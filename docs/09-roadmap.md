@@ -33,14 +33,20 @@ motoru F2'de yazılacak, boş paket iskeleti bırakmanın faydası yok.
 
 ---
 
-## F1 — Dünya ve şirket · 1,5 hafta
+## F1 — Dünya ve şirket · 1,5 hafta  ✅ TAMAMLANDI (2 Eylül 2026)
 - `cities`, `products`, `product_categories`, `facility_types`, `city_distances` seed
 - `companies` CRUD, şirket kurma akışı, `company_levels` tablosu
 - `facilities` oluşturma (inşaat süresi dahil), `inventories`
 - **`inventory_batches` + FEFO tüketim servisi** (`06-transaction-locking.md` §4)
 - `GET /company`, `GET /cities`, `GET /products`, `GET /inventory`
 
-**Çıkış:** Şirket kurulup manav açılabiliyor; lot ekleme/çıkarma testleri geçiyor.
+**Çıkış:** ✅ Şirket kurulup manav açılabiliyor · lot ekleme/çıkarma ve **T2** (aynı stok
+iki kez satılamaz) testleri geçiyor · 74 test yeşil.
+
+Uygulama notu: `used_capacity` bir trigger ile senkron tutulur ve
+`CHECK (used_capacity <= capacity)` kısıtı **I4'ü veritabanı düzeyinde garanti eder** —
+uygulama katmanı atlansa bile depo kapasitesi aşılamaz. Tesis oluşturulunca envanteri
+de trigger ile açılır (1:1).
 
 ---
 

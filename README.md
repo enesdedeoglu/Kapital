@@ -7,7 +7,7 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0 (Temel altyapı) tamamlandı.** Sıradaki faz: F1 — Dünya ve şirket.
+> **Durum: F0 ve F1 tamamlandı.** Sıradaki faz: F2 — Tick motoru + Perakende (MVP-0).
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -29,7 +29,7 @@ createdb kapital_dev && createdb kapital_test   # B) Yerel PostgreSQL 16 (5432)
 pnpm build
 pnpm db:migrate              # şemayı uygular
 pnpm db:seed                 # 5 şehir · 10 ürün · 13 tesis · 9 reçete · 7 sistem şirketi
-pnpm test                    # 46 test
+pnpm test                    # 74 test
 pnpm api:dev                 # http://localhost:3000
 ```
 
@@ -47,12 +47,16 @@ curl -s -X POST localhost:3000/auth/register -H 'content-type: application/json'
 curl -s -X POST localhost:3000/company -H 'content-type: application/json' -H "authorization: Bearer $TOKEN" -H "idempotency-key: $(uuidgen)" -d '{"name":"Anadolu Ticaret","cityCode":"IST","facilityTypeCode":"GREENGROCER"}'
 ```
 
+```bash
+curl -s -X POST localhost:3000/facilities -H 'content-type: application/json' -H "authorization: Bearer $TOKEN" -H "idempotency-key: $(uuidgen)" -d '{"facilityTypeCode":"GREENGROCER","cityCode":"IST","name":"Kadıköy Manav"}'
+```
+
 ## Yapı
 
 ```
-apps/api          NestJS — auth, şirket, sağlık, idempotency
+apps/api          NestJS — auth, dünya, şirket, tesis, envanter, idempotency
 packages/shared   Money/Qty tipleri, hata sınıfları, tur takvimi, seed'li RNG
-packages/db       Şema, elle yazılan migration'lar, seed, DEFTER ve transfer()
+packages/db       Şema, migration'lar, seed, DEFTER + transfer(), FEFO lot servisi
 packages/config    Versiyonlu denge config'i
 docs/             Teknik plan (13 doküman + 7 ADR)
 ```
@@ -61,12 +65,14 @@ Planlanan ama henüz yazılmamış paketler: `packages/economy` (saf ekonomi çe
 F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 `apps/mobile` (F9), `apps/admin` (F10).
 
-## F0'da ne var
+## Ne çalışıyor
+
+### F0 — Temel altyapı
 
 | Alan | Durum |
 |---|---|
 | Monorepo, turbo, TS strict, CI | ✅ |
-| PostgreSQL şeması — 22 tablo, partition'lı defter | ✅ |
+| PostgreSQL şeması — 25 tablo, partition'lı defter | ✅ |
 | Migration hattı + checksum koruması + ayrışma bekçisi | ✅ |
 | Seed: şehir, ürün, reçete, tesis, kredi şartları, seviyeler, config | ✅ |
 | `Money`/`Qty` — kayan nokta yok, tek yuvarlama noktası | ✅ |
@@ -75,6 +81,20 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 | Auth: kayıt, giriş, refresh rotasyonu, scrypt | ✅ |
 | Idempotency: anahtar çalıştırmadan önce rezerve edilir | ✅ |
 | Şirket kurma — başlangıç sermayesi deftere yazılır | ✅ |
+
+### F1 — Dünya ve şirket
+
+| Alan | Durum |
+|---|---|
+| Dünya uçları: şehirler, mesafeler, ürünler, tesis türleri | ✅ |
+| Tesis kurma — arsa endeksiyle maliyet, inşaat süresi, `CAPEX` defteri | ✅ |
+| Seviye kilidi ve liman şartı | ✅ |
+| Envanter tesisle birlikte otomatik oluşur (trigger) | ✅ |
+| **Lot bazlı stok** — aynı ürünün farklı kalite/maliyetteki partileri ayrı | ✅ |
+| **FEFO tüketim** — önce bozulacak önce çıkar, `SKIP LOCKED` ile paralel | ✅ |
+| Rezervasyon yaşam döngüsü: rezerve → kesinleştir / bırak | ✅ |
+| Depo kapasitesi trigger + `CHECK` ile garanti (I4) | ✅ |
+| Türetilmiş stok görünümü: toplam, ort. kalite, ağırlıklı maliyet | ✅ |
 
 ### Doğrulanmış çıkış kriterleri
 
@@ -85,6 +105,9 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 | **T4** | A→B / B→A 120 çapraz transfer → **0 deadlock** |
 | **T5** | Aynı `Idempotency-Key` ile 5 istek → tek şirket, tek sermaye aktarımı |
 | **T6** | 200 rastgele transfer sonrası `Σ bakiye = defter` ve global toplam **0** |
+| **T2** | Tek lota 30 eşzamanlı talep → toplam ayrılan lot miktarını **aşmıyor** |
+| I3 | `reserved_quantity` hiçbir zaman `quantity`'yi aşmıyor |
+| I4 | Depo kapasitesi aşılamıyor — DB kısıtı reddediyor |
 | Ayrışma | Drizzle şemasındaki her tablo/kolon veritabanında mevcut |
 
 ## Dokümantasyon
@@ -104,6 +127,20 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 | 10 | [Riskler](docs/10-riskler.md) | 18 teknik risk + azaltım |
 | 11 | [Kapsam Kararları](docs/11-kapsam-degisiklikleri.md) | Eklenen / çıkarılan |
 | 12 | [Döviz ve Dış Ticaret](docs/12-doviz-mekanigi.md) | Spesifikasyon |
+
+## API uçları
+
+| Uç | Açıklama |
+|---|---|
+| `GET /health` · `/health/invariants` | Sağlık ve değişmez denetimi (açık) |
+| `POST /auth/register` · `/login` · `/refresh` · `/logout` | Oturum |
+| `GET /cities` · `/cities/:code/distances` | Şehirler, mesafe ve transit süresi (açık) |
+| `GET /products` · `/facility-types` | Ürün ve tesis kataloğu (açık) |
+| `GET` · `POST /company` | Şirket |
+| `GET` · `POST /facilities` | Tesisler |
+| `GET /facilities/:id/stock` | Türetilmiş stok özeti |
+| `GET /facilities/:id/batches` | Lot detayı |
+| `GET /inventory` | Tüm tesislerin birleşik stoğu |
 
 ### Mimari Karar Kayıtları
 [0001 Para gösterimi](docs/adr/0001-para-gosterimi.md) ·

@@ -4,6 +4,9 @@ import { DbModule } from './common/db.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtGuard } from './modules/auth/jwt.guard.js';
 import { CompanyModule } from './modules/company/company.module.js';
+import { FacilityModule } from './modules/facility/facility.module.js';
+import { InventoryModule } from './modules/inventory/inventory.module.js';
+import { WorldModule } from './modules/world/world.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 
 /**
@@ -13,7 +16,8 @@ import { HealthModule } from './modules/health/health.module.js';
  * Açık token kullanmak uygulamayı paketleyiciden bağımsız kılar.
  */
 @Module({
-  imports: [DbModule, AuthModule, CompanyModule, HealthModule],
+  imports: [DbModule, AuthModule, WorldModule, CompanyModule, FacilityModule,
+           InventoryModule, HealthModule],
   // Varsayılan KAPALI: uçlar açıkça @Public() denmedikçe oturum ister.
   providers: [{ provide: APP_GUARD, useClass: JwtGuard }],
 })

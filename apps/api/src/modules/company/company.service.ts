@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { runInTransaction, transfer, type Sql } from '@kapital/db';
+import { currentTickSeq, runInTransaction, transfer, type Sql } from '@kapital/db';
 import { CONFIG_KEYS, getConfig, loadConfigSnapshot, type StartConfig } from '@kapital/config';
 import { asMoney, Conflict, DomainError, formatMoney, NotFound, type Money } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
@@ -112,11 +112,4 @@ export class CompanyService {
       createdAt: new Date(r.created_at).toISOString(),
     };
   }
-}
-
-/** Zaman kaynağı `NOW()` değil, en son turun sırasıdır (docs/04 §2.8). */
-async function currentTickSeq(tx: Sql): Promise<bigint> {
-  const [row] = await tx<{ seq: bigint }[]>`
-    SELECT seq FROM economic_ticks ORDER BY seq DESC LIMIT 1`;
-  return row?.seq ?? 0n;
 }

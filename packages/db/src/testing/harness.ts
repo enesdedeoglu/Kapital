@@ -25,7 +25,8 @@ export async function prepareTestDb(): Promise<Sql> {
 /** Testler arası oyuncu/NPC verisini temizler; dünya config'i kalır. */
 export async function truncateGameState(sql: Sql): Promise<void> {
   await sql.unsafe(`
-    TRUNCATE ledger_entries, outbox, tick_phase_runs, company_stats RESTART IDENTITY CASCADE;
+    TRUNCATE ledger_entries, outbox, tick_phase_runs, company_stats,
+             inventory_batches, inventories, facilities RESTART IDENTITY CASCADE;
     DELETE FROM companies WHERE kind <> 'SYSTEM';
     UPDATE companies SET cash = 0, usd_balance = 0 WHERE kind = 'SYSTEM';
   `);
@@ -61,6 +62,27 @@ export async function systemCompanyId(sql: Sql, code: string): Promise<string> {
   const [row] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = ${code}`;
   if (!row) throw new Error(`sistem şirketi bulunamadı: ${code}`);
   return row.id;
+}
+
+export interface TestFacility { id: string; inventoryId: string }
+
+/** Tesis (ve trigger ile envanteri) oluşturur. API katmanını atlar — birim testler için. */
+export async function makeFacility(
+  sql: Sql,
+  companyId: string,
+  opts: { typeCode?: string; cityId?: number; capacity?: bigint; completeAtTick?: bigint } = {},
+): Promise<TestFacility> {
+  const [type] = await sql<{ id: number; storage_capacity: bigint }[]>`
+    SELECT id, storage_capacity FROM facility_types WHERE code = ${opts.typeCode ?? 'GREENGROCER'}`;
+  const [facility] = await sql<{ id: string }[]>`
+    INSERT INTO facilities (company_id, facility_type_id, city_id, storage_capacity,
+                            construction_complete_at_tick)
+    VALUES (${companyId}::uuid, ${type!.id}, ${opts.cityId ?? 1},
+            ${opts.capacity ?? type!.storage_capacity}, ${opts.completeAtTick ?? 0n})
+    RETURNING id`;
+  const [inventory] = await sql<{ id: string }[]>`
+    SELECT id FROM inventories WHERE facility_id = ${facility!.id}::uuid`;
+  return { id: facility!.id, inventoryId: inventory!.id };
 }
 
 export async function cashOf(sql: Sql, companyId: string): Promise<Money> {
