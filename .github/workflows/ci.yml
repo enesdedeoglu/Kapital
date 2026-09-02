@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kapital
+          POSTGRES_PASSWORD: kapital
+          POSTGRES_DB: kapital_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kapital -d kapital_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://kapital:kapital@localhost:5432/kapital_test
+      TEST_DATABASE_URL: postgres://kapital:kapital@localhost:5432/kapital_test
+      JWT_SECRET: ci-only-secret
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.0 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Derleme
+        run: pnpm build
+
+      - name: Tip denetimi
+        run: pnpm typecheck
+
+      # Migration'lar CI'da koşar: uygulanmış bir migration sonradan
+      # düzenlenmişse migrate checksum uyuşmazlığıyla patlar.
+      - name: Migration
+        run: pnpm db:migrate
+
+      - name: Seed
+        run: pnpm db:seed
+
+      - name: Testler
+        run: pnpm test

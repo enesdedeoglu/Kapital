@@ -1,0 +1,47 @@
+name: kapital-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kapital-pg
+    environment:
+      POSTGRES_USER: kapital
+      POSTGRES_PASSWORD: kapital
+      POSTGRES_DB: kapital
+    # 5433: yereldeki PostgreSQL 16 ile çakışmaması için
+    ports: ["5433:5432"]
+    volumes:
+      - kapital-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kapital -d kapital"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      # Ekonomi turu kaçak transaction'la kilitlenemesin (docs/06 §7)
+      - "-c"
+      - "idle_in_transaction_session_timeout=30000"
+      - "-c"
+      - "deadlock_timeout=1s"
+      - "-c"
+      - "log_lock_waits=on"
+
+  redis:
+    image: redis:7-alpine
+    container_name: kapital-redis
+    ports: ["6380:6379"]
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - kapital-redisdata:/data
+
+volumes:
+  kapital-pgdata:
+  kapital-redisdata:

@@ -1,0 +1,25 @@
+{
+  "name": "kapital",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "engines": { "node": ">=20.11 <23" },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:up": "docker compose -f infra/docker-compose.dev.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.dev.yml down",
+    "db:migrate": "pnpm --filter @kapital/db migrate",
+    "db:seed": "pnpm --filter @kapital/db seed",
+    "db:reset": "pnpm --filter @kapital/db reset",
+    "api:dev": "pnpm --filter @kapital/api dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
