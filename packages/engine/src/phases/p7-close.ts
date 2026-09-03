@@ -7,6 +7,8 @@ export interface ClosePhaseResult {
   notifications: number;
   invariantsOk: boolean;
   violations: unknown[];
+  creditShare: number;
+  creditAlarm: boolean;
 }
 
 /**
@@ -33,11 +35,28 @@ export async function runClosePhase(sql: Sql, tick: EngineTick): Promise<ClosePh
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY company_value), 0)::bigint AS value
     FROM companies WHERE kind = 'PLAYER' AND status = 'ACTIVE'`;
 
+  // ★ R15 izlemesi: kredinin para arzı içindeki payı. %20'yi aşarsa alarm —
+  //   kredi anaparası para YARATIR, limit gevşerse enflasyon kaçar.
+  const [credit] = await sql<{ outstanding: string; loans: number; defaults: number }[]>`
+    SELECT COALESCE(SUM(remaining_balance) FILTER (WHERE status = 'ACTIVE'), 0)::text AS outstanding,
+           COUNT(*) FILTER (WHERE status = 'ACTIVE')::int AS loans,
+           COUNT(*) FILTER (WHERE defaulted_at_tick > ${tick.seq - 96n})::int AS defaults
+    FROM loans`;
+  const moneySupply = Number(supply!.total);
+  const creditShare = moneySupply > 0 ? Number(credit!.outstanding) / moneySupply : 0;
+
+  const [bankruptcies] = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count FROM companies WHERE status = 'BANKRUPT'`;
+
   await sql`
     INSERT INTO economy_snapshots (tick_id, total_money_supply, player_money, npc_money,
-                                   faucet_in, sink_out, median_company_value, active_companies)
+                                   faucet_in, sink_out, median_company_value, active_companies,
+                                   credit_outstanding, credit_share, active_loans,
+                                   defaults_24h, bankruptcies_24h)
     VALUES (${tick.seq}, ${supply!.total}, ${supply!.player}, ${supply!.npc},
-            ${supply!.faucet}, ${supply!.sink}, ${median!.value}, ${supply!.active})
+            ${supply!.faucet}, ${supply!.sink}, ${median!.value}, ${supply!.active},
+            ${credit!.outstanding}, ${creditShare}, ${credit!.loans},
+            ${credit!.defaults}, ${bankruptcies!.count})
     ON CONFLICT (tick_id) DO NOTHING`;
 
   // Satış yapan her şirkete tur özeti. dedupe_key idempotency sağlar.
@@ -88,5 +107,7 @@ export async function runClosePhase(sql: Sql, tick: EngineTick): Promise<ClosePh
     notifications: sales.length + depleted.length,
     invariantsOk: report.ok,
     violations: report.violations,
+    creditShare,
+    creditAlarm: creditShare > 0.2,
   };
 }

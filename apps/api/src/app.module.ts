@@ -8,6 +8,7 @@ import { FacilityModule } from './modules/facility/facility.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
 import { ForeignModule } from './modules/foreign/foreign.module.js';
 import { InventoryModule } from './modules/inventory/inventory.module.js';
+import { LoanModule } from './modules/loan/loan.module.js';
 import { MarketModule } from './modules/market/market.module.js';
 import { RetailModule } from './modules/retail/retail.module.js';
 import { WorldModule } from './modules/world/world.module.js';
@@ -21,7 +22,7 @@ import { HealthModule } from './modules/health/health.module.js';
  */
 @Module({
   imports: [DbModule, AuthModule, WorldModule, CompanyModule, FacilityModule,
-           InventoryModule, MarketModule, RetailModule, ForeignModule,
+           InventoryModule, MarketModule, RetailModule, ForeignModule, LoanModule,
            AdminModule, HealthModule],
   // Varsayılan KAPALI: uçlar açıkça @Public() denmedikçe oturum ister.
   providers: [{ provide: APP_GUARD, useClass: JwtGuard }],

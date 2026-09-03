@@ -124,7 +124,7 @@ Uygulama notları:
 
 ---
 
-## F5 — Bankacılık, kredi ve döviz · 2 hafta
+## F5 — Bankacılık, kredi ve döviz · 2 hafta  ✅ TAMAMLANDI (3 Eylül 2026)
 
 > **Karar (2 Eylül 2026):** Krediler MVP-1 kapsamına alındı ve denge kapısının **önüne** çekildi.
 
@@ -143,9 +143,22 @@ Uygulama notları:
 - **Kur dönüşümü:** `fx_trades`, **%1,5 spread** (komisyon `SYS_SINK`'e), Lv7 kilidi,
   şirket değerine `usd_balance × fx_rate` girer
 
-**Çıkış:** Oyuncu kredi çekip tesis kurabiliyor; ödeyemeyince kademeli olarak batıyor,
-tek turda silinmiyor. Para arzında kredi kaynaklı artış `economy_snapshots`'ta izlenebiliyor.
-Oyuncu döviz alıp satabiliyor, spread ödüyor.
+**Çıkış:** ✅ Oyuncu kredi çekip tesis kurabiliyor; ödeyemeyince kademeli olarak
+batıyor, tek turda silinmiyor. 253 test geçiyor.
+
+Uygulama notları:
+- **`loans` tablosu F0'da migration'a girmemişti** — yalnız şema dokümanında vardı.
+  Ayrışma testi Drizzle ↔ veritabanı arasını korur, doküman ↔ veritabanı arasını
+  korumaz. Eksik F5'te ortaya çıktı ve 0009 ile kapatıldı.
+- Faiz ve anapara **ayrı hesaplara** gider: faiz `SYS_SINK` (kalıcı gider),
+  anapara `SYS_BANK` (yaratılan parayı yok eder). Aynı hesaba yazılsaydı para
+  arzı ölçümü bozulurdu.
+- Test harness'i başlangıç sermayesini `SYS_BANK`'tan veriyordu; `SYS_TREASURY`
+  tam da bunu ayırmak için vardı. Kredi payı metriği (R15) kirleniyordu.
+- Tasfiye bir NAKİT hareketi değildir: banka varlığa el koyar, borç azalır.
+  Kredinin yarattığı para zaten CAPEX ile ekonomiden çıkmıştı, `Σ bakiye = 0`
+  özdeşliği bozulmaz.
+- Döviz kısmı F4'te gelmişti (kur modeli, dönüşüm, spread).
 
 **Neden denge kapısından önce:** F8'in çıkış kriterlerinden biri *"90 günde iflas oranı < %15"*.
 Kredi yoksa oyunda iflas mekanizması da yok — bu metrik ölçülemez ve simülasyon eksik kalır.

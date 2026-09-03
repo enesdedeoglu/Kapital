@@ -107,22 +107,31 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
   // Şirket finansalları defterden türetilir — tek doğruluk kaynağı orası.
   const settled = await sql`
     INSERT INTO company_financials (tick_id, company_id, revenue, cogs, maintenance, capex, tax,
-                                    net_profit, cash_close, inventory_value, facility_value,
-                                    debt, company_value)
+                                    interest_cost, net_profit, cash_close, inventory_value,
+                                    facility_value, debt, company_value)
     SELECT ${tick.seq}, c.id,
            COALESCE(l.sales, 0), COALESCE(rs.cogs, 0), COALESCE(l.maintenance, 0),
-           COALESCE(l.capex, 0), COALESCE(l.tax, 0),
-           COALESCE(l.sales, 0) - COALESCE(rs.cogs, 0) - COALESCE(l.maintenance, 0) - COALESCE(l.tax, 0),
-           c.cash, COALESCE(inv.value, 0), COALESCE(fac.value, 0), 0,
-           c.cash + COALESCE(inv.value, 0) + COALESCE(fac.value, 0)
+           COALESCE(l.capex, 0), COALESCE(l.tax, 0), COALESCE(l.interest, 0),
+           COALESCE(l.sales, 0) - COALESCE(rs.cogs, 0) - COALESCE(l.maintenance, 0)
+             - COALESCE(l.tax, 0) - COALESCE(l.interest, 0) - COALESCE(l.shipping, 0),
+           c.cash, COALESCE(inv.value, 0), COALESCE(fac.value, 0), COALESCE(debt.total, 0),
+           -- ★ Şirket değeri BORCU DÜŞER (madde 41): kredi çeken oyuncunun
+           --   değeri artmaz, yalnız nakdi artar ve borcu birebir düşülür.
+           c.cash + COALESCE(inv.value, 0) + COALESCE(fac.value, 0) - COALESCE(debt.total, 0)
     FROM companies c
     LEFT JOIN LATERAL (
       SELECT SUM(amount) FILTER (WHERE account = 'SALES'       AND direction = 'CREDIT')::bigint AS sales,
              SUM(amount) FILTER (WHERE account = 'MAINTENANCE' AND direction = 'DEBIT')::bigint  AS maintenance,
              SUM(amount) FILTER (WHERE account = 'CAPEX'       AND direction = 'DEBIT')::bigint  AS capex,
-             SUM(amount) FILTER (WHERE account = 'TAX'         AND direction = 'DEBIT')::bigint  AS tax
-      FROM ledger_entries WHERE tick_id = ${tick.seq} AND company_id = c.id
+             SUM(amount) FILTER (WHERE account = 'TAX'         AND direction = 'DEBIT')::bigint  AS tax,
+             SUM(amount) FILTER (WHERE account = 'INTEREST'    AND direction = 'DEBIT')::bigint  AS interest,
+             SUM(amount) FILTER (WHERE account = 'SHIPPING'    AND direction = 'DEBIT')::bigint  AS shipping
+      FROM ledger_entries WHERE tick_id = ${tick.seq} AND company_id = c.id AND currency = 'TRY'
     ) l ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT SUM(remaining_balance)::bigint AS total FROM loans
+      WHERE company_id = c.id AND status = 'ACTIVE'
+    ) debt ON TRUE
     LEFT JOIN LATERAL (
       SELECT SUM(cogs)::bigint AS cogs FROM retail_sales
       WHERE tick_id = ${tick.seq} AND company_id = c.id

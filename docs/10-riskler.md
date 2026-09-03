@@ -370,7 +370,7 @@ otomobil) satılamaz hale gelir.
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
 |---|---|---|---|
 | R10 | Sınırsız para basma (perakende) | 🔴 Kritik | **F2** (tasarımda) |
-| R15 | Kredi anaparası para yaratır | 🔴 Kritik | **F5** |
+| R15 | Kredi anaparası para yaratır | 🔴 Kritik | ✅ F5 — limit + enflasyona bağlı faiz + %20 alarm |
 | R7 | Veri hacmi | 🔴 Kritik | **F0** (partition şemada) |
 | R2 | Fiyat salınımı | 🟠 Yüksek | F4 |
 | R1 | Dağıtım döngüsü | 🟠 Yüksek | F2 |
@@ -385,6 +385,6 @@ otomobil) satılamaz hale gelir.
 | R13 | Reçete döngüsü | 🟢 Düşük | F3 |
 | R14 | KVKK | 🟢 Düşük | F10 |
 | R19 | Derin zincirde kalite çöküşü | 🟡 Orta | F8 (simülasyonla) |
-| R16 | Kredi yeni oyuncuyu atar | 🟠 Yüksek | F5 |
+| R16 | Kredi yeni oyuncuyu atar | 🟠 Yüksek | ✅ F5 — kademeli temerrüt + yük uyarısı |
 | R17 | İhracat musluğu | 🟠 Yüksek | F4 |
 | R18 | Dış ticaret fiyat keşfini boğar | 🟠 Yüksek | F4 |

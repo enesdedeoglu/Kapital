@@ -7,3 +7,4 @@ export * from './formulas/decay.js';
 export * from './pricing/median.js';
 export * from './production/index.js';
 export * from './market/index.js';
+export * from './lending/index.js';

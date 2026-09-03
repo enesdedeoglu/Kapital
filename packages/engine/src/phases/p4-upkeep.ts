@@ -2,6 +2,8 @@ import { transfer, type Sql } from '@kapital/db';
 import { asMoney, deterministicUuid, InsufficientFunds } from '@kapital/shared';
 import type { EngineTick } from '../context.js';
 
+import { collectLoanPayments, type LoanPhaseResult } from './loans.js';
+
 export interface UpkeepPhaseResult {
   decayedBatches: number;
   expiredBatches: number;
@@ -9,6 +11,7 @@ export interface UpkeepPhaseResult {
   facilitiesHalted: number;
   wornFacilities: number;
   criticalCondition: number;
+  loans: LoanPhaseResult;
 }
 
 /**
@@ -91,6 +94,10 @@ export async function runUpkeepPhase(sql: Sql, tick: EngineTick): Promise<Upkeep
     }
   }
 
+  // Kredi taksitleri bakımdan SONRA tahsil edilir: tesis gideri önce ödenir,
+  // böylece oyuncu üretimini sürdürebilir ve borcunu ödeyebilecek hale gelir.
+  const loans = await collectLoanPayments(sql, tick);
+
   return {
     decayedBatches: decayed.length,
     expiredBatches: expired.length,
@@ -98,5 +105,6 @@ export async function runUpkeepPhase(sql: Sql, tick: EngineTick): Promise<Upkeep
     facilitiesHalted: halted,
     wornFacilities: worn.length,
     criticalCondition: critical.length,
+    loans,
   };
 }

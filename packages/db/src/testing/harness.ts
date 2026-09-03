@@ -54,10 +54,12 @@ export async function makePlayer(sql: Sql, cash: Money, name = 'Test A.Ş.'): Pr
 
   if (cash > 0n) {
     const { transfer } = await import('../finance/transfer.js');
-    const bank = await systemCompanyId(sql, 'SYS_BANK');
+    // SYS_TREASURY, SYS_BANK DEĞİL: başlangıç sermayesi kredi değildir ve
+    // kredinin para arzı içindeki payı metriğini (R15) kirletmemelidir.
+    const treasury = await systemCompanyId(sql, 'SYS_TREASURY');
     await sql.begin((tx) =>
       transfer(tx as unknown as Sql, {
-        tickId: 0n, fromCompanyId: bank, toCompanyId: company!.id,
+        tickId: 0n, fromCompanyId: treasury, toCompanyId: company!.id,
         amount: cash, account: 'SEED', reason: 'test başlangıç sermayesi',
       }),
     );

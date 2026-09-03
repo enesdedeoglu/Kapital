@@ -6,5 +6,6 @@ export * from './operations.js';
 export * from './simulation.js';
 export * from './market.js';
 export * from './reporting.js';
+export * from './lending.js';
 export * from './finance.js';
 export * from './outbox.js';

@@ -115,4 +115,9 @@ export const economySnapshots = pgTable('economy_snapshots', {
   medianCompanyValue: moneyCol('median_company_value').notNull().default(0n),
   activeCompanies: integer('active_companies').notNull().default(0),
   bankruptcies24h: integer('bankruptcies_24h').notNull().default(0),
+  /** ★ R15: kredinin para arzı içindeki payı %20'yi aşarsa alarm. */
+  creditOutstanding: moneyCol('credit_outstanding').notNull().default(0n),
+  creditShare: doublePrecision('credit_share').notNull().default(0),
+  activeLoans: integer('active_loans').notNull().default(0),
+  defaults24h: integer('defaults_24h').notNull().default(0),
 });

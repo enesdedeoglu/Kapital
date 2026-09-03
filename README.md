@@ -7,8 +7,8 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0–F4 tamamlandı.** MVP-0, dikey üretim zinciri, toptan piyasa,
-> lojistik ve dış ticaret çalışıyor. Sıradaki faz: F5 — Bankacılık, kredi ve döviz.
+> **Durum: F0–F5 tamamlandı.** MVP-0, üretim zinciri, toptan piyasa, lojistik,
+> dış ticaret ve bankacılık çalışıyor. Sıradaki faz: F6 — NPC ekonomisi.
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -30,7 +30,7 @@ createdb kapital_dev && createdb kapital_test   # B) Yerel PostgreSQL 16 (5432)
 pnpm build
 pnpm db:migrate              # şemayı uygular
 pnpm db:seed                 # 5 şehir · 10 ürün · 13 tesis · 9 reçete · 7 sistem şirketi
-pnpm test                    # 215 test
+pnpm test                    # 253 test
 pnpm api:dev                 # http://localhost:3000
 pnpm worker:dev              # ekonomik tur zamanlayıcısı (15 dk)
 pnpm tick                    # tek bir turu elle koş
@@ -148,6 +148,21 @@ Planlanan ama henüz yazılmamış: `packages/sim` (denge simülasyonu, F8),
 | **Dış ticaret** — Liman, dünya fiyatı, derinlik tavanı, %60 band | ✅ |
 | ₺ ↔ $ dönüşümü — %1,5 spread, iki defter ayrı ayrı dengeli | ✅ |
 
+### F5 — Bankacılık ve kredi
+
+| Alan | Durum |
+|---|---|
+| `SYS_BANK` — kredi anaparası para **yaratır**, geri ödeme **yok eder** | ✅ |
+| Kredi limiti şirket değerine bağlı, kaldıraç seviyeye göre (0,40 / 0,60 / 0,75) | ✅ |
+| Anüite taksit; faiz `SYS_SINK`'e, anapara `SYS_BANK`'a **ayrı** gider | ✅ |
+| **Faiz enflasyona bağlı** — para arzı şişerse borçlanma pahalılaşır (R15) | ✅ |
+| Şirket değerinden **borç düşülür** — kredi çekmek değeri artırmaz | ✅ |
+| **Kademeli temerrüt** (R16): kaçırılan taksit → uyarı → tek tesis tasfiyesi | ✅ |
+| İflas yalnız tasfiye edilecek tesis kalmayınca | ✅ |
+| Ödeme yükü uyarısı — "bu kredi gelirinizin %X'ini götürür" | ✅ |
+| Kredinin para arzı içindeki payı izlenir, %20'de alarm | ✅ |
+| Erken kapatma ve taksit geçmişi | ✅ |
+
 ### Doğrulanmış çıkış kriterleri
 
 | Test | Ne kanıtlıyor |
@@ -237,6 +252,7 @@ Bu yapısal etki [R19](docs/10-riskler.md) olarak kaydedildi.
 | `GET /market/shipments` | Yoldaki mal ve varış turu |
 | `GET /foreign/capacity` | Dünya fiyatları ve kalan derinlik |
 | `POST /foreign/import` · `/export` · `/fx/convert` | Dış ticaret ve döviz |
+| `GET` · `POST /loans` · `POST /loans/:id/repay` | Kredi limiti, kullanım ve erken kapatma |
 | `POST /admin/tick` · `GET /admin/economy` | Tur tetikleme ve ekonomi dashboard'u |
 
 ### Mimari Karar Kayıtları
