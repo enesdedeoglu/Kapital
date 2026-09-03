@@ -1,0 +1,25 @@
+{
+  "name": "@kapital/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "tick": "tsx src/cli/tick-once.ts"
+  },
+  "dependencies": {
+    "@kapital/db": "workspace:*",
+    "@kapital/engine": "workspace:*",
+    "@kapital/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

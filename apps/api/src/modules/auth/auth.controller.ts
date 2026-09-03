@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Req, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import { AuthService } from './auth.service.js';
@@ -14,24 +14,21 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @UsePipes(new ZodPipe(registerSchema))
-  register(@Body() dto: RegisterDto) {
+  register(@Body(new ZodPipe(registerSchema)) dto: RegisterDto) {
     return this.auth.register(dto);
   }
 
   @Public()
   @Post('login')
   @HttpCode(200)
-  @UsePipes(new ZodPipe(loginSchema))
-  login(@Body() dto: LoginDto) {
+  login(@Body(new ZodPipe(loginSchema)) dto: LoginDto) {
     return this.auth.login(dto);
   }
 
   @Public()
   @Post('refresh')
   @HttpCode(200)
-  @UsePipes(new ZodPipe(refreshSchema))
-  refresh(@Body() dto: RefreshDto) {
+  refresh(@Body(new ZodPipe(refreshSchema)) dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken);
   }
 

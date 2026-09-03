@@ -42,6 +42,36 @@ export function qty(units: number | string): Qty {
   return scaleDecimal(units, QTY_SCALE, 'qty') as Qty;
 }
 
+/**
+ * HESAPLANMIŞ bir float'ı Money'e çevirir (bankacı yuvarlamasıyla).
+ *
+ * `money()` yazılmış/config değerleri içindir ve hassasiyet kaybında HATA verir;
+ * bu ise formül çıktıları içindir ve yuvarlar. İkisini karıştırmayın: strict
+ * kurucu, sessiz hassasiyet kaybını yakalayan güvenliktir.
+ */
+export function moneyFromNumber(lira: number): Money {
+  if (!Number.isFinite(lira)) throw new RangeError('money: sonlu olmayan sayı');
+  return roundScaled(lira, MONEY_SCALE) as Money;
+}
+
+/** HESAPLANMIŞ bir float'ı Qty'ye çevirir (talep, kapasite gibi formül çıktıları). */
+export function qtyFromNumber(units: number): Qty {
+  if (!Number.isFinite(units)) throw new RangeError('qty: sonlu olmayan sayı');
+  if (units < 0) return 0n as Qty;
+  return roundScaled(units, QTY_SCALE) as Qty;
+}
+
+function roundScaled(value: number, scale: bigint): bigint {
+  const scaled = value * Number(scale);
+  if (!Number.isSafeInteger(Math.round(scaled))) {
+    // 2^53 üstü: sabit noktaya geç, hassasiyet kaybetme
+    const whole = Math.trunc(value);
+    const frac = value - whole;
+    return BigInt(whole) * scale + divRoundHalfEven(BigInt(Math.round(frac * 1e9)) * scale, 1_000_000_000n);
+  }
+  return divRoundHalfEven(BigInt(Math.round(scaled * 1e6)), 1_000_000n);
+}
+
 /** Ham depolanmış değeri (DB'den gelen bigint) Money'e işaretler. */
 export const asMoney = (raw: bigint): Money => raw as Money;
 export const asQty = (raw: bigint): Qty => raw as Qty;
@@ -174,3 +204,14 @@ export const moneyToJson = (amount: Money): string => amount.toString();
 export const moneyFromJson = (raw: string): Money => BigInt(raw) as Money;
 export const qtyToJson = (amount: Qty): string => amount.toString();
 export const qtyFromJson = (raw: string): Qty => BigInt(raw) as Qty;
+
+/**
+ * `JSON.stringify` bigint'i serileştiremez. Para ve miktar her yerde bigint
+ * olduğu için JSON sınırında bu replacer kullanılır: değerler string'e döner,
+ * hassasiyet korunur.
+ */
+export const bigintReplacer = (_key: string, value: unknown): unknown =>
+  typeof value === 'bigint' ? value.toString() : value;
+
+/** bigint içerebilen herhangi bir değeri güvenle JSON'a çevirir. */
+export const toJson = (value: unknown): string => JSON.stringify(value, bigintReplacer);

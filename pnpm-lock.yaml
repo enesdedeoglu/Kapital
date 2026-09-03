@@ -32,6 +32,12 @@ importers:
       '@kapital/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@kapital/economy':
+        specifier: workspace:*
+        version: link:../../packages/economy
+      '@kapital/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@kapital/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -60,6 +66,31 @@ importers:
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  apps/worker:
+    dependencies:
+      '@kapital/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@kapital/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@kapital/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
@@ -107,6 +138,41 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.13
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/economy:
+    dependencies:
+      '@kapital/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/engine:
+    dependencies:
+      '@kapital/config':
+        specifier: workspace:*
+        version: link:../config
+      '@kapital/db':
+        specifier: workspace:*
+        version: link:../db
+      '@kapital/economy':
+        specifier: workspace:*
+        version: link:../economy
+      '@kapital/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

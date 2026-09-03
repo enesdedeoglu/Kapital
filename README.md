@@ -7,7 +7,8 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0 ve F1 tamamlandı.** Sıradaki faz: F2 — Tick motoru + Perakende (MVP-0).
+> **Durum: F0, F1 ve F2 tamamlandı — MVP-0 çalışıyor.**
+> Sıradaki faz: F3 — Tesisler ve üretim. Geçiş kapısı ★1 geçildi.
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -29,8 +30,10 @@ createdb kapital_dev && createdb kapital_test   # B) Yerel PostgreSQL 16 (5432)
 pnpm build
 pnpm db:migrate              # şemayı uygular
 pnpm db:seed                 # 5 şehir · 10 ürün · 13 tesis · 9 reçete · 7 sistem şirketi
-pnpm test                    # 74 test
+pnpm test                    # 120 test
 pnpm api:dev                 # http://localhost:3000
+pnpm worker:dev              # ekonomik tur zamanlayıcısı (15 dk)
+pnpm tick                    # tek bir turu elle koş
 ```
 
 ### Uçtan uca deneme
@@ -54,15 +57,17 @@ curl -s -X POST localhost:3000/facilities -H 'content-type: application/json' -H
 ## Yapı
 
 ```
-apps/api          NestJS — auth, dünya, şirket, tesis, envanter, idempotency
+apps/api          NestJS — auth, dünya, şirket, tesis, envanter, piyasa, perakende
+apps/worker       Tur zamanlayıcısı ve catch-up politikası
 packages/shared   Money/Qty tipleri, hata sınıfları, tur takvimi, seed'li RNG
 packages/db       Şema, migration'lar, seed, DEFTER + transfer(), FEFO lot servisi
-packages/config    Versiyonlu denge config'i
+packages/economy  ★ SAF ekonomi çekirdeği — I/O yok, deterministik
+packages/engine   Tur motoru: fazlar, orchestrator, lider kilidi
+packages/config   Versiyonlu denge config'i
 docs/             Teknik plan (13 doküman + 7 ADR)
 ```
 
-Planlanan ama henüz yazılmamış paketler: `packages/economy` (saf ekonomi çekirdeği,
-F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
+Planlanan ama henüz yazılmamış: `packages/sim` (denge simülasyonu, F8),
 `apps/mobile` (F9), `apps/admin` (F10).
 
 ## Ne çalışıyor
@@ -72,7 +77,7 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 | Alan | Durum |
 |---|---|
 | Monorepo, turbo, TS strict, CI | ✅ |
-| PostgreSQL şeması — 25 tablo, partition'lı defter | ✅ |
+| PostgreSQL şeması — 34 tablo, partition'lı defter | ✅ |
 | Migration hattı + checksum koruması + ayrışma bekçisi | ✅ |
 | Seed: şehir, ürün, reçete, tesis, kredi şartları, seviyeler, config | ✅ |
 | `Money`/`Qty` — kayan nokta yok, tek yuvarlama noktası | ✅ |
@@ -96,6 +101,24 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 | Depo kapasitesi trigger + `CHECK` ile garanti (I4) | ✅ |
 | Türetilmiş stok görünümü: toplam, ort. kalite, ağırlıklı maliyet | ✅ |
 
+### F2 — Tur motoru ve perakende (MVP-0)
+
+| Alan | Durum |
+|---|---|
+| **Saf ekonomi çekirdeği** — talep, çekicilik, pazar payı, medyan, bozulma | ✅ |
+| Tur motoru: 5 faz, durum makinesi, süre bütçeleri | ✅ |
+| Lider kilidi (PostgreSQL danışma kilidi) — çok kopya güvenli | ✅ |
+| Deterministik RNG + config anlık görüntüsü | ✅ |
+| **Perakende satışı** — paranın oyuna tek giriş noktası | ✅ |
+| **R10 azaltımı**: talep bütçe tavanı + rezervasyon fiyatı | ✅ |
+| **R1 azaltımı**: sabit 3 turlu yeniden dağıtım | ✅ |
+| **R2 azaltımı**: bir önceki turun EMA'sı + %15 devre kesici | ✅ |
+| Stok bozulması, raf ömrü, bakım gideri, kademeli ceza | ✅ |
+| Referans fiyat: kırpılmış ağırlıklı medyan + EMA | ✅ |
+| NPC satıcılar (sabit arz) ve toptan alım | ✅ |
+| Şirket/tesis finansalları, şirket değeri, ekonomi fotoğrafı | ✅ |
+| Zamanlayıcı + catch-up politikası | ✅ |
+
 ### Doğrulanmış çıkış kriterleri
 
 | Test | Ne kanıtlıyor |
@@ -109,6 +132,24 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 | I3 | `reserved_quantity` hiçbir zaman `quantity`'yi aşmıyor |
 | I4 | Depo kapasitesi aşılamıyor — DB kısıtı reddediyor |
 | Ayrışma | Drizzle şemasındaki her tablo/kolon veritabanında mevcut |
+
+### ★ Geçiş Kapısı 1 — MVP-0 kabul testi
+
+```
+Şirket kur → Manav aç → Domates al → Fiyat koy → Tur koş
+→ NPC tüketici alsın → Para artsın → Kâr raporunu gör
+```
+
+Uçtan uca geçiyor. Canlı ölçüm: 15 ₺'ye alınan 200 kg domates, 22 ₺ raf fiyatıyla
+tur başına ~38 kg satıldı (~836 ₺ ciro), stok 6 turda tükendi, nakit
+14.880 → 18.560 ₺. Tur süresi ~110 ms.
+
+Ayrıca doğrulandı:
+- **Tur idempotency**: aynı tur iki kez koşturulduğunda bakiye ve satış satırları değişmiyor
+- **R10**: rakipsiz mağaza referansın 100 katına fiyat koyunca **hiçbir şey satamıyor**
+- **R10**: gelir hiçbir koşulda şehir bütçe tavanını aşamıyor
+- 20 turluk kesintisiz koşuda değişmezler bozulmuyor
+- Δ para arzı = perakende geliri − sistem giderleri (tam eşitlik)
 
 ## Dokümantasyon
 
@@ -141,6 +182,10 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 | `GET /facilities/:id/stock` | Türetilmiş stok özeti |
 | `GET /facilities/:id/batches` | Lot detayı |
 | `GET /inventory` | Tüm tesislerin birleşik stoğu |
+| `GET /market/:cityCode` | Şehirdeki satış emirleri |
+| `POST /market/buy` | Toptan alım (anında doldurma) |
+| `GET` · `PUT /retail/:facilityId/prices` | Raf fiyatları ve tüketici tavanı |
+| `POST /admin/tick` · `GET /admin/economy` | Tur tetikleme ve ekonomi dashboard'u |
 
 ### Mimari Karar Kayıtları
 [0001 Para gösterimi](docs/adr/0001-para-gosterimi.md) ·
@@ -149,7 +194,8 @@ F2), `packages/sim` (denge simülasyonu, F8), `apps/worker` (tick motoru, F2),
 [0004 ED/NPC ayrımı](docs/adr/0004-ed-npc-ayrimi.md) ·
 [0005 Tick sharding](docs/adr/0005-tick-sharding.md) ·
 [0006 Elle yazılan migration'lar](docs/adr/0006-elle-yazilan-migrationlar.md) ·
-[0007 Açık DI token'ları](docs/adr/0007-acik-di-tokenlari.md)
+[0007 Açık DI token'ları](docs/adr/0007-acik-di-tokenlari.md) ·
+[0008 Tur orchestrator kilidi](docs/adr/0008-tick-orchestrator-kilidi.md)
 
 ## Altın kurallar
 

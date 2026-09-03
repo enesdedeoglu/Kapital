@@ -37,3 +37,29 @@ export function deriveSeed(tickSeed: bigint, phase: number, shard: number, entit
   }
   return h >>> 0;
 }
+
+/**
+ * Deterministik UUID (RFC 4122 v5 benzeri, SHA-1 tabanlı).
+ *
+ * Tick etkilerinin idempotency anahtarı buradan üretilir: aynı tur + aynı
+ * varlık her zaman aynı `tx_id`'yi verir, dolayısıyla defter çifti
+ * `ON CONFLICT DO NOTHING` ile bir kez yazılır (docs/05 §3, katman 2).
+ */
+export function deterministicUuid(namespace: string, ...parts: (string | number | bigint)[]): string {
+  // Sabit, bağımlılıksız FNV-1a tabanlı 128-bit karışım.
+  const input = namespace + '|' + parts.join('|');
+  const h = [0x9e3779b9, 0x85ebca6b, 0xc2b2ae35, 0x27d4eb2f];
+  for (let i = 0; i < input.length; i++) {
+    const c = input.charCodeAt(i);
+    for (let k = 0; k < 4; k++) {
+      h[k] = Math.imul((h[k]! ^ c) >>> 0, 0x01000193) >>> 0;
+      h[k] = ((h[k]! << 13) | (h[k]! >>> 19)) >>> 0;
+      h[(k + 1) % 4] = (h[(k + 1) % 4]! ^ h[k]!) >>> 0;
+    }
+  }
+  const hex = h.map((x) => x.toString(16).padStart(8, '0')).join('');
+  // Sürüm 5 ve varyant bitlerini ayarla
+  const v = hex.slice(0, 12) + '5' + hex.slice(13, 16) +
+            ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16) + hex.slice(17, 32);
+  return `${v.slice(0, 8)}-${v.slice(8, 12)}-${v.slice(12, 16)}-${v.slice(16, 20)}-${v.slice(20, 32)}`;
+}

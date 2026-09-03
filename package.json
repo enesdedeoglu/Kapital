@@ -2,18 +2,22 @@
   "name": "kapital",
   "private": true,
   "packageManager": "pnpm@10.15.0",
-  "engines": { "node": ">=20.11 <23" },
+  "engines": {
+    "node": ">=20.11 <23"
+  },
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=1",
     "lint": "turbo run lint",
     "db:up": "docker compose -f infra/docker-compose.dev.yml up -d",
     "db:down": "docker compose -f infra/docker-compose.dev.yml down",
     "db:migrate": "pnpm --filter @kapital/db migrate",
     "db:seed": "pnpm --filter @kapital/db seed",
     "db:reset": "pnpm --filter @kapital/db reset",
-    "api:dev": "pnpm --filter @kapital/api dev"
+    "api:dev": "pnpm --filter @kapital/api dev",
+    "worker:dev": "pnpm --filter @kapital/worker dev",
+    "tick": "pnpm --filter @kapital/worker tick"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

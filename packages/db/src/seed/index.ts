@@ -171,6 +171,17 @@ export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<vo
     }
     log(`${SYSTEM_COMPANY_CODES.length} sistem şirketi`);
 
+    // 7b) MVP-0 NPC satıcıları — sabit fiyatlı arz kaynağı (gerçek NPC ajanları F6)
+    for (const npc of d.simpleNpcSellers) {
+      const city = d.cities.find((c) => c.code === npc.cityCode)!;
+      await tx`INSERT INTO companies (kind, name, home_city_id, cash)
+               VALUES ('NPC', ${npc.name}, ${city.id}, 0)
+               ON CONFLICT DO NOTHING`;
+    }
+    const npcRows = await tx<{ count: bigint }[]>`
+      SELECT COUNT(*) AS count FROM companies WHERE kind = 'NPC'`;
+    log(`${npcRows[0]?.count ?? 0n} NPC satıcı`);
+
     // 8) Genesis tur — tick 0. Zaman kaynağı NOW() değil, tick.seq'tir. --------
     await tx`INSERT INTO economic_ticks (seq, scheduled_at, started_at, completed_at, status, rng_seed, season)
              VALUES (0, NOW(), NOW(), NOW(), 'COMPLETED', ${BigInt(Date.now())}, 0)

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Post, Req, UseInterceptors, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Req, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
@@ -17,8 +17,10 @@ export class CompanyController {
 
   @Post()
   @UseInterceptors(IdempotencyInterceptor)
-  @UsePipes(new ZodPipe(createCompanySchema))
-  create(@Req() req: Request & { user: AuthUser }, @Body() dto: CreateCompanyDto) {
+  create(
+    @Req() req: Request & { user: AuthUser },
+    @Body(new ZodPipe(createCompanySchema)) dto: CreateCompanyDto,
+  ) {
     return this.companies.create(req.user.sub, dto);
   }
 }

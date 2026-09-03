@@ -50,7 +50,7 @@ de trigger ile açılır (1:1).
 
 ---
 
-## F2 ★ — Tick motoru v1 + Perakende (MVP-0) · 2,5 hafta
+## F2 ★ — Tick motoru v1 + Perakende (MVP-0) · 2,5 hafta  ✅ TAMAMLANDI (3 Eylül 2026)
 - `economic_ticks` + `tick_phase_runs` durum makinesi
 - Orchestrator (Redis lider kilidi) + BullMQ flow
 - Fazlar: P0, P3 (retail), P4 (bozulma+bakım), P5 (finans), P7
@@ -64,7 +64,15 @@ de trigger ile açılır (1:1).
 Şirket kur → Manav aç → Domates al → Fiyat koy → Tick koş
 → NPC tüketici alsın → Para artsın → Rapor gör
 ```
-**Bu akış yeşil olmadan F3'e geçilmez.**
+**✅ GEÇİLDİ.** MVP-0 kabul testi uçtan uca yeşil; 120 test geçiyor.
+
+Uygulama notları:
+- `packages/economy` saf çekirdek olarak doğdu (ADR-0003); tüm denge formülleri
+  I/O'suz ve deterministik. `packages/sim` (F8) bu formülleri birebir koşacak.
+- Orchestrator, Redis yerine **PostgreSQL danışma kilidi** kullanıyor ve fazlar
+  şimdilik tek süreçte sırayla koşuyor — gerekçe ve BullMQ'ya geçiş eşiği
+  [ADR-0008](adr/0008-tick-orchestrator-kilidi.md)'de.
+- **R10, R1 ve R2 azaltımları uygulandı ve test edildi.**
 
 ---
 

@@ -147,6 +147,14 @@ export const companyLevels = [
   { level: 12, xp: 380_000, value: 6_800_000, volume: 15_000_000, units: 140_000, products: 6, title: 'Holding' },
 ];
 
+export const simpleNpcSellers = [
+  { name: 'Ege Sebze Toptan',    cityCode: 'IZM', productCode: 'TOMATO', priceMult: 0.92, supplyPerTick: 400, quality: 78 },
+  { name: 'Trakya Tarım',        cityCode: 'IST', productCode: 'TOMATO', priceMult: 1.00, supplyPerTick: 300, quality: 68 },
+  { name: 'Konya Ovası Hububat', cityCode: 'KON', productCode: 'WHEAT',  priceMult: 0.95, supplyPerTick: 800, quality: 72 },
+  { name: 'Anadolu Değirmen',    cityCode: 'ANK', productCode: 'FLOUR',  priceMult: 1.02, supplyPerTick: 500, quality: 75 },
+  { name: 'Marmara Fırıncılık',  cityCode: 'BRS', productCode: 'BREAD',  priceMult: 0.96, supplyPerTick: 600, quality: 70 },
+];
+
 /** Denge parametreleri — hepsi admin panelden değiştirilebilir (madde 47). */
 export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'economy.calendar', value: { tickMinutes: 15, ticksPerDay: 96, ticksPerSeason: 672, ticksPerYear: 2688 } },
@@ -162,6 +170,12 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'health.weights',   value: { supply: 0.30, sellers: 0.15, buyers: 0.10, depth: 0.15, stability: 0.15, playerShare: 0.15 } },
   { key: 'npc.population',   value: { perProductPerCity: 1.2, priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35 } },
   { key: 'npc.inventory',    value: { minTicks: 4, targetTicks: 12, maxTicks: 24 } },
+  { key: 'npc.simpleSellers', value: simpleNpcSellers },
 ];
 
+/**
+ * MVP-0 NPC satıcıları (docs/08): "yalnız NPC satıcılar, sabit arz, oyuncu alıcı".
+ * Bunlar tam NPC ajanı DEĞİLDİR — sabit fiyatlı, her tur tazelenen arz kaynağıdır.
+ * Kâr güdüsü, stok yönetimi ve yatırım kararı olan gerçek NPC'ler F6'da gelir.
+ */
 export const helpers = { money, qty };

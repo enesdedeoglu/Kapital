@@ -22,13 +22,17 @@ export async function prepareTestDb(): Promise<Sql> {
   return sql;
 }
 
-/** Testler arası oyuncu/NPC verisini temizler; dünya config'i kalır. */
+/**
+ * Testler arası OYUNCU verisini temizler.
+ * Sistem ve NPC şirketleri dünya tohumudur — silinmez, yalnız bakiyeleri sıfırlanır.
+ */
 export async function truncateGameState(sql: Sql): Promise<void> {
   await sql.unsafe(`
     TRUNCATE ledger_entries, outbox, tick_phase_runs, company_stats,
              inventory_batches, inventories, facilities RESTART IDENTITY CASCADE;
-    DELETE FROM companies WHERE kind <> 'SYSTEM';
-    UPDATE companies SET cash = 0, usd_balance = 0 WHERE kind = 'SYSTEM';
+    DELETE FROM companies WHERE kind = 'PLAYER';
+    UPDATE companies SET cash = 0, usd_balance = 0, company_value = 0
+     WHERE kind IN ('SYSTEM', 'NPC');
   `);
 }
 

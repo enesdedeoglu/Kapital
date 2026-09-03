@@ -13,6 +13,8 @@
   "dependencies": {
     "@kapital/config": "workspace:*",
     "@kapital/db": "workspace:*",
+    "@kapital/economy": "workspace:*",
+    "@kapital/engine": "workspace:*",
     "@kapital/shared": "workspace:*",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",

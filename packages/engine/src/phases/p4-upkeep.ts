@@ -1,0 +1,84 @@
+import { transfer, type Sql } from '@kapital/db';
+import { asMoney, deterministicUuid, InsufficientFunds } from '@kapital/shared';
+import type { EngineTick } from '../context.js';
+
+export interface UpkeepPhaseResult {
+  decayedBatches: number;
+  expiredBatches: number;
+  maintenanceCharged: bigint;
+  facilitiesHalted: number;
+}
+
+/**
+ * P4 — BAKIM. Stok bozulur, tesis giderleri tahsil edilir.
+ *
+ * Nakit yetmezse tesis KAPATILMAZ: `condition` düşer ve `halted_reason`
+ * yazılır. Madde 40'ın "yeni kullanıcıyı yanlışlıkla oyundan silme" şartının
+ * uygulama noktalarından biri budur (docs/05 P4).
+ */
+export async function runUpkeepPhase(sql: Sql, tick: EngineTick): Promise<UpkeepPhaseResult> {
+  // Bozulma lot bazında ve çarpımsal (madde 37). Bozulmayan ürünlere
+  // (çelik, cam, elektronik) decay_rate = 0 olduğu için dokunulmaz.
+  const decayed = await sql`
+    UPDATE inventory_batches b
+       SET quality = GREATEST(0, ROUND((b.quality * (1 - p.quality_decay_rate))::numeric, 3))
+      FROM products p
+     WHERE p.id = b.product_id AND p.quality_decay_rate > 0
+    RETURNING b.id`;
+
+  const expired = await sql`
+    DELETE FROM inventory_batches
+    WHERE expires_at_tick IS NOT NULL AND expires_at_tick <= ${tick.seq}
+    RETURNING id`;
+
+  const [sink] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = 'SYS_SINK'`;
+
+  const facilities = await sql<{
+    id: string; company_id: string; maintenance_cost: bigint; name: string;
+  }[]>`
+    SELECT f.id, f.company_id, ft.maintenance_cost, ft.name
+    FROM facilities f
+    JOIN facility_types ft ON ft.id = f.facility_type_id
+    JOIN companies c ON c.id = f.company_id AND c.status = 'ACTIVE'
+    WHERE f.closed_at IS NULL
+      AND f.construction_complete_at_tick <= ${tick.seq}
+      AND ft.maintenance_cost > 0`;
+
+  let charged = 0n;
+  let halted = 0;
+
+  for (const facility of facilities) {
+    try {
+      await sql.begin(async (tx) => {
+        await transfer(tx as unknown as Sql, {
+          tickId: tick.seq,
+          txId: deterministicUuid('maintenance', tick.seq, facility.id),
+          fromCompanyId: facility.company_id,
+          toCompanyId: sink!.id,
+          amount: asMoney(facility.maintenance_cost),
+          account: 'MAINTENANCE',
+          reason: `${facility.name} bakım gideri`,
+          refType: 'facility',
+          refId: facility.id,
+        });
+      });
+      charged += facility.maintenance_cost;
+    } catch (error) {
+      if (!(error instanceof InsufficientFunds)) throw error;
+      // Kademeli ceza: tesis kapatılmaz, yıpranır ve durdurulur.
+      await sql`
+        UPDATE facilities
+           SET condition = GREATEST(0, condition - 2),
+               halted_reason = 'bakım gideri ödenemedi'
+         WHERE id = ${facility.id}::uuid`;
+      halted++;
+    }
+  }
+
+  return {
+    decayedBatches: decayed.length,
+    expiredBatches: expired.length,
+    maintenanceCharged: charged,
+    facilitiesHalted: halted,
+  };
+}

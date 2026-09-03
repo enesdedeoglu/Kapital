@@ -1,6 +1,5 @@
 import {
-  Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req,
-  UseInterceptors, UsePipes,
+  Body, Controller, Get, Inject, Param, Post, Query, Req, UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { ZodPipe } from '../../common/zod.pipe.js';
@@ -20,8 +19,10 @@ export class FacilityController {
 
   @Post()
   @UseInterceptors(IdempotencyInterceptor)
-  @UsePipes(new ZodPipe(buildFacilitySchema))
-  build(@Req() req: Request & { user: AuthUser }, @Body() dto: BuildFacilityDto) {
+  build(
+    @Req() req: Request & { user: AuthUser },
+    @Body(new ZodPipe(buildFacilitySchema)) dto: BuildFacilityDto,
+  ) {
     return this.facilities.build(req.user.sub, dto);
   }
 
