@@ -10,3 +10,4 @@ export * from './market/index.js';
 export * from './lending/index.js';
 export * from './npc/index.js';
 export * from './director/index.js';
+export * from './progression.js';

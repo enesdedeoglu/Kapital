@@ -268,3 +268,45 @@ describe('idempotency', () => {
     expect((await checkInvariants(sql)).ok).toBe(true);
   });
 });
+
+describe('★ aynı depoya çoklu sevkiyat (F8 bulgusu)', () => {
+  it('bir sevkiyatın taşması turu düşürmez, kısmi teslim edilir', async () => {
+    // Boş kapasite döngüden önce tek sorguda okunuyordu; aynı depoya iki
+    // sevkiyat geldiğinde ikincisi bayat değeri kullanıp depoyu taşırıyor ve
+    // TÜM TUR çöküyordu.
+    const buyer = await makePlayer(sql, money(500_000), 'Alıcı A.Ş.');
+    const small = await makeFacility(sql, buyer.id, {
+      typeCode: 'KIOSK', cityId: 1, capacity: qty(300),
+    });
+    const s1 = await makePlayer(sql, money(100_000), 'Satıcı 1');
+    const s2 = await makePlayer(sql, money(100_000), 'Satıcı 2');
+    const f1 = await makeFacility(sql, s1.id, { typeCode: 'GREENGROCER', cityId: 1 });
+    const f2 = await makeFacility(sql, s2.id, { typeCode: 'GREENGROCER', cityId: 1 });
+
+    for (const [company, facility] of [[s1, f1], [s2, f2]] as const) {
+      await runInTransaction(sql, (tx) => addBatch(tx, {
+        inventoryId: facility.inventoryId, productId: IRON,
+        quantity: qty(200), unitCost: money(10), quality: 70, producedAtTick: 0n,
+      }));
+      await placeOrder(sql, {
+        companyId: company.id, facilityId: facility.id, cityId: 1, productId: IRON,
+        side: 'SELL', quantity: qty(200), price: money(12),
+      });
+    }
+    await placeOrder(sql, {
+      companyId: buyer.id, facilityId: small.id, cityId: 1, productId: IRON,
+      side: 'BUY', quantity: qty(400), price: money(20),
+    });
+
+    // Tur ÇÖKMEMELİ; depo 300 birim alır, kalanı bekler.
+    const tick = await runTick(sql);
+    expect(tick.skipped).toBe(false);
+    const exchange = tick.phases.EXCHANGE!.result as { matches: number };
+    expect(exchange.matches).toBeGreaterThan(0);
+
+    const [inv] = await sql<{ used: bigint; capacity: bigint }[]>`
+      SELECT used_capacity AS used, capacity FROM inventories
+       WHERE facility_id = ${small.id}::uuid`;
+    expect(inv!.used).toBeLessThanOrEqual(inv!.capacity);
+  });
+});

@@ -174,6 +174,61 @@ kısaltmak yerine tamamlamayı tercih ettim.
 
 ---
 
+### A13. Seviye ilerleyişi uygulandı 🔴 *(F8, 3 Eylül 2026)*
+`company_levels` F0'da tohumlandı ve şirket ekranında gösteriliyordu, ama
+`companies.level` HİÇBİR YERDE artmıyordu — yalnız testler elle set ediyordu.
+Deneyim puanı için kolon bile yoktu.
+
+Spec deneyim kazanımını yalnız ONBOARDING görevleri için tanımlıyordu (7 adım
+= 700 XP = tam olarak Lv2 şartı). Sürekli oyun için bir kural yoktu; faaliyet
+temelli bir kural tanımlandı ve config'e alındı (`progression.experience`).
+Onboarding'in 700 XP'si bu kuralla uyumludur.
+
+**Karar: uygulandı.** Migration 0013 + `packages/economy/src/progression.ts` +
+P7'de koşan `runProgression`.
+
+---
+
+### C10. Seviye merdiveni tırmanılabilir hale getirildi 🔴 *(F8, 3 Eylül 2026)*
+Lv2 "1 farklı ürün ÜRETMİŞ olmak" istiyordu; en düşük kilitli üretim tesisi
+Lv4'te açılıyordu. Aynı çelişki Lv3, Lv4 ve Lv5'te de vardı — merdiven
+tırmanılamazdı.
+
+Lv2–4'ün üretim şartı kaldırıldı (onboarding zinciri de üretim içermez),
+üretim şartı Lv5'te başlıyor. `seed-data.test.ts` kuralı sabitliyor: bir
+seviyenin `products` şartı, önceki seviyede üretilebilen farklı ürün sayısını
+aşamaz.
+
+**Karar: düzeltildi.**
+
+---
+
+### A14. `apps/sim` — `packages/sim` değil 🟢 *(F8, 3 Eylül 2026)*
+Yol haritası `packages/sim` diyordu. İki nedenle `apps/sim` oldu:
+
+1. Simülasyon bir kütüphane değil, **koşulan bir araçtır** — `apps/api` ve
+   `apps/worker` gibi.
+2. `@kapital/api`'nin servislerini doğrudan kullanır. Bir PAKETİN bir
+   UYGULAMAYA bağımlı olması katman yönünü tersine çevirirdi.
+
+Servisleri çağırması bilinçli: simüle edilen oyuncu gerçek oyuncunun geçtiği
+kod yolundan geçer. Kuralları simülasyon için ikinci kez yazmak, simülasyonu
+ölçtüğü şeyden ayırırdı.
+
+**Karar: `apps/sim`.**
+
+---
+
+### C11. Dünya talebi şirket sayısıyla ölçeklenebilir hale getirildi 🟠 *(F8, 3 Eylül 2026)*
+Spec'te tüketici talebi şehrin sabit özelliklerinden gelir ve oyuncu sayısından
+bağımsızdır. `worldDemandScale` eklendi ama **varsayılanı 1 (kapalı)**:
+tarama, üretim kapasitesi sabitken talebi büyütmenin kıtlığı derinleştirdiğini
+gösterdi (arz/talep bandındaki ürün 6/10 → 4/10).
+
+**Karar: mekanizma eklendi, kalibrasyon açık.** Ayrıntı: docs/10 R32–R33.
+
+---
+
 ### C7. ED direktiflerine YÖN eklendi 🔴 *(F7, 3 Eylül 2026)*
 Madde 30'un bant tablosu tek yönlüdür: sağlık düştükçe daha çok teşvik verir.
 Oysa madde 29'un `f_supply` bileşeni çift yönlüdür — arz/talep oranı 1,0'da tepe

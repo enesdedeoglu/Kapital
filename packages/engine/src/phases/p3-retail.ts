@@ -2,6 +2,7 @@ import { consumeFefo, transfer, type Sql } from '@kapital/db';
 import {
   allocateRetail, cityDemand, demandNoise, economicCycle, scoreOffer, seasonMultiplier,
   type CategoryWeights, type CityDemandParams, type ProductDemandParams, type RetailOffer,
+  worldDemandScale, DEFAULT_DEMAND_SCALE, type DemandScaleConfig,
 } from '@kapital/economy';
 import { asMoney, asQty, deterministicUuid, priceTimesQty, type Money } from '@kapital/shared';
 import { configValue, rngFor, type EngineTick } from '../context.js';
@@ -72,6 +73,22 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
     WHERE p.is_active AND p.is_retail_product AND p.base_demand > 0`;
 
   const cycle = economicCycle(tick.seq, retailCfg.cycleAmplitude);
+
+  /*
+   * ★ Dünya talebi ŞİRKET SAYISIYLA ölçeklenir.
+   *
+   * Spec'te talep şehrin sabit özelliklerinden gelir ve oyuncu sayısından
+   * bağımsızdır; bu, oyuncu tabanı büyüdükçe sabit bir pastanın daha çok
+   * satış noktası arasında bölünmesi demektir. F8 simülasyonunda ölçüldü:
+   * 130 nokta, nokta başına 43 ₺/tur, bakım 2 ₺/tur → her dükkân zararda.
+   */
+  const scaleCfg = configValue<DemandScaleConfig>(
+    tick, 'economy.demandScale', DEFAULT_DEMAND_SCALE,
+  );
+  const [activeCount] = await sql<{ count: bigint }[]>`
+    SELECT COUNT(*) AS count FROM companies
+     WHERE kind <> 'SYSTEM' AND status = 'ACTIVE'`;
+  const demandScale = worldDemandScale(Number(activeCount?.count ?? 0n), scaleCfg);
   const [consumer] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = 'SYS_CONSUMER'`;
 
   const byMarket = new Map<string, OfferRow[]>();
@@ -107,7 +124,7 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
       const demand = cityDemand(productParams, cityParams, {
         economicCycle: cycle,
         seasonMultiplier: seasonMultiplier(tick.season, seasonTable, product.code),
-        eventMultiplier: 1,
+        eventMultiplier: demandScale,
         noise: demandNoise(rng, retailCfg.noiseMin, retailCfg.noiseMax),
         budgetSlack,
       });

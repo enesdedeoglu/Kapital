@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { money, mulberry32, qty, type Money } from '@kapital/shared';
-import { cityDemand } from './demand.js';
+import { cityDemand, worldDemandScale,
+} from './demand.js';
 import { reservationCeiling, scoreOffer } from './attractiveness.js';
 import { affordableUnits, allocateRetail } from './allocation.js';
 import { decayBatch, expiryTick } from './decay.js';
@@ -252,5 +253,41 @@ describe('çevrim ve gürültü', () => {
       expect(n).toBeLessThanOrEqual(1.03);
       expect(n).toBe(demandNoise(b));
     }
+  });
+});
+
+describe('dünya talep ölçeği (F8)', () => {
+  const cfg = { baseMultiplier: 1, baselineCompanies: 65, elasticity: 0.85, max: 20 };
+
+  it('taban şirket sayısında ölçek 1', () => {
+    expect(worldDemandScale(65, cfg)).toBeCloseTo(1, 6);
+  });
+
+  it('★ oyuncu tabanı büyüdükçe dünya da büyür', () => {
+    const az = worldDemandScale(65, cfg);
+    const cok = worldDemandScale(500, cfg);
+    expect(cok).toBeGreaterThan(az);
+  });
+
+  it('esneklik 1in altında: nokta başına ciro seyrelir, rekabet kalkmaz', () => {
+    // 4 kat şirket → 4^0,85 ≈ 3,25 kat talep, yani nokta başına düşen azalır.
+    const scale = worldDemandScale(260, cfg);
+    expect(scale).toBeLessThan(4);
+    expect(scale).toBeGreaterThan(3);
+  });
+
+  it('tabanın altına inilmez — küçülen dünya talebi kısmaz', () => {
+    expect(worldDemandScale(10, cfg)).toBe(1);
+    expect(worldDemandScale(0, cfg)).toBe(1);
+  });
+
+  it('üst sınır uygulanır — dünya sınırsız büyümez', () => {
+    expect(worldDemandScale(1_000_000, cfg)).toBe(20);
+  });
+
+  it('taban çarpanı kalibrasyon koludur ve doğrudan çarpar', () => {
+    const yuksek = { ...cfg, baseMultiplier: 3 };
+    expect(worldDemandScale(65, yuksek)).toBeCloseTo(3, 6);
+    expect(worldDemandScale(260, yuksek)).toBeCloseTo(3 * worldDemandScale(260, cfg), 6);
   });
 });

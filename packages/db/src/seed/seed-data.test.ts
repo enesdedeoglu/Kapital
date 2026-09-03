@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { validateProductGraph, type GraphProduct, type GraphRecipe } from '@kapital/economy';
-import { facilityTypes, products, recipes } from './data.js';
+import { companyLevels, facilityTypes, products, recipes } from './data.js';
 
 /**
  * Tohum verisi doğrulaması.
@@ -87,5 +87,57 @@ describe('tohum verisi ürün grafı (I8)', () => {
       }
     }
     expect(report).toEqual([]);
+  });
+});
+
+/**
+ * Seviye merdiveni tırmanabilir olmalı.
+ *
+ * Bir seviyenin şartı, o seviyeye gelene kadar YAPILABİLECEK şeylerle
+ * sınırlıdır. İlk tasarımda değildi: Lv2 "1 farklı ürün üret" istiyor, ama en
+ * düşük üretim tesisi Lv4'te açılıyordu. Hiçbir oyuncu seviye 1'i geçemiyordu
+ * ve bu ancak F8 simülasyonunda görüldü — 200 turda 184 LEVEL_LOCKED reddi.
+ */
+describe('seviye merdiveni tırmanabilir (madde 11)', () => {
+  const producibleAt = (level: number) => {
+    const facilityUnlock = new Map(facilityTypes.map((f) => [f.code, f.unlock]));
+    return new Set(
+      recipes
+        .filter((r) => (facilityUnlock.get(r.facilityCode) ?? 99) <= level && r.unlock <= level)
+        .map((r) => r.outputCode),
+    ).size;
+  };
+
+  it('★ hiçbir seviye, önceki seviyede üretilemeyecek kadar ürün istemez', () => {
+    const deadlocks: string[] = [];
+    for (const level of companyLevels) {
+      if (level.level === 1) continue;
+      const available = producibleAt(level.level - 1);
+      if (level.products > available) {
+        deadlocks.push(
+          `Lv${level.level}: ${level.products} farklı ürün istiyor, ` +
+          `Lv${level.level - 1}'de ${available} üretilebiliyor`,
+        );
+      }
+    }
+    expect(deadlocks).toEqual([]);
+  });
+
+  it('üretim şartı olan seviyede en az bir üretim tesisi açılmış olmalı', () => {
+    for (const level of companyLevels) {
+      if (level.units <= 0) continue;
+      expect(producibleAt(level.level - 1), `Lv${level.level}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('şartlar seviyeyle birlikte artar — merdiven geriye gitmez', () => {
+    for (let i = 1; i < companyLevels.length; i++) {
+      const prev = companyLevels[i - 1]!;
+      const cur = companyLevels[i]!;
+      expect(cur.xp, `Lv${cur.level} xp`).toBeGreaterThan(prev.xp);
+      expect(cur.value, `Lv${cur.level} değer`).toBeGreaterThan(prev.value);
+      expect(cur.products, `Lv${cur.level} ürün`).toBeGreaterThanOrEqual(prev.products);
+      expect(cur.units, `Lv${cur.level} üretim`).toBeGreaterThanOrEqual(prev.units);
+    }
   });
 });

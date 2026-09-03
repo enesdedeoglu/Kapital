@@ -1,11 +1,12 @@
 import {
-  bigint, doublePrecision, index, numeric, pgTable, smallint, text, timestamp, uuid,
+  bigint, doublePrecision, index, numeric, pgTable, primaryKey, smallint, text,
+  timestamp, uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { companyKind, companyStatus } from './enums.js';
 import { moneyCol, qtyCol } from './_types.js';
 import { users } from './identity.js';
-import { cities } from './world.js';
+import { cities, products } from './world.js';
 
 export const companyLevels = pgTable('company_levels', {
   level: smallint('level').primaryKey(),
@@ -54,3 +55,20 @@ export const companyStats = pgTable('company_stats', {
   facilitiesBuilt: bigint('facilities_built', { mode: 'number' }).notNull().default(0),
   peakCompanyValue: moneyCol('peak_company_value').notNull().default(0n),
 });
+
+/**
+ * Şirketin ürettiği farklı ürünler — seviye şartı (madde 11) ve üretim geçmişi.
+ *
+ * `company_stats.distinct_products_produced` bir seviye şartıydı ama F8'e
+ * kadar hiç güncellenmiyordu. Tüm zamanların ayrık ürün sayısını her turda
+ * `production_records` üzerinden saymak pahalıdır; bu tablo sayımı O(1) yapar.
+ */
+export const companyProducts = pgTable(
+  'company_products',
+  {
+    companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+    productId: smallint('product_id').notNull().references(() => products.id),
+    firstTick: bigint('first_tick', { mode: 'bigint' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.companyId, t.productId] })],
+);

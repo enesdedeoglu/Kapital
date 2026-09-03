@@ -285,12 +285,29 @@ async function deliverArrivals(sql: Sql, tick: EngineTick): Promise<{ count: num
   let count = 0;
   let units = 0n;
 
+  /*
+   * ★ Boş kapasite döngüden ÖNCE tek sorguda okunur. Aynı depoya birden çok
+   * sevkiyat geldiğinde ikincisi bayat değeri kullanır ve depoyu taşırır;
+   * `addBatch` STORAGE_FULL fırlatır ve TÜM TUR düşer.
+   *
+   * F8 simülasyonunda ortaya çıktı: oyuncular alım yapmaya başlayınca aynı
+   * manavın deposuna iki sevkiyat aynı turda vardı ve tur çöktü.
+   *
+   * Bu harita, döngü içinde tüketilen kapasiteyi izler.
+   */
+  const consumed = new Map<string, bigint>();
+
   for (const shipment of due) {
     const pending = shipment.quantity - shipment.delivered_quantity;
     if (pending <= 0n) continue;
-    const deliverable = pending < shipment.free ? pending : shipment.free;
+    const used = consumed.get(shipment.inventory_id) ?? 0n;
+    const free = shipment.free - used;
+    const deliverable = pending < free ? pending : free;
     if (deliverable <= 0n) continue; // depo dolu — sonraki turda tekrar denenir
 
+    // İkinci kalkan: hesap doğru olsa bile tek bir sevkiyatın TÜM TURU
+    // düşürmesine izin verilmez. Teslim edilemeyen sevkiyat bekler.
+    try {
     await sql.begin(async (tx) => {
       const t = tx as unknown as Sql;
       await addBatch(t, {
@@ -312,7 +329,12 @@ async function deliverArrivals(sql: Sql, tick: EngineTick): Promise<{ count: num
                              ELSE 'PARTIAL'::shipment_status END
          WHERE id = ${shipment.id}`;
     });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'STORAGE_FULL') throw error;
+      continue;
+    }
 
+    consumed.set(shipment.inventory_id, used + deliverable);
     units += deliverable;
     if (deliverable >= pending) count++;
   }

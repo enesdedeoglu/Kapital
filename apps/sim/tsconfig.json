@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // apps/api'nin servisleri Nest dekoratörleri taşır; tsx giriş dosyasının
+    // tsconfig'ini kullandığı için burada da açık olmalı.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false
+  },
+  "include": ["src/**/*"]
+}

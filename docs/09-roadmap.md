@@ -287,16 +287,75 @@ kalıyor, çünkü arz dışı bileşenler (satıcı, alıcı, derinlik, istikra
 
 ---
 
-## F8 ★ — Simülasyon ve denge · 2 hafta
-- `packages/sim`: headless harness, 1000 şirket × 90 gün (≈8.640 tick)
-- 8 oyuncu davranış profili (agresif tüccar, pasif, ucuzcu, kaliteci, üretici,
-  perakendeci, dikey entegre, spekülatör)
-- Metrik raporu: money supply, CPI, medyan şirket değeri, Top1%/medyan,
-  volatilite, S/D oranı, stok derinliği, NPC payı, tesis ROI, iflas oranı
-- Parametre tarama (parameter sweep) ile denge ayarı
+## F8 ★ — Simülasyon ve denge · 2 hafta  🔨 SÜRÜYOR (3 Eylül 2026)
+- `apps/sim`: headless harness — **`packages/sim` değil, `apps/sim`**: bu bir
+  kütüphane değil, koşulan bir araç. Ayrıca `@kapital/api`'nin servislerini
+  kullanır ve bir paketin bir uygulamaya bağımlı olması katmanı ters çevirirdi.
+- 8 oyuncu davranış profili ✅
+- 12 metriklik geçiş kapısı raporu ✅
+- Parametre tarama (`sweep.ts`) ✅
+
+### ★ Simülasyon GERÇEK servisleri çağırır
+
+Simüle edilen oyuncu, gerçek oyuncunun geçtiği kod yolundan geçer
+(`@kapital/api/services`): aynı doğrulamalar, aynı seviye kilitleri, aynı nakit
+kontrolleri, aynı defter kayıtları. Kuralları simülasyon için ikinci kez
+yazmak, simülasyonu ölçtüğü şeyden ayırırdı — denge kapısı da o kadar
+anlamsızlaşırdı. Simülasyonun kendisi yalnız KARARI verir.
+
+### Bulunan ve düzeltilen kusurlar
+
+| Kod | Kusur | Nasıl görüldü |
+|---|---|---|
+| R30 | Seviye merdiveni kilitli: hiçbir oyuncu Lv1'i geçemiyor | 700 turda 420 `LEVEL_LOCKED` |
+| R30b | İlerleme hiç uygulanmamış; 4 sayaç ölü | `companies.level` hiçbir yerde artmıyordu |
+| R31 | Aynı depoya çoklu sevkiyat TÜM TURU düşürüyor | oyuncular alım yapınca çöktü |
+| — | Oyuncu teklifi referansın altında: hiç mal alamıyor | 138 alış emri, 0 dolum |
+| — | Oyuncu rafı piyasanın %37 üstünde: hiç satamıyor | 87 dükkân, 7.693 ₺ ciro, 17.272 ₺ bakım |
 
 ### ★ GEÇİŞ KAPISI 2 — Ekonomi hedefleri
-`08-mvp-kapsami.md` sonundaki 8 metrik eşiği tutmalı. **Tutmadan beta açılmaz.**
+
+`08-mvp-kapsami.md` sonundaki **12** metrik eşiği tutmalı (yol haritası "8"
+diyordu; tablo 12 satır). **Tutmadan beta açılmaz.**
+
+**Şu anki durum: KAPI GEÇİLMEDİ.** 60 oyuncu × 700 tur koşusunda 6 metrik
+tutmuyor. Kök neden ölçüldü ve mekanizması kuruldu (R32): dünya talebi oyuncu
+tabanıyla ölçeklenmiyordu — 130 satış noktası, nokta başına 43 ₺/tur ciro,
+bakım 2 ₺/tur, brüt marj %12. Madde 56'nın "1. hafta 100.000–250.000 ₺"
+hedefi bu talep düzeyinde matematiksel olarak ulaşılamaz.
+
+`worldDemandScale` eklendi; `economy.demandScale.baseMultiplier` kalibrasyon
+koludur. **Varsayılanı 1 (kapalı) bırakıldı**, çünkü tarama talebi büyütmenin
+tek başına durumu KÖTÜLEŞTİRDİĞİNİ gösterdi:
+
+| `baseMultiplier` | Arz/talep bandındaki ürün | Kur değişimi | Bant yapışması |
+|---|---|---|---|
+| 1 | **6/10** ✓ | %3,4 | %62,9 |
+| 5 | 4/10 ✗ | %10,2 | %10,0 |
+| 12 | 4/10 ✗ | %9,4 | %20,0 |
+
+Üretim kapasitesi sabitken talebi büyütmek yalnız kıtlığı derinleştiriyor.
+
+### Kapının önündeki asıl engel (R33)
+
+Seviye 1'de bir oyuncu yalnız **domates** ticareti yapabilir; diğer perakende
+ürünlerinin kilidi Lv6, Lv8 ve Lv12'de. Tüm yeni oyuncu nüfusu tek bir ürünün
+toptan arzı için yarışıyor ve o ürünün üretimi tavanda:
+
+```
+domates talebi   62.656 birim / 24 tur
+domates üretimi   1.881 birim / 24 tur     ← NPC bahçeleri %100 kullanımda
+oyuncu alış emri  877 açıldı · 640 süresi doldu · 55 doldu
+Lv2'ye çıkan      2 / 40 oyuncu
+```
+
+NPC'ler kıtlığa yatırımla cevap verdi (400 turda 20 tesis) ama sebze bahçesi
+kurmadılar: yatırım skoru rekabeti ceza sayıyor ve domateste 5 satıcı varken
+fırında 2 vardı. Ekonomik olarak tutarlı, ama sonucu yeni oyuncunun giriş
+ürününün kıt kalması.
+
+Seçenekler docs/10 R33'te; **karar bir oyun tasarımı kararıdır** ve kapı
+geçilmeden verilmelidir.
 
 ---
 

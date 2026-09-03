@@ -294,6 +294,13 @@ async function completeJobs(sql: Sql, tick: EngineTick): Promise<{ count: number
         await t`UPDATE company_stats
                    SET total_units_produced = total_units_produced + ${job.planned_output}
                  WHERE company_id = ${job.company_id}::uuid`;
+        // Farklı ürün sayacı bir seviye şartıdır (madde 11) ve F8'e kadar hiç
+        // güncellenmiyordu. Ayrık ürünü her turda saymak yerine ilk üretimde
+        // kaydedilir.
+        await t`
+          INSERT INTO company_products (company_id, product_id, first_tick)
+          VALUES (${job.company_id}::uuid, ${job.output_product_id}, ${tick.seq})
+          ON CONFLICT (company_id, product_id) DO NOTHING`;
       });
       produced += job.planned_output;
       count++;

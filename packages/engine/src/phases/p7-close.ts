@@ -1,11 +1,13 @@
 import { checkInvariants, type Sql } from '@kapital/db';
 import { giniCoefficient } from '@kapital/economy';
+import { runProgression, type ProgressionResult } from './progression.js';
 import { asMoney, formatMoney, toJson } from '@kapital/shared';
 import type { EngineTick } from '../context.js';
 
 export interface ClosePhaseResult {
   moneySupply: string;
   gini: number;
+  progression: ProgressionResult;
   notifications: number;
   invariantsOk: boolean;
   violations: unknown[];
@@ -116,9 +118,14 @@ export async function runClosePhase(sql: Sql, tick: EngineTick): Promise<ClosePh
 
   const report = await checkInvariants(sql);
 
+  // Seviye ilerleyişi finansallardan SONRA: şirket değeri şartı bu turun
+  // değerine bakar (madde 11).
+  const progression = await runProgression(sql, tick);
+
   return {
     moneySupply: supply!.total,
     gini,
+    progression,
     notifications: sales.length + depleted.length,
     invariantsOk: report.ok,
     violations: report.violations,

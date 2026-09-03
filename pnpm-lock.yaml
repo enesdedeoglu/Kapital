@@ -79,6 +79,37 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  apps/sim:
+    dependencies:
+      '@kapital/api':
+        specifier: workspace:*
+        version: link:../api
+      '@kapital/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@kapital/economy':
+        specifier: workspace:*
+        version: link:../../packages/economy
+      '@kapital/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@kapital/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   apps/worker:
     dependencies:
       '@kapital/db':

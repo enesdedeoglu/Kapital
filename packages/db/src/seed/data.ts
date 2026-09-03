@@ -149,18 +149,36 @@ export const loanTerms = [
  * Seviyeler 1–12 — madde 42. BEŞ kriter de sağlanmalıdır (AND, OR değil);
  * böylece zengin bir arkadaştan para almak tek başına seviye atlatmaz (C4).
  */
+/**
+ * Seviye merdiveni — madde 11.
+ *
+ * ★ `products` (farklı ürün ÜRETMİŞ olma şartı) ile tesis kilit seviyeleri
+ * TUTARLI olmalıdır. İlk tasarımda değildi ve merdiven kilitleniyordu:
+ * Lv2 "1 farklı ürün üret" istiyordu ama en düşük üretim tesisi (Sebze
+ * Bahçesi) Lv4'te açılıyordu. Sonuç: hiçbir oyuncu seviye 1'i geçemiyordu.
+ * F8 simülasyonu bunu ortaya çıkardı (200 turda 184 LEVEL_LOCKED reddi).
+ *
+ * Kural: L seviyesinin `products` şartı, L−1'de üretilebilen farklı ürün
+ * sayısını AŞAMAZ. `seed-data.test.ts` bunu doğrular.
+ *
+ * Üretilebilen ürün sayısı: Lv1–3 → 0 · Lv4 → 1 (domates) · Lv5 → 2 (+buğday)
+ * Lv6 → 4 (+un, ekmek) · Lv7 → 5 (+tütün) · Lv8 → 6 (+sigara)
+ * Lv13 → 8 (+demir, kömür) · Lv15 → 9 (+çelik) · Lv16 → 10 (+mobilya)
+ */
 export const companyLevels = [
   { level: 1,  xp: 0,       value: 0,         volume: 0,        units: 0,     products: 0, title: 'Esnaf' },
-  { level: 2,  xp: 700,     value: 45_000,    volume: 15_000,   units: 0,     products: 1, title: 'Dükkân Sahibi' },
-  { level: 3,  xp: 2_000,   value: 80_000,    volume: 60_000,   units: 0,     products: 1, title: 'Tüccar' },
-  { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 2, title: 'Bahçe Sahibi' },
-  { level: 5,  xp: 9_000,   value: 240_000,   volume: 320_000,  units: 500,   products: 2, title: 'Çiftçi' },
-  { level: 6,  xp: 17_000,  value: 400_000,   volume: 620_000,  units: 2_000, products: 3, title: 'Değirmenci' },
+  // Lv2–4 perakendeyle çıkılır: onboarding zinciri de üretim içermez (docs/08).
+  { level: 2,  xp: 700,     value: 45_000,    volume: 15_000,   units: 0,     products: 0, title: 'Dükkân Sahibi' },
+  { level: 3,  xp: 2_000,   value: 80_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
+  { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 0, title: 'Bahçe Sahibi' },
+  // Lv4'te Sebze Bahçesi açıldı: artık üretim şartı konabilir.
+  { level: 5,  xp: 9_000,   value: 240_000,   volume: 320_000,  units: 500,   products: 1, title: 'Çiftçi' },
+  { level: 6,  xp: 17_000,  value: 400_000,   volume: 620_000,  units: 2_000, products: 2, title: 'Değirmenci' },
   { level: 7,  xp: 30_000,  value: 650_000,   volume: 1_100_000, units: 5_000, products: 3, title: 'Üretici' },
   { level: 8,  xp: 52_000,  value: 1_050_000, volume: 1_900_000, units: 12_000, products: 4, title: 'Sanayici' },
-  { level: 9,  xp: 88_000,  value: 1_700_000, volume: 3_200_000, units: 25_000, products: 4, title: 'Fabrikatör' },
+  { level: 9,  xp: 88_000,  value: 1_700_000, volume: 3_200_000, units: 25_000, products: 5, title: 'Fabrikatör' },
   { level: 10, xp: 145_000, value: 2_700_000, volume: 5_400_000, units: 45_000, products: 5, title: 'Zincir Sahibi' },
-  { level: 11, xp: 235_000, value: 4_300_000, volume: 9_000_000, units: 80_000, products: 5, title: 'Grup Başkanı' },
+  { level: 11, xp: 235_000, value: 4_300_000, volume: 9_000_000, units: 80_000, products: 6, title: 'Grup Başkanı' },
   { level: 12, xp: 380_000, value: 6_800_000, volume: 15_000_000, units: 140_000, products: 6, title: 'Holding' },
 ];
 
@@ -180,6 +198,10 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'economy.upkeep',  value: { maintenanceRate: MAINTENANCE_RATE, conditionWearPerTick: 0.05 } },
   { key: 'economy.loan',    value: { liquidationRate: 0.5, inflationK: 1.0, creditShareAlarm: 0.20 } },
   { key: 'economy.upgrade',    value: { costMultiplier: 0.75, costExponent: 1.55, maxLevel: 10 } },
+  // Dünya talep ölçeği (F8) — talep şirket sayısıyla büyür. `baseMultiplier`
+  // kalibrasyon koludur; `sweep.ts` ile taranır.
+  { key: 'economy.demandScale', value: { baseMultiplier: 1, baselineCompanies: 65,
+                                         elasticity: 0.85, max: 20 } },
   { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12 } },
   { key: 'economy.pricing',  value: { emaAlpha: 0.25, trimLowPct: 0.10, trimHighPct: 0.90, shockClampPct: 0.15, referenceWindowTicks: 96 } },
   { key: 'economy.shipping', value: { baseRatePerKgDistance: money(0.35).toString() } },
@@ -194,6 +216,10 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'npc.inventory',    value: { minTicks: 4, targetTicks: 12, maxTicks: 24 } },
   { key: 'npc.throttle',     value: { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 } },
   { key: 'npc.investment',   value: { threshold: 0.55, cashBufferRatio: 1.5, maxFacilities: 4 } },
+  // Seviye ilerleyişi — madde 11. Onboarding zinciri 7 adımda 700 XP verir
+  // (Lv2 şartı); sürekli oyun da benzer büyüklükte olmalı.
+  { key: 'progression.experience', value: { retailPerXp: 100, tradePerXp: 200,
+                                            producedPerXp: 10, facilityBonus: 100 } },
   // Ekonomi Direktörü — madde 29-33. Ağırlıklar admin panelden ayarlanabilir.
   { key: 'director',         value: { hysteresisTicks: 6, directiveTtlTicks: 96,
                                       targetSellers: 4, targetBuyers: 6 } },

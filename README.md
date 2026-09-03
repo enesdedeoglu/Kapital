@@ -7,10 +7,11 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0–F7 tamamlandı.** MVP-0, üretim zinciri, toptan piyasa, lojistik,
-> dış ticaret, bankacılık, NPC ekonomisi ve Ekonomi Direktörü çalışıyor.
-> Oyuncusuz bir dünya 500 tur boyunca kendi kendine koşuyor; arz şoklarını
-> ölçüyor ve müdahale ediyor. Sıradaki faz: F8 — simülasyon ve denge kapısı.
+> **Durum: F0–F7 tamamlandı, F8 sürüyor.** MVP-0, üretim zinciri, toptan piyasa,
+> lojistik, dış ticaret, bankacılık, NPC ekonomisi ve Ekonomi Direktörü
+> çalışıyor. F8'in simülasyon altyapısı kuruldu ve beş ciddi kusur ortaya
+> çıkardı; **denge kapısı henüz geçilmedi** — kalan iş oyun dengesi
+> kalibrasyonu (docs/10 R32–R33).
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -217,6 +218,30 @@ hepsi NPC davranışına dokunur.
 ```bash
 # Arz şoku senaryosu: ısınma → üretimi durdur + stoğu imha et → gözle → onar
 pnpm --filter @kapital/engine exec tsx src/cli/scenario-shock.ts TOMATO 40 60 60
+```
+
+### F8 — Simülasyon ve denge kapısı 🔨
+
+| Alan | Durum |
+|---|---|
+| `apps/sim` — başsız simülasyon, 8 oyuncu davranış profili | ✅ |
+| **Gerçek servis yollarını kullanır** — kural kopyalanmaz | ✅ |
+| 12 metriklik geçiş kapısı raporu (madde 56) | ✅ |
+| Parametre tarama (`sweep.ts`) | ✅ |
+| **Denge kapısı geçildi mi** | ❌ henüz |
+
+Simüle edilen oyuncu, gerçek oyuncunun geçtiği kod yolundan geçer
+(`@kapital/api/services`): aynı doğrulamalar, aynı seviye kilitleri, aynı nakit
+kontrolleri. Simülasyon yalnız kararı verir, kuralı değil.
+
+**Bulup düzelttikleri:** seviye merdiveni kilitliydi ve ilerleme hiç
+uygulanmamıştı (R30) · aynı depoya çoklu sevkiyat tüm turu düşürüyordu (R31) ·
+oyuncu teklifi referansın altındaydı, hiç mal alamıyordu · oyuncu rafı
+piyasanın %37 üstündeydi, hiç satamıyordu.
+
+```bash
+pnpm --filter @kapital/sim exec tsx src/cli/run-sim.ts 60 700 350
+pnpm --filter @kapital/sim exec tsx src/cli/sweep.ts economy.demandScale '{...}' '{...}' -- 40 400
 ```
 
 ### Doğrulanmış çıkış kriterleri

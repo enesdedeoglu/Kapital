@@ -612,6 +612,151 @@ büyür.
 
 ---
 
+## R30 — Seviye merdiveni kilitliydi: hiçbir oyuncu Lv1'i geçemiyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 simülasyonu · **Durum:** ✅ çözüldü
+
+İki ayrı kusur üst üste binmişti:
+
+**(a) İlerleme hiç uygulanmamıştı.** `company_levels` F0'da tohumlandı ve
+şirket ekranında gösteriliyordu, ama `companies.level` HİÇBİR YERDE
+artmıyordu — yalnız testler elle set ediyordu. Deneyim puanı için kolon bile
+yoktu.
+
+**(b) Merdivenin kendisi tırmanılamazdı.** Lv2 "1 farklı ürün ÜRETMİŞ olmak"
+istiyordu; ama en düşük kilitli üretim tesisi (Sebze Bahçesi) Lv4'te
+açılıyordu. Aynı çelişki Lv3, Lv4 ve Lv5'te de vardı:
+
+| Seviye | İstenen farklı ürün | Önceki seviyede üretilebilen |
+|---|---|---|
+| 2 | 1 | **0** |
+| 3 | 1 | **0** |
+| 4 | 2 | **0** |
+| 5 | 2 | **1** |
+| 6 | 3 | **2** |
+
+Sonuç: 60 oyuncu, 700 tur (7,3 gün) boyunca seviye 1'de kaldı; 420 eylem
+`LEVEL_LOCKED` ile reddedildi. Oyuncular yalnız domates satabildi, üretim
+tesisi kuramadı, NPC üretim payı %100'de kaldı.
+
+**Çözüm:**
+- Migration 0013: `company_stats.experience`, `last_level_up_tick`,
+  `company_products` tablosu.
+- `packages/economy/src/progression.ts`: faaliyet temelli deneyim + şart
+  kontrolü (saf, test edilmiş).
+- P7'de (CLOSE) koşan `runProgression`: finansallar yazıldıktan sonra, çünkü
+  şirket değeri şartı o turun değerine bakar.
+- Merdiven tohumda düzeltildi: Lv2–4 perakendeyle çıkılır (onboarding zinciri
+  de üretim içermez), üretim şartı Lv5'te başlar.
+- `seed-data.test.ts`: "hiçbir seviye, önceki seviyede üretilemeyecek kadar
+  ürün istemez" — kilitlenme artık CI'da düşer.
+
+**Yan bulgu — ölü sayaçlar.** `distinct_products_produced` bir seviye şartıydı
+ama hiç güncellenmiyordu; `total_retail_revenue`, `distinct_cities` ve
+`peak_company_value` de kalıcı olarak 0'dı. Dördü de artık işliyor.
+
+---
+
+## R31 — Aynı depoya çoklu sevkiyat tüm turu düşürüyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 simülasyonu · **Durum:** ✅ çözüldü
+
+`deliverArrivals` boş kapasiteyi döngüden ÖNCE tek sorguda okuyordu. Aynı
+depoya iki sevkiyat vardığında ikincisi bayat değeri kullanıp depoyu taşırıyor,
+`addBatch` STORAGE_FULL fırlatıyor ve **tur tamamen çöküyordu**.
+
+Oyuncular alım yapmaya başlayana kadar görünmedi: NPC'ler tek kaynaktan
+alıyordu, oyuncular ise aynı manava iki satıcıdan mal çekti.
+
+**Çözüm:** döngü içinde tüketilen kapasiteyi izleyen harita + ikinci kalkan
+olarak STORAGE_FULL yakalama (tek sevkiyat turu düşüremez, bekler).
+Regresyon testi: `exchange.test.ts`.
+
+---
+
+## R32 — Dünya talebi oyuncu tabanıyla ölçeklenmiyor
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 simülasyonu · **Durum:** ⏳ mekanizma kuruldu, kalibrasyon sürüyor
+
+Spec'te tüketici talebi şehrin SABİT özelliklerinden gelir:
+`base_demand × population_index × income_index × consumer_demand_index`.
+Oyuncu sayısından bağımsızdır. Yani oyuncu tabanı büyüdükçe sabit bir pasta
+daha çok satış noktası arasında bölünür.
+
+Ölçüm (60 oyuncu + 65 NPC, 700 tur):
+
+| Ölçüt | Değer |
+|---|---|
+| Toplam tüketici bütçesi | 12.309 ₺/tur |
+| Satış noktası | 130 |
+| Nokta başına ciro | 43 ₺/tur |
+| Manav bakımı | 2 ₺/tur |
+| Perakende brüt marjı | %12 |
+| Oyuncu net kârı (96 tur) | **−11.145 ₺** |
+| 1. hafta şirket değeri | **30.000 ₺** (hedef 100.000–250.000) |
+
+Madde 56'nın büyüme hedefi bu talep düzeyinde matematiksel olarak
+ulaşılamaz: hedef için oyuncu başına ~100–220 ₺/tur net kâr gerekir, dünyanın
+TOPLAM perakende musluğu ise 5.400 ₺/tur.
+
+**Çözüm (mekanizma):** `worldDemandScale(activeCompanies, config)` — dünya
+oyuncu tabanıyla büyür. Her yeni şirket kendi müşteri çevresini de getirir.
+Esneklik 1'in altında (0,85) tutulur ki rekabet baskısı kalksın istemiyoruz:
+nokta başına ciro biraz seyrelir.
+
+`economy.demandScale.baseMultiplier` kalibrasyon koludur ve `sweep.ts` ile
+taranır. **Kapı henüz geçilmedi**; kalibrasyon bu koşularla sürüyor.
+
+---
+
+
+---
+
+## R33 — Yeni oyuncunun giriş yolu tek bir ürüne bağlı ve o ürün kıt
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 simülasyonu · **Durum:** ⏳ ölçüldü, kalibrasyon açık
+
+Seviye 1'de bir oyuncu yalnız **domates** ticareti yapabilir: diğer perakende
+ürünlerinin kilidi Lv6 (ekmek), Lv8 (sigara) ve Lv12'dedir (mobilya). Yani tüm
+yeni oyuncu nüfusu tek bir ürünün toptan arzı için yarışır.
+
+Ölçüm (40 oyuncu + 65 NPC, 400 tur, talep çarpanı 12):
+
+| Ölçüt | Değer |
+|---|---|
+| Domates talebi | 62.656 birim / 24 tur |
+| Domates üretimi | **1.881 birim / 24 tur** |
+| NPC sebze bahçesi kullanımı | %100 (tavanda) |
+| Oyuncu alış emri | 877 açıldı · **640 süresi doldu** · 55 doldu |
+| Lv2'ye çıkan oyuncu | 2 / 40 |
+
+NPC'ler kıtlığa yatırımla cevap VERDİ (400 turda 20 yeni tesis) ama sebze
+bahçesi kurmadılar: yatırım skoru rekabeti ceza olarak sayar ve domateste 5
+satıcı varken fırında 2 vardı. Ekonomik olarak tutarlı bir tercih — ama sonucu,
+yeni oyuncunun giriş ürününün kıt kalması.
+
+**Talep ölçeğini büyütmek çözüm değil.** Tarama bunu gösterdi: `baseMultiplier`
+1 → 5 → 12 arttıkça arz/talep bandındaki ürün sayısı 6/10 → 4/10 → 4/10'a
+DÜŞTÜ. Üretim kapasitesi sabitken talebi büyütmek yalnız kıtlığı derinleştirir.
+Bu yüzden `economy.demandScale.baseMultiplier` varsayılanı **1** bırakıldı:
+mekanizma yerinde, kalibrasyon açık.
+
+**Açık seçenekler (kapı geçilmeden karara bağlanmalı):**
+1. NPC yatırım skoruna "giriş ürünü" ağırlığı: Lv1–3'te ticareti yapılabilen
+   ürünlerde kıtlık ekstra ceza alsın.
+2. `VEG_GARDEN` kilidini Lv4'ten Lv2'ye çekmek — oyuncu kendi arzını üretsin.
+   Seviye başlıklarıyla çelişir ("Lv4 Bahçe Sahibi").
+3. Lv1'de ticareti serbest ürün sayısını artırmak (ekmek kilidini düşürmek).
+4. NPC kapasitesini de oyuncu tabanıyla ölçeklemek — talep gibi.
+
+Seçim bir OYUN TASARIMI kararıdır, mühendislik kararı değil; ölçümler bu
+belgede, karar bekliyor.
+
+---
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -645,3 +790,7 @@ büyür.
 | R27 | `f_playerShare` oyuncusuz dünyada ceza | 🟡 Orta | ✅ F7 — soğuk başlangıç kuralı |
 | R28 | Eşzamanlı yatırım balonu | 🟠 Yüksek | ✅ F7 — boru hattı farkındalığı |
 | R29 | CAPEX para arzını sızdırıyor | 🟡 Orta | ⏳ F8 (ölçüldü) |
+| R30 | Seviye merdiveni kilitli — Lv1 geçilemiyor | 🔴 Kritik | ✅ F8 — ilerleme + merdiven düzeltmesi |
+| R31 | Çoklu sevkiyat turu düşürüyor | 🔴 Kritik | ✅ F8 — kapasite izleme |
+| R32 | Dünya talebi oyuncu tabanıyla ölçeklenmiyor | 🔴 Kritik | ⏳ F8 — mekanizma kuruldu, varsayılan kapalı |
+| R33 | Giriş yolu tek ürüne bağlı ve o ürün kıt | 🔴 Kritik | ⏳ F8 — ölçüldü, tasarım kararı bekliyor |
