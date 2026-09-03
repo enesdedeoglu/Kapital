@@ -3,8 +3,8 @@ import {
   smallint, timestamp, uuid,
 } from 'drizzle-orm/pg-core';
 import { moneyCol, qtyCol } from './_types.js';
-import { companies } from './organization.js';
 import { facilities } from './operations.js';
+import { companies } from './organization.js';
 import { cities, products } from './world.js';
 
 export const orderSide = pgEnum('order_side', ['BUY', 'SELL']);

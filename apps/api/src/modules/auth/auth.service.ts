@@ -4,8 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import type { Sql } from '@kapital/db';
 import { Conflict, DomainError, NotFound } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
-import { hashPassword, verifyPassword } from './password.js';
 import type { LoginDto, RegisterDto } from './auth.dto.js';
+import { hashPassword, verifyPassword } from './password.js';
 
 export interface AuthTokens {
   accessToken: string;

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { money } from '@kapital/shared';
 import {
-  DEFAULT_HEALTH_WEIGHTS, marketHealthScore, type HealthInput,
-} from './health.js';
-import {
   advanceHysteresis, classifyBand, directivesForBand, leverMultiplier, softFloor,
   type HealthBand,
 } from './bands.js';
+import {
+  DEFAULT_HEALTH_WEIGHTS, marketHealthScore, type HealthInput,
+} from './health.js';
 import { giniCoefficient } from './inequality.js';
 
 const healthy: HealthInput = {

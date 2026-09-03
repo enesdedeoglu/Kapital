@@ -3,7 +3,7 @@ import { addBatch, currentTickSeq, transfer, type Sql } from '@kapital/db';
 import { expiryTick } from '@kapital/economy';
 import {
   asMoney, asQty, DomainError, formatMoney, formatQty, InsufficientFunds,
-  money, NotFound, priceTimesQty, qtyFromNumber, type Money, type Qty,
+  money, NotFound, priceTimesQty, qtyFromNumber, type Money,
 } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import type { BuyDto } from './market.dto.js';

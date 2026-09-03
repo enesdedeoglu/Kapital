@@ -1,6 +1,6 @@
 import { bigint, index, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { currencyT, ledgerDir } from './enums.js';
 import { moneyCol } from './_types.js';
+import { currencyT, ledgerDir } from './enums.js';
 
 /**
  * Çift taraflı kayıt defteri — para arzının TEK doğruluk kaynağı (docs/02 §5, I1).

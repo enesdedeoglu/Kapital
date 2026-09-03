@@ -1,7 +1,7 @@
-import type { Sql } from '../client.js';
 import {
   asMoney, asQty, DomainError, divRoundHalfEven, type Money, type Qty,
 } from '@kapital/shared';
+import type { Sql } from '../client.js';
 
 export interface AddBatchInput {
   inventoryId: string;

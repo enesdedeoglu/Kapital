@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { parseEnv } from 'node:util';
 import { join } from 'node:path';
+import { parseEnv } from 'node:util';
 
 const envPath = join(process.cwd(), '../../.env');
 if (existsSync(envPath)) {

@@ -3,7 +3,7 @@ import {
   matchBuyOrder, shippingPerUnit, type BookOrder, type Match, type MatchCandidate,
 } from '@kapital/economy';
 import {
-  asMoney, asQty, deterministicUuid, InsufficientFunds, priceTimesQty, type Money,
+  asMoney, asQty, deterministicUuid, InsufficientFunds, priceTimesQty,
 } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 

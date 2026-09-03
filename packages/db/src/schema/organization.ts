@@ -1,10 +1,10 @@
+import { sql } from 'drizzle-orm';
 import {
   bigint, doublePrecision, index, numeric, pgTable, primaryKey, smallint, text,
   timestamp, uuid,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
-import { companyKind, companyStatus } from './enums.js';
 import { moneyCol, qtyCol } from './_types.js';
+import { companyKind, companyStatus } from './enums.js';
 import { users } from './identity.js';
 import { cities, products } from './world.js';
 

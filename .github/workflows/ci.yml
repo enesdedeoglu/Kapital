@@ -39,6 +39,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Lint derlemeye bağlı değil (tip-farkında kural yok), bu yüzden en başta
+      # koşar: sözdizimi/ölü kod hataları 20 saniyede döner, 3 dakikada değil.
+      - name: Lint
+        run: pnpm lint
+
       - name: Derleme
         run: pnpm build
 

@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { checkInvariants, createSql, type Sql } from '@kapital/db';
 import { prepareTestDb, truncateGameState } from '@kapital/db/testing';
 import { runTick } from '@kapital/engine';
-import { formatMoney, asMoney, money, qty } from '@kapital/shared';
+import { asMoney, money, qty } from '@kapital/shared';
 import { AppModule } from './app.module.js';
 import { DomainErrorFilter } from './common/domain-error.filter.js';
 

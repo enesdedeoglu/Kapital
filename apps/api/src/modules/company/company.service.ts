@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { currentTickSeq, runInTransaction, transfer, type Sql } from '@kapital/db';
 import { CONFIG_KEYS, getConfig, loadConfigSnapshot, type StartConfig } from '@kapital/config';
-import { asMoney, Conflict, DomainError, formatMoney, NotFound, type Money } from '@kapital/shared';
+import { currentTickSeq, runInTransaction, transfer, type Sql } from '@kapital/db';
+import { asMoney, Conflict, DomainError, formatMoney, NotFound } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import type { CreateCompanyDto } from './company.dto.js';
 

@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, expect, it } from 'vitest';
 import { getTableName, getTableColumns } from 'drizzle-orm';
 import { PgTable } from 'drizzle-orm/pg-core';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { Sql } from './client.js';
-import { prepareTestDb } from './testing/harness.js';
 import * as schema from './schema/index.js';
+import { prepareTestDb } from './testing/harness.js';
 
 /**
  * Migration'lar elle SQL yazıldığı için Drizzle şeması ile veritabanı ayrışabilir.

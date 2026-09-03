@@ -1,8 +1,8 @@
+import { sql } from 'drizzle-orm';
 import {
   bigint, boolean, doublePrecision, index, integer, numeric, pgTable, smallint, text,
   timestamp, uuid,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
 import { moneyCol, qtyCol } from './_types.js';
 import { companies } from './organization.js';
 import { cities, facilityTypes, productionRecipes, products } from './world.js';

@@ -31,6 +31,13 @@ Uygulama sırasında alınan iki ek karar: [ADR-0006](adr/0006-elle-yazilan-migr
 `packages/economy` ve `apps/worker` F0'da oluşturulmadı: ilk saf formüller ve tick
 motoru F2'de yazılacak, boş paket iskeleti bırakmanın faydası yok.
 
+**Düzeltme (4 Eylül 2026):** F0'ın "ESLint/Prettier" maddesi aslında F0'da
+kurulmamıştı — kökte `lint` script'i turbo'ya devrediyordu ama hiçbir pakette
+`lint` script'i yoktu, dolayısıyla `pnpm lint` sessizce "0 total" dönüyordu.
+ESLint 9 flat config, Prettier yapılandırması, paket başına `lint` script'i ve
+CI lint adımı F8 sonrasında eklendi. Prettier yalnız **yapılandırma** olarak
+duruyor; mevcut dosyalara toplu uygulanmadı (gerekçe: `eslint.config.js` başı).
+
 ---
 
 ## F1 — Dünya ve şirket · 1,5 hafta  ✅ TAMAMLANDI (2 Eylül 2026)

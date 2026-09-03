@@ -4,7 +4,7 @@ import {
   annuityPayment, inflationAdjustedRate, maxLoanAmount, paymentBurden, splitInstallment,
 } from '@kapital/economy';
 import {
-  asMoney, DomainError, formatMoney, InsufficientFunds, money, NotFound, type Money,
+  asMoney, DomainError, formatMoney, InsufficientFunds, money, NotFound,
 } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import type { TakeLoanDto } from './loan.dto.js';

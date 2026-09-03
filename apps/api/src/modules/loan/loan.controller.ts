@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Inject, Param, Post, Req, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
-import { ZodPipe } from '../../common/zod.pipe.js';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
+import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
-import { LoanService } from './loan.service.js';
 import { takeLoanSchema, type TakeLoanDto } from './loan.dto.js';
+import { LoanService } from './loan.service.js';
 
 @Controller('loans')
 export class LoanController {

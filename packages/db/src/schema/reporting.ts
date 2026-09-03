@@ -1,5 +1,5 @@
 import {
-  bigint, bigserial, boolean, doublePrecision, index, integer, jsonb, numeric, pgTable,
+  bigint, bigserial, doublePrecision, index, integer, jsonb, numeric, pgTable,
   primaryKey, smallint, text, timestamp, uniqueIndex, uuid,
 } from 'drizzle-orm/pg-core';
 import { moneyCol, qtyCol } from './_types.js';

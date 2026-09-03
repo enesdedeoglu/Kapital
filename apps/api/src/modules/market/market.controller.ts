@@ -2,13 +2,13 @@ import {
   Body, Controller, Delete, Get, Inject, Param, Post, Query, Req, UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ZodPipe } from '../../common/zod.pipe.js';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
+import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
-import { MarketService } from './market.service.js';
 import { buySchema, type BuyDto } from './market.dto.js';
-import { OrderService } from './order.service.js';
+import { MarketService } from './market.service.js';
 import { placeOrderSchema, type PlaceOrderDto } from './order.dto.js';
+import { OrderService } from './order.service.js';
 
 @Controller('market')
 export class MarketController {

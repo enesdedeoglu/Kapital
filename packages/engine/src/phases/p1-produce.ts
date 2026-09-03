@@ -4,8 +4,8 @@ import {
   type FacilityCategory,
 } from '@kapital/economy';
 import {
-  asMoney, asQty, deterministicUuid, divRoundHalfEven, formatQty, InsufficientFunds,
-  qtyFromNumber, type Money, type Qty,
+  asMoney, asQty, deterministicUuid, divRoundHalfEven, InsufficientFunds,
+  qtyFromNumber,
 } from '@kapital/shared';
 import { configValue, rngFor, type EngineTick } from '../context.js';
 import { PHASE } from '../phases.js';

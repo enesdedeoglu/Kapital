@@ -1,12 +1,12 @@
 import { Body, Controller, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ZodPipe } from '../../common/zod.pipe.js';
-import { AuthService } from './auth.service.js';
-import { Public, type AuthUser } from './jwt.guard.js';
 import {
   loginSchema, refreshSchema, registerSchema,
   type LoginDto, type RefreshDto, type RegisterDto,
 } from './auth.dto.js';
+import { AuthService } from './auth.service.js';
+import { Public, type AuthUser } from './jwt.guard.js';
 
 @Controller('auth')
 export class AuthController {

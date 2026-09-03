@@ -1,4 +1,4 @@
-import { currentTickSeq, type Sql } from '@kapital/db';
+import { type Sql } from '@kapital/db';
 import { runTick } from '@kapital/engine';
 import { TICK_MINUTES } from '@kapital/shared';
 
