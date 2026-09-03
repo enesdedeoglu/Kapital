@@ -2,11 +2,13 @@ import type { Sql } from '@kapital/db';
 import { mulMoney, qtyFromNumber } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices } from '../reference-prices.js';
+import { computeForeignCapacity } from './foreign-capacity.js';
 
 export interface OpenPhaseResult {
   expiredOrders: number;
   completedConstructions: number;
   npcOffersRefreshed: number;
+  foreignProducts: number;
 }
 
 interface SimpleSeller {
@@ -32,10 +34,15 @@ export async function runOpenPhase(sql: Sql, tick: EngineTick): Promise<OpenPhas
 
   const npcOffersRefreshed = await refreshNpcSupply(sql, tick);
 
+  // Dış ticaret derinliği turun başında sabitlenir: oyuncular tur boyunca
+  // aynı tavanı pro-rata paylaşır, tur zamanlaması yarışı oluşmaz (R17).
+  const foreign = await computeForeignCapacity(sql, tick);
+
   return {
     expiredOrders: expired.length,
     completedConstructions: completed.length,
     npcOffersRefreshed,
+    foreignProducts: foreign.products,
   };
 }
 

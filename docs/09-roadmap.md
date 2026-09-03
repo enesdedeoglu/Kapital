@@ -98,7 +98,7 @@ Uygulama notları:
 
 ---
 
-## F4 — Piyasa, lojistik ve dış ticaret · 3,5 hafta
+## F4 — Piyasa, lojistik ve dış ticaret · 3,5 hafta  ✅ TAMAMLANDI (3 Eylül 2026)
 - `market_orders` (BUY/SELL, min_quality, escrow), advisory lock protokolü
 - P2 (EXCHANGE) fazı: eşleştirme motoru, kısmi doldurma
 - `shipments`: mesafe = maliyet **+ transit süresi**
@@ -109,8 +109,18 @@ Uygulama notları:
   **Liman** tesisi (yalnız İstanbul/İzmir/Bursa), pro-rata derinlik dağıtımı,
   sürtünme bandı (ihracat ×0,75 · ithalat ×1,35), Lv7 kilidi
 
-**Çıkış:** İki oyuncu şehirler arası ticaret yapabiliyor, referans fiyat oluşuyor;
-liman sahibi oyuncu ithalat/ihracat yapabiliyor ve mal limandan iç şehirlere lojistikle taşınıyor.
+**Çıkış:** ✅ İki oyuncu şehirler arası ticaret yapabiliyor, referans fiyat oluşuyor;
+liman sahibi oyuncu ithalat/ihracat yapabiliyor. 215 test geçiyor.
+
+Uygulama notları:
+- **Escrow kullanılmadı** ([ADR-0009](adr/0009-escrow-yerine-eslesme-aninda-dogrulama.md)):
+  bakiye eşleşme anında doğrulanır. Satıcı zarar görmez çünkü stok yalnız
+  başarılı eşleşmede tüketilir.
+- **Wash trade'in birincil savunması eşleştirme motorunun kendisi çıktı**: kendi
+  ortağınızla eşleşemezsiniz, motor en ucuz toplam maliyeti seçer. Tespit
+  mekanizması ikinci katman (bkz. [R8](10-riskler.md)).
+- Kur modeli PPP çıpasına yakınsıyor ve iki para biriminin defteri ayrı ayrı
+  dengede kalıyor (I1-TRY, I1-USD).
 
 ---
 

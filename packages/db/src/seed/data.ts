@@ -166,6 +166,7 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'economy.shipping', value: { baseRatePerKgDistance: money(0.35).toString() } },
   { key: 'economy.fx',       value: { rate0: FX_RATE_0, alpha: 0.05, tradeBalanceK: 0.02, spreadPct: 0.015, clampPerTick: 0.005, clampPerDay: 0.03, unlockLevel: 7 } },
   { key: 'economy.foreign',  value: { exportMultiplier: 0.75, importMultiplier: 1.35, depthPct: 0.15, prorata: true } },
+  { key: 'market.washTrade', value: { bilateralShareThreshold: 0.30, priceDeviationThreshold: 0.20, windowTicks: 96 } },
   { key: 'economy.inventory',value: { liquidityDiscountThreshold: 0.20, liquidityDiscountPct: 0.50 } },
   { key: 'director.bands',   value: { healthy: 75, watch: 55, adjust: 35, stimulate: 20, hysteresisTicks: 6, directiveTtlTicks: 96 } },
   { key: 'director.levers',  value: { INVENTORY_TARGET: 0.40, PRODUCTION_BIAS: 0.30, BUY_BIAS: 0.35, INVESTMENT_BIAS: 0.50, CAPACITY_CAP: 1.0, IMPORT_QUOTA: 3.0 } },

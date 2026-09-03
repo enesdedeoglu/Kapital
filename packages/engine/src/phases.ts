@@ -2,9 +2,8 @@
  * Tick fazları — docs/05 §2.
  *
  * Madde 53'teki 25 adım, bağımlılık ve shard anahtarına göre 8 faza gruplanır.
- * F3 itibarıyla 6 faz uygulanır; kalanlar kendi fazlarında gelir:
- *   P2 EXCHANGE → F4 (emir defteri, sevkiyat)
- *   P6 GOVERN   → F6/F7 (NPC stratejisi, Economic Director)
+ * F4 itibarıyla 7 faz uygulanır; kalan:
+ *   P6 GOVERN → F6/F7 (NPC stratejisi, Economic Director)
  *
  * Faz numaraları baştan sabittir: yeni fazlar araya girdiğinde mevcut
  * `tick_phase_runs` kayıtları anlamını korur.
@@ -35,6 +34,7 @@ export interface PhaseDefinition {
 export const ACTIVE_PHASES: readonly PhaseDefinition[] = [
   { phase: PHASE.OPEN,    code: 'OPEN',    shardKey: 'none',    budgetMs: 1_000 },
   { phase: PHASE.PRODUCE, code: 'PRODUCE', shardKey: 'company', budgetMs: 12_000 },
+  { phase: PHASE.EXCHANGE, code: 'EXCHANGE', shardKey: 'product', budgetMs: 10_000 },
   { phase: PHASE.RETAIL,  code: 'RETAIL',  shardKey: 'city',    budgetMs: 15_000 },
   { phase: PHASE.UPKEEP,  code: 'UPKEEP',  shardKey: 'company', budgetMs: 8_000 },
   { phase: PHASE.SETTLE,  code: 'SETTLE',  shardKey: 'company', budgetMs: 10_000 },

@@ -7,8 +7,8 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0–F3 tamamlandı.** MVP-0 çalışıyor ve dikey üretim zinciri kuruldu.
-> Sıradaki faz: F4 — Piyasa, lojistik ve dış ticaret.
+> **Durum: F0–F4 tamamlandı.** MVP-0, dikey üretim zinciri, toptan piyasa,
+> lojistik ve dış ticaret çalışıyor. Sıradaki faz: F5 — Bankacılık, kredi ve döviz.
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -30,7 +30,7 @@ createdb kapital_dev && createdb kapital_test   # B) Yerel PostgreSQL 16 (5432)
 pnpm build
 pnpm db:migrate              # şemayı uygular
 pnpm db:seed                 # 5 şehir · 10 ürün · 13 tesis · 9 reçete · 7 sistem şirketi
-pnpm test                    # 154 test
+pnpm test                    # 215 test
 pnpm api:dev                 # http://localhost:3000
 pnpm worker:dev              # ekonomik tur zamanlayıcısı (15 dk)
 pnpm tick                    # tek bir turu elle koş
@@ -133,6 +133,21 @@ Planlanan ama henüz yazılmamış: `packages/sim` (denge simülasyonu, F8),
 | Kendi tesisleri arası stok taşıma (aynı şehir) | ✅ |
 | Üretim durumu ve duruş nedeni raporu | ✅ |
 
+### F4 — Piyasa, lojistik ve dış ticaret
+
+| Alan | Durum |
+|---|---|
+| Emir defteri: BUY/SELL, kısmi doldurma, iptal, süre dolumu | ✅ |
+| P2 eşleştirme fazı — ürün başına shard, danışma kilidi | ✅ |
+| **Nakliye dahil tavan fiyat** (madde 16, C2) — uzak satıcı kendiliğinden elenir | ✅ |
+| **Sevkiyat: mesafe = maliyet + SÜRE** (A3) — yoldaki mal hiçbir envanterde değil | ✅ |
+| Kırpılmış ağırlıklı medyan + EMA + %15 devre kesici | ✅ |
+| **Wash-trade tespiti** — işlem iptal edilmez, endeksten çıkarılır | ✅ |
+| **Likidite iskontosu** (C3) — piyasayı stoklayarak şirket değeri şişirilemez | ✅ |
+| **Kur modeli** — PPP çıpası + ticaret dengesi, oyuncu belirleyemez | ✅ |
+| **Dış ticaret** — Liman, dünya fiyatı, derinlik tavanı, %60 band | ✅ |
+| ₺ ↔ $ dönüşümü — %1,5 spread, iki defter ayrı ayrı dengeli | ✅ |
+
 ### Doğrulanmış çıkış kriterleri
 
 | Test | Ne kanıtlıyor |
@@ -217,6 +232,11 @@ Bu yapısal etki [R19](docs/10-riskler.md) olarak kaydedildi.
 | `GET /market/:cityCode` | Şehirdeki satış emirleri |
 | `POST /market/buy` | Toptan alım (anında doldurma) |
 | `GET` · `PUT /retail/:facilityId/prices` | Raf fiyatları ve tüketici tavanı |
+| `GET /market/book/:product` | Emir defteri — fiyat / nakliye / toplam ayrı |
+| `GET` · `POST /market/orders` · `DELETE /market/orders/:id` | Emir yönetimi |
+| `GET /market/shipments` | Yoldaki mal ve varış turu |
+| `GET /foreign/capacity` | Dünya fiyatları ve kalan derinlik |
+| `POST /foreign/import` · `/export` · `/fx/convert` | Dış ticaret ve döviz |
 | `POST /admin/tick` · `GET /admin/economy` | Tur tetikleme ve ekonomi dashboard'u |
 
 ### Mimari Karar Kayıtları
@@ -227,7 +247,8 @@ Bu yapısal etki [R19](docs/10-riskler.md) olarak kaydedildi.
 [0005 Tick sharding](docs/adr/0005-tick-sharding.md) ·
 [0006 Elle yazılan migration'lar](docs/adr/0006-elle-yazilan-migrationlar.md) ·
 [0007 Açık DI token'ları](docs/adr/0007-acik-di-tokenlari.md) ·
-[0008 Tur orchestrator kilidi](docs/adr/0008-tick-orchestrator-kilidi.md)
+[0008 Tur orchestrator kilidi](docs/adr/0008-tick-orchestrator-kilidi.md) ·
+[0009 Escrow yerine eşleşme anında doğrulama](docs/adr/0009-escrow-yerine-eslesme-aninda-dogrulama.md)
 
 ## Altın kurallar
 

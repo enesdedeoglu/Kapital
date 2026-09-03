@@ -165,7 +165,18 @@ zaman UUID sırasına göre tek `ORDER BY id FOR UPDATE` sorgusuyla kilitlenir.
 **Belirti:** İki oyuncu birbirine 1000 ₺'den çelik satıp alıyor; referans fiyat şişiyor;
 şirket değerleri (stok değerlemesi) yapay olarak patlıyor; sıralama bozuluyor.
 
+**F4'te ortaya çıkan bulgu — birincil savunma tespit DEĞİL, eşleştirme motorudur.**
+Sürekli çift taraflı açık artırmada kendi ortağınızla eşleşemezsiniz: motor
+alıcı için **en ucuz toplam maliyeti** seçer. Manipülatör 280 ₺'lik alış emri
+verdiğinde dürüst satıcı 28 ₺'den satıyorsa emir 154 ₺'den ona doldurulur —
+wash trade denemesi gerçek para kaybettirir. Canlı ölçümle doğrulandı.
+
+Tespit mekanizması bu yüzden **ikinci katmandır**: motorun koruyamadığı ince
+piyasa durumları içindir.
+
 **Azaltım:**
+0. **Emir defteri eşleştirmesi** — kendi emrine eşleşme yasak, en ucuz toplam
+   maliyet kuralı wash trade'i pratikte imkânsız kılar.
 1. Ağırlıklı **medyan** (ortalama değil) — tek uç işlem medyanı oynatamaz.
 2. P10–P90 dışı işlemler endeks dışı.
 3. `trade_flags`: 24 saatte (A,B) ikilisinin karşılıklı hacmi toplam hacmin %30'unu
@@ -173,6 +184,11 @@ zaman UUID sırasına göre tek `ORDER BY id FOR UPDATE` sorgusuyla kilitlenir.
 4. Şirket değerinde stok, `ema_reference` ile değerlenir (anlık medyan değil).
 5. **İşlem iptal edilmez** — oyuncular ticaretini yapar, sadece endeksi kirletemez
    (madde 48: "gerçek ticareti gereksiz yere engelleme").
+
+**BİLİNEN SINIR:** manipülatör ikili piyasanın TAMAMIYSA medyan onların fiyatı
+olur ve sapma sıfır çıkar; tespit çalışmaz. Zararı EMA yumuşatması ve %15 devre
+kesici sınırlar — manipüle edilmiş fiyat referansı tek turda en fazla %15
+oynatabilir (R2). Bu sınır testle belgelenmiştir.
 
 **Test:** Sim'de wash-trade ajanı; referans fiyat sapması < %3 kalmalı.
 

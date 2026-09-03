@@ -167,7 +167,7 @@ describe('tur motoru', () => {
       SELECT phase, phase_code, status FROM tick_phase_runs
       WHERE tick_id = ${second.tickId} ORDER BY phase`;
     expect(phases.map((p) => p.phase_code))
-      .toEqual(['OPEN', 'PRODUCE', 'RETAIL', 'UPKEEP', 'SETTLE', 'CLOSE']);
+      .toEqual(['OPEN', 'PRODUCE', 'EXCHANGE', 'RETAIL', 'UPKEEP', 'SETTLE', 'CLOSE']);
     expect(phases.every((p) => p.status === 'COMPLETED')).toBe(true);
   });
 

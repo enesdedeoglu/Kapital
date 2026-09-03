@@ -29,7 +29,10 @@ export async function prepareTestDb(): Promise<Sql> {
 export async function truncateGameState(sql: Sql): Promise<void> {
   await sql.unsafe(`
     TRUNCATE ledger_entries, outbox, tick_phase_runs, company_stats,
-             inventory_batches, inventories, facilities RESTART IDENTITY CASCADE;
+             inventory_batches, inventories, facilities,
+             market_orders, market_trades, shipments, trade_flags,
+             fx_trades, foreign_trades, retail_offers, retail_sales,
+             production_jobs, production_records RESTART IDENTITY CASCADE;
     DELETE FROM companies WHERE kind = 'PLAYER';
     UPDATE companies SET cash = 0, usd_balance = 0, company_value = 0
      WHERE kind IN ('SYSTEM', 'NPC');
@@ -87,6 +90,25 @@ export async function makeFacility(
   const [inventory] = await sql<{ id: string }[]>`
     SELECT id FROM inventories WHERE facility_id = ${facility!.id}::uuid`;
   return { id: facility!.id, inventoryId: inventory!.id };
+}
+
+/** Doğrudan emir yazar — API katmanını atlar (motor birim testleri için). */
+export async function placeOrder(sql: Sql, input: {
+  companyId: string; facilityId: string; cityId: number; productId: number;
+  side: 'BUY' | 'SELL'; quantity: bigint; price: bigint;
+  quality?: number; minQuality?: number; maxDistance?: number; expiresAtTick?: bigint;
+}): Promise<bigint> {
+  const [row] = await sql<{ id: bigint }[]>`
+    INSERT INTO market_orders (company_id, facility_id, product_id, city_id, side,
+                               quantity, remaining_quantity, price_per_unit, quality,
+                               min_quality, max_delivery_distance, expires_at_tick)
+    VALUES (${input.companyId}::uuid, ${input.facilityId}::uuid, ${input.productId},
+            ${input.cityId}, ${input.side}::order_side, ${input.quantity}, ${input.quantity},
+            ${input.price}, ${(input.quality ?? 70).toFixed(3)},
+            ${(input.minQuality ?? 0).toFixed(3)}, ${input.maxDistance ?? null},
+            ${input.expiresAtTick ?? 9999n})
+    RETURNING id`;
+  return row!.id;
 }
 
 export async function cashOf(sql: Sql, companyId: string): Promise<Money> {

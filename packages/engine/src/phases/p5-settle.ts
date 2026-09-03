@@ -1,12 +1,17 @@
 import type { Sql } from '@kapital/db';
-import { smoothReference, weightedMedian, type PriceSample } from '@kapital/economy';
+import { nextFxRate, smoothReference, weightedMedian, type PriceSample } from '@kapital/economy';
 import { asMoney, asQty, TICKS_PER_DAY } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
+import { detectWashTrades } from './wash-trade.js';
 
 export interface SettlePhaseResult {
   pricedProducts: number;
   settledCompanies: number;
   shockedProducts: number;
+  flaggedPairs: number;
+  excludedTrades: number;
+  gameCpi: number;
+  fxRate: bigint;
 }
 
 /**
@@ -21,6 +26,22 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
     { emaAlpha: 0.25, trimLowPct: 0.1, trimHighPct: 0.9, shockClampPct: 0.15, referenceWindowTicks: TICKS_PER_DAY },
   );
   const windowStart = tick.seq - BigInt(pricing.referenceWindowTicks);
+
+  // ★ Wash trade tespiti MEDYANDAN ÖNCE koşar: işaretlenen işlemler endekse
+  //   girmez. Sıra tersine dönerse manipüle edilmiş fiyat referansa sızar (R8).
+  const washCfg = configValue<{ bilateralShareThreshold: number; priceDeviationThreshold: number }>(
+    tick, 'market.washTrade', { bilateralShareThreshold: 0.30, priceDeviationThreshold: 0.20 },
+  );
+  const wash = await detectWashTrades(sql, tick, {
+    bilateralShareThreshold: washCfg.bilateralShareThreshold,
+    priceDeviationThreshold: washCfg.priceDeviationThreshold,
+    windowTicks: pricing.referenceWindowTicks,
+  });
+
+  const liquidity = configValue<{ liquidityDiscountThreshold: number; liquidityDiscountPct: number }>(
+    tick, 'economy.inventory', { liquidityDiscountThreshold: 0.2, liquidityDiscountPct: 0.5 },
+  );
+  const liq = { threshold: liquidity.liquidityDiscountThreshold, discount: liquidity.liquidityDiscountPct };
 
   const products = await sql<{ id: number; base: bigint }[]>`
     SELECT id, base_reference_price AS base FROM products WHERE is_active`;
@@ -53,6 +74,20 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
               ${median}, ${volume}, ${samples.length})
       ON CONFLICT (tick_id, product_id, city_id) DO NOTHING`;
   }
+
+  // Game CPI — perakende ürünlerinin talep ağırlıklı fiyat endeksi (madde 35).
+  // Kur modelinin PPP çıpası buna dayanır (docs/12 §4).
+  const [cpiRow] = await sql<{ cpi: number }[]>`
+    SELECT COALESCE(
+      SUM(COALESCE(ph.ema_reference, p.base_reference_price) * p.base_demand)::double precision
+      / NULLIF(SUM(p.base_reference_price * p.base_demand), 0), 1) AS cpi
+    FROM products p
+    LEFT JOIN price_history ph
+           ON ph.product_id = p.id AND ph.city_id = 0 AND ph.tick_id = ${tick.seq}
+    WHERE p.is_active AND p.is_retail_product AND p.base_demand > 0`;
+  const gameCpi = cpiRow?.cpi ?? 1;
+
+  const fxRate = await updateFxRate(sql, tick, gameCpi, windowStart);
 
   // Tesis bazlı kâr/zarar — madde 46: oyuncu hangi tesisin kazandırdığını görmeli
   await sql`
@@ -95,14 +130,35 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
     -- ★ Stok, oyuncunun KENDİ satış fiyatıyla değil, piyasa referansıyla
     --   değerlenir (madde 41): aksi halde herkes fiyatı yükseltip şirket
     --   değerini yapay olarak şişirirdi.
+    -- ★ LİKİDİTE İSKONTOSU (docs/11 C3): 24 saatlik hacmin belirli bir oranını
+    --   aşan stok, aşan kısımda iskontolu değerlenir. Aksi halde tüm piyasayı
+    --   stoklayan oyuncu, satamayacağı malla sıralamayı ele geçirirdi.
     LEFT JOIN LATERAL (
-      SELECT SUM(b.quantity * COALESCE(ph.ema_reference, p.base_reference_price) / 1000)::bigint AS value
-      FROM inventories i
-      JOIN inventory_batches b ON b.inventory_id = i.id
-      JOIN products p ON p.id = b.product_id
-      LEFT JOIN price_history ph
-             ON ph.product_id = b.product_id AND ph.city_id = 0 AND ph.tick_id = ${tick.seq}
-      WHERE i.company_id = c.id
+      SELECT SUM(
+        CASE
+          WHEN v.volume > 0 AND pq.qty > v.volume * ${liq.threshold}
+            THEN (v.volume * ${liq.threshold} * pq.price / 1000)
+               + ((pq.qty - v.volume * ${liq.threshold}) * pq.price
+                  * ${1 - liq.discount} / 1000)
+          ELSE pq.qty * pq.price / 1000
+        END
+      )::bigint AS value
+      FROM (
+        SELECT b.product_id, SUM(b.quantity) AS qty,
+               MAX(COALESCE(ph.ema_reference, p.base_reference_price)) AS price
+        FROM inventories i
+        JOIN inventory_batches b ON b.inventory_id = i.id
+        JOIN products p ON p.id = b.product_id
+        LEFT JOIN price_history ph
+               ON ph.product_id = b.product_id AND ph.city_id = 0 AND ph.tick_id = ${tick.seq}
+        WHERE i.company_id = c.id
+        GROUP BY b.product_id
+      ) pq
+      LEFT JOIN (
+        SELECT product_id, SUM(quantity) AS volume FROM market_trades
+        WHERE tick_id > ${windowStart} AND tick_id <= ${tick.seq}
+        GROUP BY product_id
+      ) v ON v.product_id = pq.product_id
     ) inv ON TRUE
     LEFT JOIN LATERAL (
       SELECT SUM(ft.base_cost)::bigint AS value
@@ -118,5 +174,60 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
     FROM company_financials cf
     WHERE cf.tick_id = ${tick.seq} AND cf.company_id = c.id`;
 
-  return { pricedProducts: products.length, settledCompanies: settled.length, shockedProducts: shocked };
+  return {
+    pricedProducts: products.length,
+    settledCompanies: settled.length,
+    shockedProducts: shocked,
+    flaggedPairs: wash.flaggedPairs,
+    excludedTrades: wash.excludedTrades,
+    gameCpi,
+    fxRate,
+  };
+}
+
+/**
+ * Kur modeli — docs/12 §4 (S2). Kur hiçbir oyuncu tarafından belirlenmez;
+ * satın alma gücü paritesi çıpası ve ticaret dengesinden türer.
+ */
+async function updateFxRate(
+  sql: Sql, tick: EngineTick, gameCpi: number, windowStart: bigint,
+): Promise<bigint> {
+  const fx = configValue<{
+    rate0: number; alpha: number; tradeBalanceK: number; clampPerTick: number;
+  }>(tick, 'economy.fx', { rate0: 35, alpha: 0.05, tradeBalanceK: 0.02, clampPerTick: 0.005 });
+
+  const baseRate = asMoney(BigInt(Math.round(fx.rate0 * 10_000)));
+  const [previous] = await sql<{ rate: bigint }[]>`
+    SELECT rate_try_per_usd AS rate FROM fx_rates
+    WHERE tick_id < ${tick.seq} ORDER BY tick_id DESC LIMIT 1`;
+
+  const [balance] = await sql<{ exports: string; imports: string }[]>`
+    SELECT COALESCE(SUM(try_equivalent) FILTER (WHERE direction = 'EXPORT'), 0)::text AS exports,
+           COALESCE(SUM(try_equivalent) FILTER (WHERE direction = 'IMPORT'), 0)::text AS imports
+    FROM foreign_trades WHERE tick_id > ${windowStart} AND tick_id <= ${tick.seq}`;
+  const ex = Number(balance?.exports ?? '0');
+  const im = Number(balance?.imports ?? '0');
+  const tradeBalance = ex + im > 0 ? (ex - im) / (ex + im) : 0;
+
+  const { rate } = nextFxRate({
+    previousRate: asMoney(previous?.rate ?? baseRate),
+    baseRate,
+    gameCpi,
+    tradeBalance,
+    alpha: fx.alpha,
+    tradeBalanceK: fx.tradeBalanceK,
+    clampPerTick: fx.clampPerTick,
+  });
+
+  const [circulation] = await sql<{ total: string }[]>`
+    SELECT COALESCE(SUM(usd_balance), 0)::text AS total FROM companies WHERE kind <> 'SYSTEM'`;
+
+  await sql`
+    INSERT INTO fx_rates (tick_id, rate_try_per_usd, source, trade_balance,
+                          usd_in_circulation, game_cpi)
+    VALUES (${tick.seq}, ${rate}, 'MODEL', ${Math.round((ex - im))},
+            ${circulation!.total}, ${gameCpi})
+    ON CONFLICT (tick_id) DO NOTHING`;
+
+  return rate as bigint;
 }
