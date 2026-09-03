@@ -7,8 +7,9 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0–F5 tamamlandı.** MVP-0, üretim zinciri, toptan piyasa, lojistik,
-> dış ticaret ve bankacılık çalışıyor. Sıradaki faz: F6 — NPC ekonomisi.
+> **Durum: F0–F6 tamamlandı.** MVP-0, üretim zinciri, toptan piyasa, lojistik,
+> dış ticaret, bankacılık ve NPC ekonomisi çalışıyor. Oyuncusuz bir dünya
+> 500 tur boyunca kendi kendine koşuyor. Sıradaki faz: F7 — Ekonomi Direktörü.
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -162,6 +163,30 @@ Planlanan ama henüz yazılmamış: `packages/sim` (denge simülasyonu, F8),
 | Ödeme yükü uyarısı — "bu kredi gelirinizin %X'ini götürür" | ✅ |
 | Kredinin para arzı içindeki payı izlenir, %20'de alarm | ✅ |
 | Erken kapatma ve taksit geçmişi | ✅ |
+
+### F6 — NPC ekonomisi
+
+| Alan | Durum |
+|---|---|
+| 8 arketip, ±%15 parametre dağılımı (`npc_profiles`) | ✅ |
+| P6 fazı: operasyonel karar her tur, stratejik karar N turda bir | ✅ |
+| Fiyat: ±%3 bant, sağlık < 35 ve sapma > %25 ise acil ±%10 bant (R4) | ✅ |
+| Stok planı: min 4 / hedef 12 / max 24 tur | ✅ |
+| **Alış teklifi navlun payı içerir** (R20) — yoksa zincir şehirler arası kopar | ✅ |
+| **Üretim kısma** (R21) — satılmayan stok birikince kapasite kademeli düşer | ✅ |
+| Ürün grafı tohuma karşı doğrulanır (R23); mobilya zinciri kapatıldı | ✅ |
+| Tohum fiyatları tariflerle tutarlı, marj bandı 1,15–1,75 test edilir (R22) | ✅ |
+| 60 NPC / 75 tesis dünya tohumlama (`pnpm --filter @kapital/db seed:npc`) | ✅ |
+| Başsız N-tur koşu aracı (`run-ticks.ts`) | ✅ |
+| NPC stratejik yatırım kararı → tesis inşası | ⏭ F7 |
+
+**500 turluk oyuncusuz koşu:** tur ort 1.202 ms / p95 1.394 ms (bütçe 37.000 ms) ·
+para arzı +%1,1 · **Game CPI 1,000 → 1,029** (tepe 1,033, sonra geri — dar bantta
+salınım) · **0 iflas** / 65 NPC · **10/10** ürün işlem görüyor.
+
+```bash
+pnpm --filter @kapital/engine exec tsx src/cli/run-ticks.ts 500 50
+```
 
 ### Doğrulanmış çıkış kriterleri
 

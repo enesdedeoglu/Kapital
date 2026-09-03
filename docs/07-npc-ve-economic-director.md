@@ -162,6 +162,26 @@ Aksi halde oyuncular bir üründe üretime başladığında NPC'ler aniden çeki
 
 Uzun vade hedefi (madde 31): çoğu üründe %70–90 oyuncu / %10–30 NPC.
 
+### 8.1 İkinci kısma: satılmayan kendi stoğu (R21)
+
+Yukarıdaki kaldıraç NPC'yi **oyuncu arzı** karşısında geri çeker. Ama oyuncusuz
+bir dünyada da aşırı üretim olur: hammadde üreticileri aşağı halkanın
+işleyebileceğinden fazlasını üretir. Kapasiteye üreten tesis, malı satılmasa
+bile her tur işçilik öder ve o para `SYS_SINK`'e, yani ekonomiden çıkar.
+
+```
+kapsam        = çıktı_stoğu / tur_başına_kapasite      (kaç turluk satılmamış üretim)
+hedef_kullanım = kapsam ≤ 8 ? 1 : clamp(8 / kapsam, 0.10, 1)
+utilization   = önceki + clamp(hedef − önceki, −0.05, +0.05)
+```
+
+`facilities.utilization` üretim kapasitesiyle çarpılır (madde 12 formülünün son
+terimi). Taban %10'dur: tesis tamamen durmaz, çünkü sıfır üretim **fiyat
+sinyalini de yok eder** — piyasa o ürünün pahalılaştığını göremez.
+
+İki kaldıraç birbirinden bağımsızdır ve çarpışmaz: `npcCapacityCap` NPC'nin
+piyasa payını, `outputThrottle` tek tesisin doluluk geri beslemesini yönetir.
+
 ## 9. NPC arketipleri (madde 24)
 
 | Arketip | target_margin | quality_target | price_aggr. | Rol |

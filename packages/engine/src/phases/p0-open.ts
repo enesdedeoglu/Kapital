@@ -54,6 +54,11 @@ export async function runOpenPhase(sql: Sql, tick: EngineTick): Promise<OpenPhas
  * var olması (docs/08 MVP-0).
  */
 async function refreshNpcSupply(sql: Sql, tick: EngineTick): Promise<number> {
+  // Gerçek NPC ajanları varsa (F6) basit satıcılara gerek yok: arzı onlar
+  // sağlar. Basit satıcılar yalnız MVP-0 dünyası için bir iskeledir.
+  const [real] = await sql<{ count: bigint }[]>`SELECT COUNT(*) AS count FROM npc_profiles`;
+  if ((real?.count ?? 0n) > 0n) return 0;
+
   const sellers = configValue<SimpleSeller[]>(tick, 'npc.simpleSellers', []);
   if (sellers.length === 0) return 0;
 

@@ -3,7 +3,7 @@ import { addBatch, runInTransaction, type Sql } from '@kapital/db';
 import {
   makeFacility, makePlayer, placeOrder, prepareTestDb, truncateGameState,
 } from '@kapital/db/testing';
-import { money, qty } from '@kapital/shared';
+import { asMoney, money, qty } from '@kapital/shared';
 import { runTick } from './orchestrator.js';
 
 let sql: Sql;
@@ -44,20 +44,35 @@ async function trade(seller: Awaited<ReturnType<typeof trader>>, buyer: Awaited<
   await placeOrder(sql, { companyId: buyer.id, facilityId: buyer.facility.id, cityId: IST, productId: IRON, side: 'BUY', quantity: amount, price });
 }
 
+/**
+ * Demirin taban referansı tohum verisinden okunur. Sabit yazılırsa tohum
+ * dengesi her değiştiğinde (F6'da 28 → 24 ₺ oldu) bu testler kırılır — oysa
+ * kanıtladıkları şey mutlak fiyat değil, EMA ve devre kesici ORANLARIDIR.
+ */
+async function ironReference(): Promise<bigint> {
+  const [row] = await sql<{ price: bigint }[]>`
+    SELECT base_reference_price AS price FROM products WHERE id = ${IRON}`;
+  return row!.price;
+}
+
 describe('referans fiyat oluşumu', () => {
   it('gerçekleşen işlemlerden medyan hesaplar ve EMA ile yumuşatır', async () => {
     const s = await trader('S');
     const b = await trader('B');
-    await trade(s, b, qty(100), money(40)); // referans 28 ₺'nin üstünde
+    const base = await ironReference();
+    // Referansın %20 üstü: devre kesicinin (%15) İÇİNDE kalır, böylece bu test
+    // kırpmayı değil YUMUŞATMAYI ölçer. Kırpma ayrı testte.
+    const price = asMoney((base * 12n) / 10n);
+    await trade(s, b, qty(100), price);
     const tick = await runTick(sql);
 
     const [ph] = await sql<{ weighted_median: bigint; ema_reference: bigint; volume: bigint }[]>`
       SELECT weighted_median, ema_reference, volume FROM price_history
       WHERE product_id = ${IRON} AND city_id = 0 AND tick_id = ${tick.seq}`;
     expect(ph!.volume).toBe(qty(100));
-    expect(ph!.weighted_median).toBe(money(40));
-    // EMA: 0,25×40 + 0,75×28 = 31 ₺ — tek işlem referansı fırlatmaz (R2)
-    expect(ph!.ema_reference).toBe(money(31));
+    expect(ph!.weighted_median).toBe(price);
+    // EMA: 0,25 × işlem + 0,75 × referans — tek işlem referansı fırlatmaz (R2)
+    expect(ph!.ema_reference).toBe(price / 4n + (base * 3n) / 4n);
   });
 
   it('devre kesici tek turda %15\'ten fazla hareketi kırpar (R2)', async () => {
@@ -67,8 +82,8 @@ describe('referans fiyat oluşumu', () => {
     const tick = await runTick(sql);
     const [ph] = await sql<{ ema_reference: bigint }[]>`
       SELECT ema_reference FROM price_history WHERE product_id = ${IRON} AND city_id = 0 AND tick_id = ${tick.seq}`;
-    // 28 × 1,15 = 32,20 ₺ tavanı
-    expect(ph!.ema_reference).toBe(money(32.2));
+    // Tavan: referans × 1,15
+    expect(ph!.ema_reference).toBe((await ironReference() * 115n) / 100n);
   });
 
   it('işlem yoksa referans önceki değerde kalır', async () => {
@@ -161,8 +176,8 @@ describe('★ wash trade savunması (madde 48, R8)', () => {
     const [ph] = await sql<{ ema_reference: bigint }[]>`
       SELECT ema_reference FROM price_history
       WHERE product_id = ${IRON} AND city_id = 0 AND tick_id = ${tick.seq}`;
-    // ★ Ama hasar sınırlı: 28 × 1,15 = 32,20 ₺'yi aşamadı
-    expect(ph!.ema_reference).toBe(money(32.2));
+    // ★ Ama hasar sınırlı: referans × 1,15 tavanını aşamadı
+    expect(ph!.ema_reference).toBe((await ironReference() * 115n) / 100n);
   });
 });
 

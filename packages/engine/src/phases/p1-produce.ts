@@ -13,7 +13,7 @@ import { PHASE } from '../phases.js';
 interface ProducerRow {
   facility_id: string; company_id: string; city_id: number; inventory_id: string;
   facility_name: string; category: FacilityCategory; level: number; condition: string;
-  technology_bonus: number; staff_score: number; base_capacity: number;
+  technology_bonus: number; staff_score: number; base_capacity: number; utilization: number;
   level_multiplier: number; agriculture_bonus: number; industrial_bonus: number;
   free_capacity: bigint;
   recipe_id: number; output_product_id: number; output_quantity: bigint;
@@ -58,7 +58,7 @@ export async function runProducePhase(sql: Sql, tick: EngineTick): Promise<Produ
   const producers = await sql<ProducerRow[]>`
     SELECT f.id AS facility_id, f.company_id, f.city_id, i.id AS inventory_id,
            COALESCE(f.name, ft.name) AS facility_name, ft.category, f.level,
-           f.condition::text, f.technology_bonus, f.staff_score, ft.base_capacity,
+           f.condition::text, f.technology_bonus, f.staff_score, f.utilization, ft.base_capacity,
            COALESCE(lc.capacity_multiplier, 1) AS level_multiplier,
            c.agriculture_bonus, c.industrial_bonus,
            (i.capacity - i.used_capacity)::bigint AS free_capacity,
@@ -128,6 +128,7 @@ async function startJob(
     condition: Number(p.condition),
     cityBonus,
     technologyBonus: p.technology_bonus,
+    utilization: p.utilization,
   });
   const planned = qtyFromNumber(capacity) as bigint;
 

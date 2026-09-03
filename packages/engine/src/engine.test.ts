@@ -73,10 +73,13 @@ describe('tur döngüsü', () => {
   it('bakım gideri her tur tahsil edilir', async () => {
     const player = await makePlayer(sql, money(50_000));
     await makeFacility(sql, player.id, { typeCode: 'GREENGROCER' });
+    // Bakım tutarı tohumda kurulum maliyetinden türetilir; sabit yazılmaz.
+    const [type] = await sql<{ maintenance_cost: bigint }[]>`
+      SELECT maintenance_cost FROM facility_types WHERE code = 'GREENGROCER'`;
     await runTick(sql);
     const before = await cashOf(player.id);
     await runTick(sql);
-    expect(await cashOf(player.id)).toBe(before - money(120)); // manav bakımı
+    expect(await cashOf(player.id)).toBe(before - type!.maintenance_cost);
   });
 
   it('nakit yetmezse tesis kapatılmaz, yıpranır (madde 40)', async () => {

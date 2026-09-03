@@ -365,6 +365,128 @@ otomobil) satılamaz hale gelir.
 
 ---
 
+## R20 — NPC alış teklifi navlunu kapsamıyor: zincir şehirler arasında kopuyor
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F6, 500 turluk oyuncusuz koşu · **Durum:** ✅ çözüldü
+
+Eşleştirme motorunda alıcının verdiği fiyat **nakliye dahil tavandır**
+(`matching.ts`: `sell.pricePerUnit + shippingPerUnit <= buy.pricePerUnit`).
+Bu doğru tasarımdır — alıcı malın kapısına teslim maliyetini görür. Ama NPC
+teklifini `referans × 1,02` olarak veriyordu; içinde navlun payı yoktu.
+
+Sonuç: NPC yalnızca **kendi şehrindeki** satıcıyla eşleşebiliyordu. Ucuz ve
+ağır mallarda navlun farkı spread'i yutuyordu:
+
+| Yol | Ürün | Satıcı ister | Navlun | Alıcı verir | Eşleşir mi |
+|---|---|---|---|---|---|
+| Konya → Ankara | Buğday | 3,66 ₺ | 0,91 ₺ | 3,94 ₺ | ❌ |
+| İstanbul → Ankara | Demir | 13,00 ₺ | 1,58 ₺ | 13,95 ₺ | ❌ |
+| Bursa → Ankara | Kömür | 9,50 ₺ | 1,37 ₺ | 9,99 ₺ | ❌ |
+
+Tohum dünyasında buğday tarlalarının 4/5'i Konya'da, değirmenlerin tamamı
+Ankara ve İstanbul'daydı. 500 turluk koşuda ölçülen sonuç: buğday, un, ekmek,
+tütün ve sigara üretimi **tamamen durdu**; tarlaların deposu doldu, değirmenler
+girdisiz kaldı, perakende cirosu 2.978 → 241 ₺'ye çöktü.
+
+**Çözüm:** `inputBid()` — teklif `referans × (1 + pay) + navlun_payı`. Navlun
+payı, alıcının şehrinden diğer şehirlere olan **medyan** mesafeden hesaplanır
+(`representativeDistance`): ortalama uzak aykırı değerlerden şişer, minimum ise
+en yakın komşudan öteye erişimi kapatır.
+
+Pay bir tavandır, ödenen fiyat değil: motor adayları `istek + navlun` toplamına
+göre sıralar ve orta noktadan fiyatlar. Yerel ucuz satıcı yine kazanır; pay
+sadece uzaktaki arzı **erişilebilir** kılar.
+
+**Ölçüm (aynı tohum, 25 tur):** buğday 0 → 4.197, un 0 → 1.605, ekmek 0 → 3.156,
+sigara 0 → 1.054 birim. "Depo dolu" duruşu sıfırlandı.
+
+**Test:** `npc.test.ts` — iki farklı şehirdeki aynı üretici farklı teklif verir
+ve ikisi de referans × 1,02'nin üstündedir.
+
+---
+
+## R21 — Kapasiteye üretim: satılmayan mal para arzını sızdırıyor
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F6, 500 turluk oyuncusuz koşu · **Durum:** ✅ çözüldü
+
+Tesisler her tur %100 kapasiteyle üretiyordu. Satılmayan mal depoya yığılıyor
+ama **işçilik her tur ödeniyordu**. İşçilik SYS_SINK'e gider, yani ekonomiden
+çıkar. Perakende musluğu (SYS_CONSUMER) bunu karşılamayınca para arzı sürekli
+daralır.
+
+Ölçülen denge (tur başına, 30 turluk ortalama):
+
+| Kalem | Yön | ₺/tur |
+|---|---|---|
+| SALES (perakende musluğu) | giriş | +4.041 |
+| SALARY (işçilik + enerji) | çıkış | −4.859 |
+| MAINTENANCE | çıkış | −720 |
+| SHIPPING | çıkış | −458 |
+| **Net** | | **−1.996** |
+
+Kaynağı aşırı üretimdi: 25 turda 4.197 buğday üretilip 2.175'i öğütülüyordu;
+tütün 893 üretilip 36'sı işleniyordu.
+
+**Çözüm:** `facilities.utilization` (migration 0011) + `outputThrottle()`.
+NPC her tur kendi çıktı stoğunun kaç turluk üretime denk geldiğini ölçer
+(kapsam = stok ÷ kapasite) ve hedefin (8 tur) üstündeyse kullanımı orantısal
+olarak kısar. Değişim kademelidir (tur başına ≤ %5) ve taban %10'dur: tesis
+tamamen durmaz, çünkü sıfır üretim fiyat sinyalini de yok eder.
+
+**Ölçüm:** işçilik 4.859 → 3.489 ₺/tur, net sızıntı −1.996 → −698 ₺/tur.
+500 turluk koşuda para arzı tur 200'de dip yapıp yükselişe geçti (−%0,6 net).
+Kullanım oranları arz fazlasını doğru okudu: tütün 0,18 · buğday 0,47 ·
+kömür 0,62 · fırın ve sebze bahçesi 1,00 (hepsi satılıyor).
+
+**Not:** `npcCapacityCap` (madde 31) NPC'yi OYUNCU arzı karşısında geri çeker;
+`outputThrottle` ise kendi satılmamış stoğu karşısında. İkisi farklı sorunlardır
+ve oyuncusuz bir dünyada yalnızca ikincisi devrededir.
+
+---
+
+## R22 — Tohum referans fiyatları tariflerle tutarsız
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F6, 500 turluk oyuncusuz koşu · **Durum:** ✅ mekanizma kuruldu, ince ayar F8
+
+Referans fiyat bir tasarım sabiti değil, fiyat keşfinin **başlangıç çıpasıdır**.
+Çıpa maliyetle tutarsızsa piyasa yüzlerce tur boyunca doğru fiyata yürür ve bu
+yürüyüş enflasyon/deflasyon gibi görünür — oysa sadece yanlış başlangıçtır.
+
+En uç örnek: sigara referansı 80 ₺ iken tarif maliyeti 1,95 ₺ idi (1 kg tütün
+→ 20 paket, işçilik 1,35 ₺/paket). 500 turluk koşuda sigara 5,06 ₺'ye indi ve
+**tek başına Game CPI'yı 1,00'dan 0,53'e çekti**. Diğer ürünler tabanın %40–90'ına
+oturdu; hepsi işçilik tabanının üstündeydi, yani sarmal değil yeniden fiyatlamaydı.
+
+**Çözüm:** `seed-data.test.ts` — her tarif için
+`referans ÷ birim_maliyet` oranı **1,15–1,75** bandında olmalı. Tohum tablosu bu
+banda göre yeniden dengelendi (buğday 10→8, un 16→22, demir 28→24, kömür 18→14;
+işçilik değerleri ve ekmek/sigara verimleri güncellendi).
+
+**Kalan iş (F8):** bant testi tutarlılığı garanti eder, *isabetliliği* değil.
+Talep esneklikleri, tesis kapasiteleri ve arketip dağılımının nihai ayarı
+F8 simülasyon kapısında yapılacak.
+
+---
+
+## R23 — Ürün grafı tohum verisine karşı doğrulanmıyordu
+
+**Şiddet:** 🟡 Orta · **Bulunma:** F6 · **Durum:** ✅ çözüldü
+
+`validateProductGraph` (I8/R13) F3'ten beri vardı ama yalnızca admin panelden
+girilen reçetelere uygulanıyordu. Tohum verisi hiç doğrulanmamıştı.
+
+Sonuç: FURNITURE tanımlıydı, perakende ürünüydü, referans fiyatı vardı — ama
+onu üretecek ne bir tesis tipi ne bir reçete vardı. Çelik fabrikaları üretim
+yapıyor, çeliği kimse almıyor, deposu doluyordu. Zincirin ucu açıktı.
+
+**Çözüm:** `packages/db/src/seed/seed-data.test.ts` doğrulayıcıyı tohuma bağlar;
+ayrıca "kapasitesi olan her tesis tipinin reçetesi vardır" kuralını ekler.
+FURNITURE_FACTORY tesis tipi ve `10 kg çelik → 1 mobilya` reçetesi eklendi.
+Ürün sayısı 10/10 işlem görür hale geldi.
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -388,3 +510,7 @@ otomobil) satılamaz hale gelir.
 | R16 | Kredi yeni oyuncuyu atar | 🟠 Yüksek | ✅ F5 — kademeli temerrüt + yük uyarısı |
 | R17 | İhracat musluğu | 🟠 Yüksek | F4 |
 | R18 | Dış ticaret fiyat keşfini boğar | 🟠 Yüksek | F4 |
+| R20 | NPC teklifi navlunu kapsamıyor | 🔴 Kritik | ✅ F6 — `inputBid` + medyan mesafe |
+| R21 | Kapasiteye üretim para arzını sızdırıyor | 🟠 Yüksek | ✅ F6 — `utilization` + `outputThrottle` |
+| R22 | Tohum fiyatları tariflerle tutarsız | 🟠 Yüksek | ✅ F6 mekanizma · ince ayar F8 |
+| R23 | Ürün grafı tohuma karşı doğrulanmıyor | 🟡 Orta | ✅ F6 — `seed-data.test.ts` |

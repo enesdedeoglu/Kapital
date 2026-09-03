@@ -160,6 +160,44 @@ Uygulama içi bildirim akışı MVP'de yeterli. Push, APNs/FCM sertifikaları + 
 
 ---
 
+### B10. Mobilya — tesis tipi ve reçete eklendi 🟠 *(F6, 3 Eylül 2026)*
+Spec'te FURNITURE bir perakende ürünü olarak listeliydi ve referans fiyatı vardı,
+ama onu üretecek ne bir tesis tipi ne bir reçete tanımlıydı. Zincirin ucu açıktı:
+çelik üretiliyor, alıcısı olmadığı için depoya yığılıyordu.
+
+`FURNITURE_FACTORY` tesis tipi ve `10 kg çelik → 1 mobilya` reçetesi eklendi.
+Zincir artık maden → çelik → mobilya olarak üç aşamalı; bu aynı zamanda R19'un
+(derin zincirde kalite çöküşü) F8'de ölçülebileceği en derin yol.
+
+**Karar: eklendi.** Alternatifi ürünü listeden çıkarmaktı; spec'in ürün ağacını
+kısaltmak yerine tamamlamayı tercih ettim.
+
+---
+
+### C6. Tohum referans fiyatları yeniden dengelendi 🟠 *(F6, 3 Eylül 2026)*
+Spec'in ürün tablosundaki referans fiyatlar, benim yazdığım tariflerin maliyet
+yapısıyla tutarsızdı. En uç örnek sigara: referans 80 ₺, tarif maliyeti 1,95 ₺.
+500 turluk koşuda piyasa sigarayı 5,06 ₺'ye indirdi ve tek başına Game CPI'yı
+1,00'dan 0,53'e çekti.
+
+Referans fiyat bir tasarım sabiti değil, fiyat keşfinin **başlangıç çıpasıdır**.
+Yanlış çıpa, yüzlerce turluk sahte bir deflasyon üretir ve her ölçümü kirletir.
+
+Değişenler: buğday 10→8 ₺, un 16→22 ₺, demir 28→24 ₺, kömür 18→14 ₺. Tüketiciye
+dönük fiyatlar (ekmek 15, domates 15, sigara 80) **korundu** — bunlar gerçekçi
+Türkiye fiyatları ve spec'in kasıtlı çıpaları. Tutarlılık, işçilik/enerji ve
+verim değerleri değiştirilerek sağlandı (ekmek 1 kg un → 4 somun; sigara 8 kg
+tütün → 20 paket, işçilik paket başına 47,25 ₺ — gerçekte de paket fiyatının
+büyük kısmı işleme ve vergidir).
+
+`seed-data.test.ts` her tarif için `referans ÷ birim_maliyet` oranını **1,15–1,75**
+bandında tutar. Bant tutarlılığı garanti eder, *isabetliliği* değil: talep
+esneklikleri ve kapasitelerin nihai ayarı F8 simülasyon kapısında yapılacak.
+
+**Karar: dengelendi.**
+
+---
+
 ## C. DEĞİŞTİRİLMESİ ÖNERİLENLER
 
 ### C1. Tick adım sırası: üretim ↔ piyasa ilişkisi netleşmeli 🟠

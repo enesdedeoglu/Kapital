@@ -18,6 +18,7 @@ export const facilities = pgTable(
     level: smallint('level').notNull().default(1),
     condition: numeric('condition', { precision: 5, scale: 2 }).notNull().default('100'),
     technologyBonus: doublePrecision('technology_bonus').notNull().default(0),
+    utilization: doublePrecision('utilization').notNull().default(1),
     /** MVP'de sabit 0,5; F11'de çalışanlardan türer (docs/11 B2). */
     staffScore: doublePrecision('staff_score').notNull().default(0.5),
     productionEnabled: boolean('production_enabled').notNull().default(true),

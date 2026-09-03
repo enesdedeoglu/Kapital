@@ -8,6 +8,19 @@ import { money, qty } from '@kapital/shared';
 /** Kur çıpası: 1 USD = 35 ₺. Dünya fiyatları bu ana göre sabitlenir (docs/12 §3.1). */
 export const FX_RATE_0 = 35;
 
+/**
+ * Bakım gideri TUR BAŞINADIR ve kurulum maliyetinden TÜRETİLİR.
+ *
+ * Elle yazıldığında birim hatası yapılmıştı: günlük değerler tur başına
+ * yazılınca 8.000 ₺'lik manavın bakımı günde 11.520 ₺ (kurulumun %144'ü)
+ * oluyordu ve ekonomi her tur para kaybediyordu. Türetilmiş değer bu hatanın
+ * tekrarını engeller.
+ *
+ * 0,00025 ≈ kurulum maliyetinin günde %2,4'ü (96 tur).
+ */
+export const MAINTENANCE_RATE = 0.00025;
+const upkeep = (cost: number) => Math.round(cost * MAINTENANCE_RATE * 100) / 100;
+
 export const cities = [
   // id, kod, ad, nüfus, gelir, arsa, sanayi, tarım, talep, lojistik, liman
   { id: 1, code: 'IST', name: 'İstanbul', populationIndex: 1.60, incomeIndex: 1.20, landCostIndex: 1.50, industrialBonus: 1.05, agricultureBonus: 0.85, consumerDemandIndex: 1.0, logisticsModifier: 1.0, hasPort: true },
@@ -41,16 +54,16 @@ export const productCategories = [
  * 100–250k ₺'ye ulaşsın → başlangıçta ~50–100 ₺/tur net kâr.
  */
 export const products = [
-  { id: 1,  code: 'WHEAT',     name: 'Buğday',  categoryId: 4, unit: 'kg',    price: 10,   demand: 0,    priceSens: 1.4, qualSens: 0.9, brandSens: 0.2, shelfLife: 2880, decay: 0.0004, weight: 1.0,  unlock: 5,  raw: true,  inter: false, retail: false },
-  { id: 2,  code: 'FLOUR',     name: 'Un',      categoryId: 5, unit: 'kg',    price: 16,   demand: 0,    priceSens: 1.3, qualSens: 1.0, brandSens: 0.3, shelfLife: 5760, decay: 0.0002, weight: 1.0,  unlock: 6,  raw: false, inter: true,  retail: false },
+  { id: 1,  code: 'WHEAT',     name: 'Buğday',  categoryId: 4, unit: 'kg',    price: 8,   demand: 0,    priceSens: 1.4, qualSens: 0.9, brandSens: 0.2, shelfLife: 2880, decay: 0.0004, weight: 1.0,  unlock: 5,  raw: true,  inter: false, retail: false },
+  { id: 2,  code: 'FLOUR',     name: 'Un',      categoryId: 5, unit: 'kg',    price: 22,   demand: 0,    priceSens: 1.3, qualSens: 1.0, brandSens: 0.3, shelfLife: 5760, decay: 0.0002, weight: 1.0,  unlock: 6,  raw: false, inter: true,  retail: false },
   { id: 3,  code: 'BREAD',     name: 'Ekmek',   categoryId: 1, unit: 'adet',  price: 15,   demand: 40,   priceSens: 1.7, qualSens: 0.8, brandSens: 0.35, shelfLife: 96,  decay: 0.0150, weight: 0.5,  unlock: 6,  raw: false, inter: false, retail: true },
   { id: 4,  code: 'TOMATO',    name: 'Domates', categoryId: 2, unit: 'kg',    price: 15,   demand: 25,   priceSens: 1.5, qualSens: 1.1, brandSens: 0.30, shelfLife: 480, decay: 0.0040, weight: 1.0,  unlock: 1,  raw: true,  inter: false, retail: true },
   { id: 5,  code: 'TOBACCO',   name: 'Tütün',   categoryId: 4, unit: 'kg',    price: 30,   demand: 0,    priceSens: 1.2, qualSens: 1.2, brandSens: 0.2, shelfLife: 8640, decay: 0.0001, weight: 1.0,  unlock: 7,  raw: true,  inter: false, retail: false },
   { id: 6,  code: 'CIGARETTE', name: 'Sigara',  categoryId: 3, unit: 'paket', price: 80,   demand: 8,    priceSens: 0.9, qualSens: 0.9, brandSens: 1.20, shelfLife: null, decay: 0,     weight: 0.2,  unlock: 8,  raw: false, inter: false, retail: true },
-  { id: 7,  code: 'IRON',      name: 'Demir',   categoryId: 4, unit: 'kg',    price: 28,   demand: 0,    priceSens: 1.5, qualSens: 1.0, brandSens: 0.2, shelfLife: null, decay: 0,     weight: 1.0,  unlock: 13, raw: true,  inter: false, retail: false },
-  { id: 8,  code: 'COAL',      name: 'Kömür',   categoryId: 4, unit: 'kg',    price: 18,   demand: 0,    priceSens: 1.5, qualSens: 0.9, brandSens: 0.2, shelfLife: null, decay: 0,     weight: 1.0,  unlock: 13, raw: true,  inter: false, retail: false },
+  { id: 7,  code: 'IRON',      name: 'Demir',   categoryId: 4, unit: 'kg',    price: 24,   demand: 0,    priceSens: 1.5, qualSens: 1.0, brandSens: 0.2, shelfLife: null, decay: 0,     weight: 1.0,  unlock: 13, raw: true,  inter: false, retail: false },
+  { id: 8,  code: 'COAL',      name: 'Kömür',   categoryId: 4, unit: 'kg',    price: 14,   demand: 0,    priceSens: 1.5, qualSens: 0.9, brandSens: 0.2, shelfLife: null, decay: 0,     weight: 1.0,  unlock: 13, raw: true,  inter: false, retail: false },
   { id: 9,  code: 'STEEL',     name: 'Çelik',   categoryId: 5, unit: 'kg',    price: 72,   demand: 0,    priceSens: 1.3, qualSens: 1.1, brandSens: 0.25, shelfLife: null, decay: 0,    weight: 1.0,  unlock: 15, raw: false, inter: true,  retail: false },
-  { id: 10, code: 'FURNITURE', name: 'Mobilya', categoryId: 6, unit: 'adet',  price: 6000, demand: 0.15, priceSens: 0.9, qualSens: 1.3, brandSens: 1.15, shelfLife: null, decay: 0,    weight: 60.0, unlock: 12, raw: false, inter: false, retail: true },
+  { id: 10, code: 'FURNITURE', name: 'Mobilya', categoryId: 6, unit: 'adet',  price: 1200, demand: 0.15, priceSens: 0.9, qualSens: 1.3, brandSens: 1.15, shelfLife: null, decay: 0,    weight: 60.0, unlock: 12, raw: false, inter: false, retail: true },
 ] as const;
 
 /**
@@ -75,19 +88,20 @@ export const worldMarket = [
 ];
 
 export const facilityTypes = [
-  { id: 1,  code: 'GREENGROCER', name: 'Manav',            category: 'RETAIL',      cost: 8_000,   capacity: 0,   maintenance: 120, storage: 2_000,  ticks: 1, unlock: 1,  port: false },
-  { id: 2,  code: 'KIOSK',       name: 'Büfe',             category: 'RETAIL',      cost: 8_000,   capacity: 0,   maintenance: 120, storage: 1_500,  ticks: 1, unlock: 1,  port: false },
-  { id: 3,  code: 'MARKET',      name: 'Market',           category: 'RETAIL',      cost: 35_000,  capacity: 0,   maintenance: 380, storage: 8_000,  ticks: 4, unlock: 2,  port: false },
-  { id: 4,  code: 'VEG_GARDEN',  name: 'Sebze Bahçesi',    category: 'AGRICULTURE', cost: 20_000,  capacity: 18,  maintenance: 210, storage: 4_000,  ticks: 6, unlock: 4,  port: false },
-  { id: 5,  code: 'WHEAT_FIELD', name: 'Buğday Tarlası',   category: 'AGRICULTURE', cost: 25_000,  capacity: 30,  maintenance: 240, storage: 6_000,  ticks: 8, unlock: 5,  port: false },
-  { id: 6,  code: 'MILL',        name: 'Değirmen',         category: 'INDUSTRY',    cost: 45_000,  capacity: 22,  maintenance: 460, storage: 6_000,  ticks: 8, unlock: 6,  port: false },
-  { id: 7,  code: 'BAKERY',      name: 'Fırın',            category: 'INDUSTRY',    cost: 30_000,  capacity: 40,  maintenance: 380, storage: 3_000,  ticks: 6, unlock: 6,  port: false },
-  { id: 8,  code: 'TOBACCO_FARM',name: 'Tütün Tarlası',    category: 'AGRICULTURE', cost: 30_000,  capacity: 9,   maintenance: 280, storage: 3_000,  ticks: 8, unlock: 7,  port: false },
-  { id: 9,  code: 'CIG_FACTORY', name: 'Sigara Fabrikası', category: 'INDUSTRY',    cost: 70_000,  capacity: 14,  maintenance: 720, storage: 4_000,  ticks: 12, unlock: 8, port: false },
-  { id: 10, code: 'IRON_MINE',   name: 'Demir Madeni',     category: 'MINING',      cost: 60_000,  capacity: 26,  maintenance: 640, storage: 8_000,  ticks: 12, unlock: 13, port: false },
-  { id: 11, code: 'COAL_MINE',   name: 'Kömür Madeni',     category: 'MINING',      cost: 50_000,  capacity: 34,  maintenance: 560, storage: 8_000,  ticks: 12, unlock: 13, port: false },
-  { id: 12, code: 'STEEL_MILL',  name: 'Çelik Fabrikası',  category: 'INDUSTRY',    cost: 120_000, capacity: 18,  maintenance: 1_250, storage: 10_000, ticks: 16, unlock: 15, port: false },
-  { id: 13, code: 'PORT',        name: 'Liman',            category: 'LOGISTICS',   cost: 200_000, capacity: 0,   maintenance: 1_800, storage: 20_000, ticks: 20, unlock: 7, port: true },
+  { id: 1,  code: 'GREENGROCER', name: 'Manav',            category: 'RETAIL',      cost: 8_000, capacity: 0, maintenance: upkeep(8_000), storage: 2_000,  ticks: 1, unlock: 1,  port: false },
+  { id: 2,  code: 'KIOSK',       name: 'Büfe',             category: 'RETAIL',      cost: 8_000, capacity: 0, maintenance: upkeep(8_000), storage: 1_500,  ticks: 1, unlock: 1,  port: false },
+  { id: 3,  code: 'MARKET',      name: 'Market',           category: 'RETAIL',      cost: 35_000, capacity: 0, maintenance: upkeep(35_000), storage: 8_000,  ticks: 4, unlock: 2,  port: false },
+  { id: 4,  code: 'VEG_GARDEN',  name: 'Sebze Bahçesi',    category: 'AGRICULTURE', cost: 20_000, capacity: 18, maintenance: upkeep(20_000), storage: 4_000,  ticks: 6, unlock: 4,  port: false },
+  { id: 5,  code: 'WHEAT_FIELD', name: 'Buğday Tarlası',   category: 'AGRICULTURE', cost: 25_000, capacity: 30, maintenance: upkeep(25_000), storage: 6_000,  ticks: 8, unlock: 5,  port: false },
+  { id: 6,  code: 'MILL',        name: 'Değirmen',         category: 'INDUSTRY',    cost: 45_000, capacity: 22, maintenance: upkeep(45_000), storage: 6_000,  ticks: 8, unlock: 6,  port: false },
+  { id: 7,  code: 'BAKERY',      name: 'Fırın',            category: 'INDUSTRY',    cost: 30_000, capacity: 40, maintenance: upkeep(30_000), storage: 3_000,  ticks: 6, unlock: 6,  port: false },
+  { id: 8,  code: 'TOBACCO_FARM',name: 'Tütün Tarlası',    category: 'AGRICULTURE', cost: 30_000, capacity: 9, maintenance: upkeep(30_000), storage: 3_000,  ticks: 8, unlock: 7,  port: false },
+  { id: 9,  code: 'CIG_FACTORY', name: 'Sigara Fabrikası', category: 'INDUSTRY',    cost: 70_000, capacity: 14, maintenance: upkeep(70_000), storage: 4_000,  ticks: 12, unlock: 8, port: false },
+  { id: 10, code: 'IRON_MINE',   name: 'Demir Madeni',     category: 'MINING',      cost: 60_000, capacity: 26, maintenance: upkeep(60_000), storage: 8_000,  ticks: 12, unlock: 13, port: false },
+  { id: 11, code: 'COAL_MINE',   name: 'Kömür Madeni',     category: 'MINING',      cost: 50_000, capacity: 34, maintenance: upkeep(50_000), storage: 8_000,  ticks: 12, unlock: 13, port: false },
+  { id: 12, code: 'STEEL_MILL',  name: 'Çelik Fabrikası',  category: 'INDUSTRY',    cost: 120_000, capacity: 18, maintenance: upkeep(120_000), storage: 10_000, ticks: 16, unlock: 15, port: false },
+  { id: 13, code: 'PORT',        name: 'Liman',            category: 'LOGISTICS',   cost: 200_000, capacity: 0, maintenance: upkeep(200_000), storage: 20_000, ticks: 20, unlock: 7, port: true },
+  { id: 14, code: 'FURNITURE_FACTORY', name: 'Mobilya Fabrikası', category: 'INDUSTRY', cost: 150_000, capacity: 2, maintenance: upkeep(150_000), storage: 6_000, ticks: 18, unlock: 16, port: false },
 ] as const;
 
 /** Kapasite katsayıları — madde 12. Kod içine gömülmez. */
@@ -102,19 +116,22 @@ export const recipes: {
   cycleTicks: number; labor: number; energy: number; unlock: number;
   inputs: { code: string; qty: number; minQuality?: number }[];
 }[] = [
-  { facilityCode: 'VEG_GARDEN',  outputCode: 'TOMATO',    outputQty: 1, cycleTicks: 1, labor: 3,   energy: 1,  unlock: 4,  inputs: [] },
-  { facilityCode: 'WHEAT_FIELD', outputCode: 'WHEAT',     outputQty: 1, cycleTicks: 1, labor: 2,   energy: 1,  unlock: 5,  inputs: [] },
-  { facilityCode: 'TOBACCO_FARM',outputCode: 'TOBACCO',   outputQty: 1, cycleTicks: 1, labor: 6,   energy: 2,  unlock: 7,  inputs: [] },
-  { facilityCode: 'IRON_MINE',   outputCode: 'IRON',      outputQty: 1, cycleTicks: 1, labor: 6,   energy: 5,  unlock: 13, inputs: [] },
-  { facilityCode: 'COAL_MINE',   outputCode: 'COAL',      outputQty: 1, cycleTicks: 1, labor: 4,   energy: 4,  unlock: 13, inputs: [] },
+  { facilityCode: 'VEG_GARDEN',  outputCode: 'TOMATO',    outputQty: 1, cycleTicks: 1, labor: 8,   energy: 3,  unlock: 4,  inputs: [] },
+  { facilityCode: 'WHEAT_FIELD', outputCode: 'WHEAT',     outputQty: 1, cycleTicks: 1, labor: 4,   energy: 2,  unlock: 5,  inputs: [] },
+  { facilityCode: 'TOBACCO_FARM',outputCode: 'TOBACCO',   outputQty: 1, cycleTicks: 1, labor: 15,  energy: 7,  unlock: 7,  inputs: [] },
+  { facilityCode: 'IRON_MINE',   outputCode: 'IRON',      outputQty: 1, cycleTicks: 1, labor: 11,  energy: 7,  unlock: 13, inputs: [] },
+  { facilityCode: 'COAL_MINE',   outputCode: 'COAL',      outputQty: 1, cycleTicks: 1, labor: 6,   energy: 4,  unlock: 13, inputs: [] },
   // 4 kg Buğday → 3 kg Un
-  { facilityCode: 'MILL',        outputCode: 'FLOUR',     outputQty: 3, cycleTicks: 1, labor: 4,   energy: 3,  unlock: 6,  inputs: [{ code: 'WHEAT', qty: 4 }] },
-  // 1 kg Un → 2 Ekmek
-  { facilityCode: 'BAKERY',      outputCode: 'BREAD',     outputQty: 2, cycleTicks: 1, labor: 3,   energy: 2,  unlock: 6,  inputs: [{ code: 'FLOUR', qty: 1 }] },
-  // 1 kg Tütün → 20 paket Sigara
-  { facilityCode: 'CIG_FACTORY', outputCode: 'CIGARETTE', outputQty: 20, cycleTicks: 1, labor: 18, energy: 9,  unlock: 8,  inputs: [{ code: 'TOBACCO', qty: 1, minQuality: 40 }] },
+  { facilityCode: 'MILL',        outputCode: 'FLOUR',     outputQty: 3, cycleTicks: 1, labor: 12,  energy: 5,  unlock: 6,  inputs: [{ code: 'WHEAT', qty: 4 }] },
+  // 1 kg Un → 4 Ekmek (350 g/somun)
+  { facilityCode: 'BAKERY',      outputCode: 'BREAD',     outputQty: 4, cycleTicks: 1, labor: 16,  energy: 6,  unlock: 6,  inputs: [{ code: 'FLOUR', qty: 1 }] },
+  // 8 kg Tütün → 20 paket Sigara. İşçilik yüksektir: paket fiyatının büyük
+  // kısmı işleme ve vergidir, yaprak maliyeti değil.
+  { facilityCode: 'CIG_FACTORY', outputCode: 'CIGARETTE', outputQty: 20, cycleTicks: 1, labor: 650, energy: 295, unlock: 8, inputs: [{ code: 'TOBACCO', qty: 8, minQuality: 40 }] },
   // 3 kg Kömür + 2 kg Demir → 2 kg Çelik
-  { facilityCode: 'STEEL_MILL',  outputCode: 'STEEL',     outputQty: 2, cycleTicks: 1, labor: 9,   energy: 14, unlock: 15, inputs: [{ code: 'COAL', qty: 3 }, { code: 'IRON', qty: 2, minQuality: 30 }] },
+  { facilityCode: 'STEEL_MILL',  outputCode: 'STEEL',     outputQty: 2, cycleTicks: 1, labor: 11,  energy: 6,  unlock: 15, inputs: [{ code: 'COAL', qty: 3 }, { code: 'IRON', qty: 2, minQuality: 30 }] },
+  // 10 kg Çelik → 1 Mobilya. Zincirin en derin ucu: maden → çelik → mobilya.
+  { facilityCode: 'FURNITURE_FACTORY', outputCode: 'FURNITURE', outputQty: 1, cycleTicks: 1, labor: 120, energy: 49, unlock: 16, inputs: [{ code: 'STEEL', qty: 10, minQuality: 35 }] },
 ];
 
 /**
@@ -160,6 +177,7 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'economy.calendar', value: { tickMinutes: 15, ticksPerDay: 96, ticksPerSeason: 672, ticksPerYear: 2688 } },
   { key: 'economy.start',    value: { cash: money(30_000).toString(), level: 1, facilityChoices: ['GREENGROCER', 'KIOSK'] } },
   { key: 'economy.production', value: { rawBaseQuality: 70, qualityVariance: 1.5, conditionWearPerTick: 0.05, haltBelowCondition: 30 } },
+  { key: 'economy.upkeep',  value: { maintenanceRate: MAINTENANCE_RATE, conditionWearPerTick: 0.05 } },
   { key: 'economy.loan',    value: { liquidationRate: 0.5, inflationK: 1.0, creditShareAlarm: 0.20 } },
   { key: 'economy.upgrade',    value: { costMultiplier: 0.75, costExponent: 1.55, maxLevel: 10 } },
   { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12 } },
@@ -174,6 +192,7 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'health.weights',   value: { supply: 0.30, sellers: 0.15, buyers: 0.10, depth: 0.15, stability: 0.15, playerShare: 0.15 } },
   { key: 'npc.population',   value: { perProductPerCity: 1.2, priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35 } },
   { key: 'npc.inventory',    value: { minTicks: 4, targetTicks: 12, maxTicks: 24 } },
+  { key: 'npc.throttle',     value: { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 } },
   { key: 'npc.simpleSellers', value: simpleNpcSellers },
 ];
 

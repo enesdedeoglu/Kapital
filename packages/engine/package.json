@@ -5,11 +5,17 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "run": "tsx src/cli/run-ticks.ts"
   },
   "dependencies": {
     "@kapital/config": "workspace:*",
@@ -17,5 +23,8 @@
     "@kapital/economy": "workspace:*",
     "@kapital/shared": "workspace:*"
   },
-  "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
 }

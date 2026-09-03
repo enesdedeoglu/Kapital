@@ -8,6 +8,7 @@ import { runExchangePhase } from './phases/p2-exchange.js';
 import { runRetailPhase } from './phases/p3-retail.js';
 import { runUpkeepPhase } from './phases/p4-upkeep.js';
 import { runSettlePhase } from './phases/p5-settle.js';
+import { runGovernPhase } from './phases/p6-govern.js';
 import { runClosePhase } from './phases/p7-close.js';
 
 /**
@@ -35,6 +36,7 @@ const RUNNERS: Record<number, (sql: Sql, tick: EngineTick) => Promise<unknown>> 
   3: runRetailPhase,
   4: runUpkeepPhase,
   5: runSettlePhase,
+  6: runGovernPhase,
   7: runClosePhase,
 };
 

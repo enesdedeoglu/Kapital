@@ -5,6 +5,7 @@ import {
   SYSTEM_COMPANIES, SYSTEM_COMPANY_CODES,
 } from '@kapital/shared';
 import * as d from './data.js';
+import { seedNpcWorld } from './npc-world.js';
 
 /** Tekrar çalıştırılabilir (idempotent): var olan satırları günceller, yenisini ekler. */
 export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<void> {

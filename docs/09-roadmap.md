@@ -165,16 +165,38 @@ Kredi yoksa oyunda iflas mekanizması da yok — bu metrik ölçülemez ve simü
 
 ---
 
-## F6 — NPC ekonomisi · 2 hafta
+## F6 — NPC ekonomisi · 2 hafta  ✅ TAMAMLANDI (3 Eylül 2026)
 - `npc_profiles`, 8 arketip, ±%15 parametre dağılımı
 - P6 fazı NPC bölümü: operasyonel (her tick) + stratejik (N tick)
 - NPC fiyat algoritması (±%3 bant + acil bant)
 - NPC stok yönetimi (min 4 / hedef 12 / max 24 tur)
-- NPC yatırım skoru → inşaat kararı
-- NPC-NPC agregasyonu (madde 54 optimizasyonu)
-- 60 NPC / 150 tesis dünya tohumlama
+- NPC alış teklifi **navlun payı** içerir (R20) — `inputBid` + medyan mesafe
+- **Üretim kısma** (R21): `facilities.utilization` + `outputThrottle`
+- Ürün grafı tohum verisine karşı doğrulanır (R23); mobilya zinciri kapatıldı
+- Tohum fiyatları tariflerle tutarlı hale getirildi, marj bandı testi (R22)
+- 60 NPC / 75 tesis dünya tohumlama + `run-ticks` başsız koşu aracı
 
 **Çıkış:** Oyuncusuz bir dünyada ekonomi 500 tick boyunca kendi kendine sağlıklı koşuyor.
+
+**Ölçüm (500 tur, oyuncusuz):**
+
+| Ölçüt | Sonuç | Hedef |
+|---|---|---|
+| Tur süresi | ort 1.202 ms · p95 1.394 ms | < 37.000 ms |
+| Para arzı | 15,00 M → 15,17 M ₺ (**+%1,1**) | sapma yok |
+| Game CPI | 1,000 → **1,029** (tepe 1,033, sonra geri) | 1,0 civarında dengeli |
+| İflas | **0** / 65 NPC | sıfır |
+| İşlem gören ürün | **10 / 10** | tümü |
+| Zincir duruşu | yok — yalnız normal sürtünme | yok |
+| Perakende cirosu | 4.900–7.800 ₺/tur, trend yok | çökmüyor |
+
+CPI 500 tur boyunca 1,022 → 1,033 → 1,029 seyretti: yükselip **geri döndü**.
+Tek yönlü sürüklenme değil, dar bantta salınım — yani fiyat mekanizması kendi
+kendini düzeltiyor.
+
+**Devredilen:** NPC stratejik yatırım kararı (`investmentScore` yazılı ve test
+edildi, ama tesis inşası henüz bağlanmadı) → F7 ile birlikte, Ekonomi Direktörü
+sermaye akışını yönetirken. Nihai denge ayarı → F8.
 
 ---
 

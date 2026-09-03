@@ -16,13 +16,15 @@ export interface CapacityInput {
   readonly technologyBonus: number;
   /** Dünya olayı arz çarpanı. */
   readonly eventMultiplier?: number;
+  /** `facilities.utilization` 0..1 — sahibinin kısıtladığı kapasite oranı. */
+  readonly utilization?: number;
 }
 
 /**
  * Tesis üretim kapasitesi — madde 12.
  *
  *   kapasite = taban × seviye_çarpanı × (durum/100) × şehir_bonusu
- *              × (1 + teknoloji) × olay_çarpanı
+ *              × (1 + teknoloji) × olay_çarpanı × kullanım_oranı
  *
  * Çalışan skoru kapasiteye DEĞİL kaliteye girer (madde 14): personel çıktının
  * miktarını değil niteliğini belirler.
@@ -34,6 +36,7 @@ export function productionCapacity(input: CapacityInput): number {
     (Math.max(0, Math.min(100, input.condition)) / 100) *
     input.cityBonus *
     (1 + input.technologyBonus) *
+    Math.max(0, Math.min(1, input.utilization ?? 1)) *
     (input.eventMultiplier ?? 1);
   return capacity > 0 ? capacity : 0;
 }

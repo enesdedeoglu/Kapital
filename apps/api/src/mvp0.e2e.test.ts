@@ -136,7 +136,10 @@ describe('MVP-0 — Domates Döngüsü', () => {
          FROM company_financials WHERE tick_id = 2 AND company_id = ${companyId}::uuid`;
     expect(financials!.revenue).toBeGreaterThan(0n);
     expect(financials!.cogs).toBeGreaterThan(0n);
-    expect(financials!.maintenance).toBe(money(120)); // manav bakımı
+    // Bakım tohumda kurulum maliyetinden türetilir (%0,025/tur); sabit yazılmaz.
+    const [shopType] = await sql<{ maintenance_cost: bigint }[]>`
+      SELECT maintenance_cost FROM facility_types WHERE code = 'GREENGROCER'`;
+    expect(financials!.maintenance).toBe(shopType!.maintenance_cost);
     expect(financials!.net_profit).toBeGreaterThan(0n); // ★ kâr etti
     expect(financials!.company_value).toBeGreaterThan(money(18_000)); // stok + tesis dahil
 
@@ -166,8 +169,9 @@ describe('tur motoru', () => {
     const phases = await sql<{ phase: number; phase_code: string; status: string }[]>`
       SELECT phase, phase_code, status FROM tick_phase_runs
       WHERE tick_id = ${second.tickId} ORDER BY phase`;
+    // GOVERN (P6) F6'da devreye girdi: NPC operasyonel kararları.
     expect(phases.map((p) => p.phase_code))
-      .toEqual(['OPEN', 'PRODUCE', 'EXCHANGE', 'RETAIL', 'UPKEEP', 'SETTLE', 'CLOSE']);
+      .toEqual(['OPEN', 'PRODUCE', 'EXCHANGE', 'RETAIL', 'UPKEEP', 'SETTLE', 'GOVERN', 'CLOSE']);
     expect(phases.every((p) => p.status === 'COMPLETED')).toBe(true);
   });
 

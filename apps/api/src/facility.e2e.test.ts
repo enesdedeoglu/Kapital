@@ -103,7 +103,10 @@ describe('dünya uçları (oturumsuz)', () => {
 
   it('tesis türlerini seviye kilidi ve liman şartıyla listeler', async () => {
     const res = await call('/facility-types');
-    expect(res.body).toHaveLength(13);
+    // Sayı tohumdan okunur: yeni tesis tipi eklendiğinde (F6'da mobilya
+    // fabrikası) bu test kırılmasın, uç noktanın TÜMÜNÜ döndürdüğünü ölçsün.
+    const [{ count }] = await sql<{ count: bigint }[]>`SELECT COUNT(*) AS count FROM facility_types`;
+    expect(res.body).toHaveLength(Number(count));
     const port = res.body.find((f: { code: string }) => f.code === 'PORT');
     expect(port.requiresPort).toBe(true);
     expect(port.unlockLevel).toBe(7);
