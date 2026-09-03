@@ -7,6 +7,7 @@ import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js'
 import type { AuthUser } from '../auth/jwt.guard.js';
 import { FacilityService } from './facility.service.js';
 import { buildFacilitySchema, type BuildFacilityDto } from './facility.dto.js';
+import { setRecipeSchema, type SetRecipeDto } from './production.dto.js';
 
 @Controller('facilities')
 export class FacilityController {
@@ -35,6 +36,28 @@ export class FacilityController {
   @Get(':id/stock')
   stock(@Req() req: Request & { user: AuthUser }, @Param('id') id: string) {
     return this.facilities.stock(req.user.sub, id);
+  }
+
+  /** Üretim durumu: kapasite, aktif reçete, son turların çıktısı ve duruş nedeni. */
+  @Get(':id/production')
+  production(@Req() req: Request & { user: AuthUser }, @Param('id') id: string) {
+    return this.facilities.production(req.user.sub, id);
+  }
+
+  /** Tesisin üreteceği ürünü seçer. */
+  @Post(':id/recipe')
+  setRecipe(
+    @Req() req: Request & { user: AuthUser },
+    @Param('id') id: string,
+    @Body(new ZodPipe(setRecipeSchema)) dto: SetRecipeDto,
+  ) {
+    return this.facilities.setRecipe(req.user.sub, id, dto);
+  }
+
+  @Post(':id/upgrade')
+  @UseInterceptors(IdempotencyInterceptor)
+  upgrade(@Req() req: Request & { user: AuthUser }, @Param('id') id: string) {
+    return this.facilities.upgrade(req.user.sub, id);
   }
 
   /** Lot detayı: aynı ürünün farklı kalite ve maliyetteki partileri ayrı ayrı. */

@@ -5,3 +5,4 @@ export * from './formulas/attractiveness.js';
 export * from './formulas/allocation.js';
 export * from './formulas/decay.js';
 export * from './pricing/median.js';
+export * from './production/index.js';

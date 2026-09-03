@@ -2,8 +2,7 @@
  * Tick fazları — docs/05 §2.
  *
  * Madde 53'teki 25 adım, bağımlılık ve shard anahtarına göre 8 faza gruplanır.
- * F2'de 5 faz uygulanır; kalanlar kendi fazlarında gelir:
- *   P1 PRODUCE  → F3 (üretim)
+ * F3 itibarıyla 6 faz uygulanır; kalanlar kendi fazlarında gelir:
  *   P2 EXCHANGE → F4 (emir defteri, sevkiyat)
  *   P6 GOVERN   → F6/F7 (NPC stratejisi, Economic Director)
  *
@@ -32,11 +31,12 @@ export interface PhaseDefinition {
   readonly budgetMs: number;
 }
 
-/** F2'de koşan fazlar, sırayla. Sıra atlanamaz. */
+/** Koşan fazlar, sırayla. Sıra atlanamaz. */
 export const ACTIVE_PHASES: readonly PhaseDefinition[] = [
-  { phase: PHASE.OPEN,   code: 'OPEN',   shardKey: 'none',    budgetMs: 1_000 },
-  { phase: PHASE.RETAIL, code: 'RETAIL', shardKey: 'city',    budgetMs: 15_000 },
-  { phase: PHASE.UPKEEP, code: 'UPKEEP', shardKey: 'company', budgetMs: 8_000 },
-  { phase: PHASE.SETTLE, code: 'SETTLE', shardKey: 'company', budgetMs: 10_000 },
-  { phase: PHASE.CLOSE,  code: 'CLOSE',  shardKey: 'none',    budgetMs: 3_000 },
+  { phase: PHASE.OPEN,    code: 'OPEN',    shardKey: 'none',    budgetMs: 1_000 },
+  { phase: PHASE.PRODUCE, code: 'PRODUCE', shardKey: 'company', budgetMs: 12_000 },
+  { phase: PHASE.RETAIL,  code: 'RETAIL',  shardKey: 'city',    budgetMs: 15_000 },
+  { phase: PHASE.UPKEEP,  code: 'UPKEEP',  shardKey: 'company', budgetMs: 8_000 },
+  { phase: PHASE.SETTLE,  code: 'SETTLE',  shardKey: 'company', budgetMs: 10_000 },
+  { phase: PHASE.CLOSE,   code: 'CLOSE',   shardKey: 'none',    budgetMs: 3_000 },
 ];

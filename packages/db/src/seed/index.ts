@@ -1,5 +1,9 @@
+import { validateProductGraph } from '@kapital/economy';
 import { createSql, type Sql } from '../client.js';
-import { asMoney, divRoundHalfEven, money, qty, SYSTEM_COMPANIES, SYSTEM_COMPANY_CODES } from '@kapital/shared';
+import {
+  asMoney, divRoundHalfEven, InvariantViolation, money, qty,
+  SYSTEM_COMPANIES, SYSTEM_COMPANY_CODES,
+} from '@kapital/shared';
 import * as d from './data.js';
 
 /** Tekrar çalıştırılabilir (idempotent): var olan satırları günceller, yenisini ekler. */
@@ -123,6 +127,11 @@ export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<vo
     }
     log(`${d.facilityTypes.length} tesis tipi · ${d.recipes.length} reçete`);
 
+    // 4b) ★ Ürün grafı doğrulaması — değişmez I8, risk R13.
+    //     Döngülü reçete (Çelik → Motor → Çelik) üretim fazını sonsuz döngüye
+    //     sokar. Seed ve CI'da yakalanır; bozuk graf hiç yazılmaz.
+    await assertProductGraph(tx as unknown as Sql);
+
     // 5) Kredi şartları ve seviyeler ------------------------------------------
     for (const t of d.loanTerms) {
       await tx`INSERT INTO loan_terms (level_min, leverage_ratio, interest_rate, max_term_ticks, default_after_missed)
@@ -174,9 +183,10 @@ export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<vo
     // 7b) MVP-0 NPC satıcıları — sabit fiyatlı arz kaynağı (gerçek NPC ajanları F6)
     for (const npc of d.simpleNpcSellers) {
       const city = d.cities.find((c) => c.code === npc.cityCode)!;
+      // companies_npc_name_unique (0006) sayesinde tekrar koşu kopya yaratmaz
       await tx`INSERT INTO companies (kind, name, home_city_id, cash)
                VALUES ('NPC', ${npc.name}, ${city.id}, 0)
-               ON CONFLICT DO NOTHING`;
+               ON CONFLICT (name) WHERE kind = 'NPC' DO NOTHING`;
     }
     const npcRows = await tx<{ count: bigint }[]>`
       SELECT COUNT(*) AS count FROM companies WHERE kind = 'NPC'`;
@@ -187,6 +197,52 @@ export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<vo
              VALUES (0, NOW(), NOW(), NOW(), 'COMPLETED', ${BigInt(Date.now())}, 0)
              ON CONFLICT (seq) DO NOTHING`;
   });
+}
+
+/** Ürün grafını okur ve doğrular; sorunluysa transaction geri alınır. */
+export async function assertProductGraph(sql: Sql): Promise<void> {
+  const products = await sql<{
+    id: number; code: string; unlock_level: number;
+    is_raw_material: boolean; is_retail_product: boolean;
+  }[]>`SELECT id, code, unlock_level, is_raw_material, is_retail_product
+       FROM products WHERE is_active`;
+
+  const recipes = await sql<{
+    id: number; facility_code: string; output_product_id: number;
+    unlock_level: number; inputs: number[] | null;
+  }[]>`
+    SELECT r.id, ft.code AS facility_code, r.output_product_id, r.unlock_level,
+           ARRAY_AGG(ri.product_id) FILTER (WHERE ri.product_id IS NOT NULL) AS inputs
+    FROM production_recipes r
+    JOIN facility_types ft ON ft.id = r.facility_type_id
+    LEFT JOIN recipe_inputs ri ON ri.recipe_id = r.id
+    WHERE r.is_active
+    GROUP BY r.id, ft.code, r.output_product_id, r.unlock_level`;
+
+  const report = validateProductGraph(
+    recipes.map((r) => ({
+      recipeId: r.id,
+      facilityTypeCode: r.facility_code,
+      outputProductId: r.output_product_id,
+      unlockLevel: r.unlock_level,
+      inputProductIds: r.inputs ?? [],
+    })),
+    products.map((p) => ({
+      id: p.id, code: p.code, unlockLevel: p.unlock_level,
+      isRawMaterial: p.is_raw_material, isRetailProduct: p.is_retail_product,
+    })),
+  );
+
+  // MVP-1'de Mobilya kereste zinciri gelmediği için ithalatla karşılanıyor;
+  // "üretilemiyor" uyarısı beklenen durumdur (docs/08 istisnası).
+  const blocking = report.issues.filter(
+    (i) => !(i.kind === 'UNREACHABLE' && i.message.startsWith('FURNITURE')),
+  );
+  if (blocking.length > 0) {
+    throw new InvariantViolation('I8', 'ürün grafı geçersiz', {
+      issues: blocking.map((i) => i.message),
+    });
+  }
 }
 
 export async function seedFromEnv(url?: string): Promise<void> {

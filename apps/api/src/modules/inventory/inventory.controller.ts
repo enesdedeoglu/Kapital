@@ -1,14 +1,31 @@
-import { Controller, Get, Inject, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Req, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
 import { summarizeInventory, type Sql } from '@kapital/db';
 import { asMoney, asQty, formatMoney, formatQty, NotFound } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
+import { ZodPipe } from '../../common/zod.pipe.js';
+import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
+import { InventoryService } from './inventory.service.js';
+import { transferStockSchema, type TransferStockDto } from './inventory.dto.js';
 
 /** Şirketin tüm tesislerindeki stoğun birleşik görünümü. */
 @Controller('inventory')
 export class InventoryController {
-  constructor(@Inject(SQL) private readonly sql: Sql) {}
+  constructor(
+    @Inject(SQL) private readonly sql: Sql,
+    @Inject(InventoryService) private readonly inventory: InventoryService,
+  ) {}
+
+  /** Kendi tesisleri arasında stok taşır (aynı şehir; şehirler arası F4). */
+  @Post('transfer')
+  @UseInterceptors(IdempotencyInterceptor)
+  transferStock(
+    @Req() req: Request & { user: AuthUser },
+    @Body(new ZodPipe(transferStockSchema)) dto: TransferStockDto,
+  ) {
+    return this.inventory.transfer(req.user.sub, dto);
+  }
 
   @Get()
   async all(@Req() req: Request & { user: AuthUser }) {

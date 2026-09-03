@@ -7,8 +7,8 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0, F1 ve F2 tamamlandı — MVP-0 çalışıyor.**
-> Sıradaki faz: F3 — Tesisler ve üretim. Geçiş kapısı ★1 geçildi.
+> **Durum: F0–F3 tamamlandı.** MVP-0 çalışıyor ve dikey üretim zinciri kuruldu.
+> Sıradaki faz: F4 — Piyasa, lojistik ve dış ticaret.
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -30,7 +30,7 @@ createdb kapital_dev && createdb kapital_test   # B) Yerel PostgreSQL 16 (5432)
 pnpm build
 pnpm db:migrate              # şemayı uygular
 pnpm db:seed                 # 5 şehir · 10 ürün · 13 tesis · 9 reçete · 7 sistem şirketi
-pnpm test                    # 120 test
+pnpm test                    # 154 test
 pnpm api:dev                 # http://localhost:3000
 pnpm worker:dev              # ekonomik tur zamanlayıcısı (15 dk)
 pnpm tick                    # tek bir turu elle koş
@@ -119,6 +119,20 @@ Planlanan ama henüz yazılmamış: `packages/sim` (denge simülasyonu, F8),
 | Şirket/tesis finansalları, şirket değeri, ekonomi fotoğrafı | ✅ |
 | Zamanlayıcı + catch-up politikası | ✅ |
 
+### F3 — Tesisler ve üretim
+
+| Alan | Durum |
+|---|---|
+| **Ürün grafı DAG doğrulaması** (I8/R13) — seed ve CI'da koşar | ✅ |
+| P1 üretim fazı: tarla, maden, fabrika **tek kod yolu** | ✅ |
+| Üretim kalitesi formülü (madde 14) ve kapasite formülü (madde 12) | ✅ |
+| Çok girdili reçeteler ve minimum kalite filtresi | ✅ |
+| Çok turlu üretim döngüleri (`production_jobs`) | ✅ |
+| Tesis yükseltme — `taban × 0,75 × seviye^1,55` | ✅ |
+| `condition` aşınması ve kritik seviyede duruş | ✅ |
+| Kendi tesisleri arası stok taşıma (aynı şehir) | ✅ |
+| Üretim durumu ve duruş nedeni raporu | ✅ |
+
 ### Doğrulanmış çıkış kriterleri
 
 | Test | Ne kanıtlıyor |
@@ -151,6 +165,21 @@ Ayrıca doğrulandı:
 - 20 turluk kesintisiz koşuda değişmezler bozulmuyor
 - Δ para arzı = perakende geliri − sistem giderleri (tam eşitlik)
 
+### ★ F3 çıkış kriteri — dikey zincir
+
+`Buğday Tarlası → Değirmen → Fırın → Manav`, hepsi Konya'da, hiçbir şey
+piyasadan satın alınmadan. Canlı ölçüm:
+
+| Adım | Miktar | Kalite | Birim maliyet |
+|---|---|---|---|
+| Buğday (tarla) | 323 kg | %69,5 | 3,00 ₺ |
+| Un (değirmen) | 20,8 kg | %59,5 | 6,33 ₺ |
+| Ekmek (fırın) | 37,8 adet | %52,0 | 5,66 ₺ |
+
+Kalitenin zincir boyunca düşmesi madde 14'ün 0,70 katsayısının doğal sonucudur
+ve tasarım gereğidir — telafisi teknoloji ve çalışan sistemleridir (F11).
+Bu yapısal etki [R19](docs/10-riskler.md) olarak kaydedildi.
+
 ## Dokümantasyon
 
 | # | Doküman | İçerik |
@@ -182,6 +211,9 @@ Ayrıca doğrulandı:
 | `GET /facilities/:id/stock` | Türetilmiş stok özeti |
 | `GET /facilities/:id/batches` | Lot detayı |
 | `GET /inventory` | Tüm tesislerin birleşik stoğu |
+| `POST /inventory/transfer` | Kendi tesisleri arası stok taşıma |
+| `GET /facilities/:id/production` | Kapasite, reçete, duruş nedeni |
+| `POST /facilities/:id/recipe` · `/upgrade` | Reçete seçimi ve yükseltme |
 | `GET /market/:cityCode` | Şehirdeki satış emirleri |
 | `POST /market/buy` | Toptan alım (anında doldurma) |
 | `GET` · `PUT /retail/:facilityId/prices` | Raf fiyatları ve tüketici tavanı |

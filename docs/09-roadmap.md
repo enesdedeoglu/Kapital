@@ -76,14 +76,25 @@ Uygulama notları:
 
 ---
 
-## F3 — Tesisler ve üretim · 2 hafta
+## F3 — Tesisler ve üretim · 2 hafta  ✅ TAMAMLANDI (3 Eylül 2026)
 - `production_recipes` + `recipe_inputs` + ürün grafı DAG doğrulaması
 - P1 (PRODUCE) fazı: tarım, maden, fabrika — tek kod yolu
 - Üretim kalitesi formülü, `production_jobs` (çok-tick döngüler)
 - Tesis yükseltme (`facility_level_curve`), `condition` aşınması
 - Zincir: Buğday→Un→Ekmek, Demir+Kömür→Çelik
 
-**Çıkış:** Oyuncu kendi buğdayını üretip ununu yapıp ekmeğini satabiliyor.
+**Çıkış:** ✅ Oyuncu kendi buğdayını üretip ununu yapıp ekmeğini satabiliyor.
+154 test geçiyor.
+
+Uygulama notları:
+- Tarla, maden ve fabrika **tek kod yolunu** kullanır; aralarındaki fark yalnız
+  reçetedir (girdisiz reçete = hammadde üreticisi).
+- Ürün grafı DAG doğrulaması seed'de koşar: döngülü reçete hiç yazılamaz (R13).
+- Kendi tesisleri arası stok taşıma eklendi ama **yalnız aynı şehirde**;
+  şehirler arası taşıma F4'te sevkiyat sistemine bağlanacak, aksi halde
+  lojistik bedavaya atlanabilirdi.
+- Yeni denge bulgusu: derin zincirlerde kalite sabit noktaya yakınsıyor
+  ([R19](10-riskler.md)) — teknoloji/çalışan sistemleri bunun telafisi.
 
 ---
 

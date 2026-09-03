@@ -3,6 +3,7 @@ export * from './context.js';
 export * from './orchestrator.js';
 export * from './reference-prices.js';
 export * from './phases/p0-open.js';
+export * from './phases/p1-produce.js';
 export * from './phases/p3-retail.js';
 export * from './phases/p4-upkeep.js';
 export * from './phases/p5-settle.js';

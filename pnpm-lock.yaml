@@ -122,6 +122,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@kapital/economy':
+        specifier: workspace:*
+        version: link:../economy
       '@kapital/shared':
         specifier: workspace:*
         version: link:../shared

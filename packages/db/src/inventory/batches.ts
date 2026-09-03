@@ -10,7 +10,7 @@ export interface AddBatchInput {
   /** 0–100 */
   quality: number | string;
   unitCost: Money;
-  producedInTick?: bigint;
+  producedInTick?: bigint | null;
   expiresAtTick?: bigint | null;
   sourceCompanyId?: string | null;
   sourceFacilityId?: string | null;

@@ -3,6 +3,7 @@ import { InvariantViolation, seasonOf, TICK_MINUTES, toJson } from '@kapital/sha
 import { ACTIVE_PHASES, type PhaseDefinition } from './phases.js';
 import { buildTickContext, type EngineTick } from './context.js';
 import { runOpenPhase } from './phases/p0-open.js';
+import { runProducePhase } from './phases/p1-produce.js';
 import { runRetailPhase } from './phases/p3-retail.js';
 import { runUpkeepPhase } from './phases/p4-upkeep.js';
 import { runSettlePhase } from './phases/p5-settle.js';
@@ -28,6 +29,7 @@ export interface TickResult {
 
 const RUNNERS: Record<number, (sql: Sql, tick: EngineTick) => Promise<unknown>> = {
   0: runOpenPhase,
+  1: runProducePhase,
   3: runRetailPhase,
   4: runUpkeepPhase,
   5: runSettlePhase,

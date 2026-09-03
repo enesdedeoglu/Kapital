@@ -159,6 +159,8 @@ export const simpleNpcSellers = [
 export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'economy.calendar', value: { tickMinutes: 15, ticksPerDay: 96, ticksPerSeason: 672, ticksPerYear: 2688 } },
   { key: 'economy.start',    value: { cash: money(30_000).toString(), level: 1, facilityChoices: ['GREENGROCER', 'KIOSK'] } },
+  { key: 'economy.production', value: { rawBaseQuality: 70, qualityVariance: 1.5, conditionWearPerTick: 0.05, haltBelowCondition: 30 } },
+  { key: 'economy.upgrade',    value: { costMultiplier: 0.75, costExponent: 1.55, maxLevel: 10 } },
   { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12 } },
   { key: 'economy.pricing',  value: { emaAlpha: 0.25, trimLowPct: 0.10, trimHighPct: 0.90, shockClampPct: 0.15, referenceWindowTicks: 96 } },
   { key: 'economy.shipping', value: { baseRatePerKgDistance: money(0.35).toString() } },

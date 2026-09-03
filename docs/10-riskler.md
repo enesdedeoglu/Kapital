@@ -314,6 +314,41 @@ Bu eşik aşılırsa çarpanlar genişletilir.
 
 ---
 
+## 🟡 R19 — Derin zincirlerde kalite sabit noktaya çöker
+
+**Belirti:** Buğday %69 → Un %59 → Ekmek %52. Zincir uzadıkça kalite düşmeye
+devam eder; Otomobil gibi 5–6 adımlık ürünlerde kalite anlamsızlaşır.
+
+**Kök neden:** Madde 14'ün formülü doğrusal ve büzücüdür:
+
+```
+q' = 0,70·q + tech·15 + staff·10 + condition·0,05
+```
+
+Varsayılanlarda (tech = 0, staff = 0,5, condition = 100) sabit nokta:
+`q = 0,70q + 10 → q ≈ 33`. Yani hiçbir yatırım yapılmazsa her zincir uzun
+vadede %33 kaliteye yakınsar — girdi ne kadar iyi olursa olsun.
+
+**Bu bir hata değil, tasarımın kendisi.** Teknoloji ve çalışan sistemleri
+(madde 38–39) tam olarak bu büzülmeyi telafi etmek için var:
+`tech = 1, staff = 1` ile sabit nokta `q = 0,70q + 30 → q = 100` olur.
+
+**Ama şu an ikisi de yok** (F11'e ertelendi, docs/11 B2–B3), dolayısıyla
+MVP-1'de derin zincirlerin kalitesi yapısal olarak düşük kalacak.
+
+**Azaltım seçenekleri (F8'de simülasyonla karara bağlanacak):**
+1. MVP-1 süresince `staff_score` varsayılanını 0,5 → 0,8'e çekmek
+   (sabit nokta ≈ %43'e çıkar) — tek satırlık config değişikliği.
+2. Zincir derinliğine göre telafi katsayısı eklemek.
+3. Kabul etmek: derin zincir ürünleri düşük kaliteli ve ucuz olur; kalite
+   isteyen oyuncu F11'de teknolojiye yatırım yapar.
+
+**Test:** Sim'de 6 adımlık zincir koş; nihai ürün kalitesi %40'ın altına
+inmemeli, aksi halde kalite hassasiyeti yüksek kategoriler (elektronik,
+otomobil) satılamaz hale gelir.
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -333,6 +368,7 @@ Bu eşik aşılırsa çarpanlar genişletilir.
 | R12 | Config yarışı | 🟡 Orta | F2 |
 | R13 | Reçete döngüsü | 🟢 Düşük | F3 |
 | R14 | KVKK | 🟢 Düşük | F10 |
+| R19 | Derin zincirde kalite çöküşü | 🟡 Orta | F8 (simülasyonla) |
 | R16 | Kredi yeni oyuncuyu atar | 🟠 Yüksek | F5 |
 | R17 | İhracat musluğu | 🟠 Yüksek | F4 |
 | R18 | Dış ticaret fiyat keşfini boğar | 🟠 Yüksek | F4 |

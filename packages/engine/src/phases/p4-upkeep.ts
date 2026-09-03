@@ -7,6 +7,8 @@ export interface UpkeepPhaseResult {
   expiredBatches: number;
   maintenanceCharged: bigint;
   facilitiesHalted: number;
+  wornFacilities: number;
+  criticalCondition: number;
 }
 
 /**
@@ -29,6 +31,20 @@ export async function runUpkeepPhase(sql: Sql, tick: EngineTick): Promise<Upkeep
   const expired = await sql`
     DELETE FROM inventory_batches
     WHERE expires_at_tick IS NOT NULL AND expires_at_tick <= ${tick.seq}
+    RETURNING id`;
+
+  // Tesis aşınması (docs/11 C6): tur başına −0,05. Bakım harcaması onarır (F11).
+  const worn = await sql`
+    UPDATE facilities
+       SET condition = GREATEST(0, condition - 0.05)
+     WHERE closed_at IS NULL AND construction_complete_at_tick <= ${tick.seq} AND condition > 0
+    RETURNING id`;
+
+  // condition < 30 → üretim durur (C6). Tesis KAPATILMAZ, onarılabilir.
+  const critical = await sql`
+    UPDATE facilities
+       SET production_enabled = FALSE, halted_reason = 'tesis durumu kritik (<30)'
+     WHERE closed_at IS NULL AND condition < 30 AND production_enabled
     RETURNING id`;
 
   const [sink] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = 'SYS_SINK'`;
@@ -80,5 +96,7 @@ export async function runUpkeepPhase(sql: Sql, tick: EngineTick): Promise<Upkeep
     expiredBatches: expired.length,
     maintenanceCharged: charged,
     facilitiesHalted: halted,
+    wornFacilities: worn.length,
+    criticalCondition: critical.length,
   };
 }
