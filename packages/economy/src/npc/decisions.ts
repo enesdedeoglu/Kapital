@@ -166,10 +166,15 @@ export function investmentScore(input: InvestmentScoreInput): number {
 export function npcCapacityCap(
   playerSupplyShare: number, previousCap: number, maxStepPerTick = 0.02,
 ): number {
-  const target = Math.max(0.10, Math.min(0.85, 1 - playerSupplyShare * 1.15));
+  const target = npcShareTarget(playerSupplyShare);
   const delta = target - previousCap;
   const step = Math.max(-maxStepPerTick, Math.min(maxStepPerTick, delta));
   return Math.max(0.10, Math.min(0.85, previousCap + step));
+}
+
+/** Hedeflenen NPC arz payı — kademelilik uygulanmamış ham değer (madde 31). */
+export function npcShareTarget(playerSupplyShare: number): number {
+  return Math.max(0.10, Math.min(0.85, 1 - playerSupplyShare * 1.15));
 }
 
 /* ------------------------------------------------------------------ */

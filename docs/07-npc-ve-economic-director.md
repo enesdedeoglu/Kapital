@@ -80,6 +80,45 @@ Health > 75   HEALTHY    → müdahale yok, geçerli direktifler süresi dolar
                            ürün ithal edilemiyorsa veya döviz de yetmiyorsa SYS_RESERVE
 ```
 
+### ★ Yön: kaldıraçların işareti arz/talep oranından gelir
+
+Yukarıdaki tablo düşük sağlığın her zaman KITLIK demek olduğunu varsayar. Oysa
+`f_supply` çift yönlüdür (§7): oran 1,0'da tepe yapar, hem kıtlık hem **aşırı
+arz** skoru düşürür. Yön ayrımı yapılmazsa ED bolluk gördüğünde üretimi daha da
+artırır ve düzeltmesi gereken sorunu kendisi büyütür.
+
+Ölçüldü (F7 ilk koşusu, R24): buğday arzı 4.108, ara talep 2.128 → oran 1,93 →
+`f_supply` 0 → ADJUST → `PRODUCTION_BIAS` +%15 → daha çok buğday.
+
+```
+oran > 1 (bolluk)  → PRODUCTION_BIAS, BUY_BIAS, INVENTORY_TARGET işaretleri TERS
+                     IMPORT_QUOTA ve INVESTMENT_BIAS hiç yayınlanmaz
+oran ≤ 1 (kıtlık)  → tablodaki gibi
+```
+
+Acil BOLLUK krizinde ithalat açmak felaket olurdu; onun yerine üretim −1,
+stok −0,625, yatırım −1 verilir.
+
+### ★ Duruş tutarlılığı: geçersiz direktifler anında iptal edilir
+
+Direktifler `expires_tick` ile sönümlenir, ama bant veya yön değiştiğinde eski
+direktifleri 96 tur boyunca yaşatmak ED'yi tutarsız bırakır. Ölçüldü (R25): un
+arzı fazlaya döndüğünde ED üretimi kısarken (`PRODUCTION_BIAS −0,50`) önceki
+kıtlık dönemine ait `IMPORT_QUOTA +0,50` ve `INVESTMENT_BIAS +0,80` hâlâ
+etkindi — bir eliyle kısıp diğeriyle teşvik ediyordu.
+
+Bu yüzden her turda, o ürünün güncel plana ait olmayan aktif direktifleri
+anında sonlandırılır. `CAPACITY_CAP` bunun dışındadır: onu bant değil oyuncu
+payı yönetir (§8.1).
+
+### ★ İthal edilemeyen ürünler
+
+`world_market.importable = false` olan ürünlerde (ekmek, domates, sigara —
+nihai tüketim ürünleri) `IMPORT_QUOTA` yayınlanmaz. Kota artsa da hiçbir mal
+gelmez; "ithalat kapısı açıldı" demek oyuncuya yanlış bilgi vermektir. Bu
+ürünlerde durum olduğu gibi duyurulur (`IMPORT_UNAVAILABLE`) ve tek kalan yol
+`SYS_RESERVE`'dür.
+
 Direktifler `expires_tick` ile **kendiliğinden sönümlenir** (varsayılan 96 tick = 24 saat).
 Kalıcı müdahale yoktur; sağlık düzelirse ekonomi kendi haline döner.
 
@@ -127,6 +166,12 @@ NPC yalnızca "daha çok almaya eğilimli" olur, "her fiyattan almaya" değil.
 ```
 Oyuncu kötü yatırım yaptıysa zarar eder. Bu bilinçli.
 
+**Uygulama (F7).** `BUY_BIAS` NPC'nin alış **miktarını** ölçekler, fiyatını
+değil — ED'nin yapamadıkları listesinin ilk maddesi "fiyat belirlemek"tir (§3).
+Destek tabanı ise bir anahtardır: son turun ağırlıklı medyanı `ema × 0,55`'in
+altına düşmüşse ED desteği tamamen çekilir ve piyasa temizlensin diye bırakılır.
+Yani ED "daha çok al" der, "her fiyattan al" demez.
+
 ## 7. Market Health Score (madde 29)
 
 ```
@@ -141,10 +186,24 @@ f_supply    = 1 − min(1, |supply/demand − 1| / 0.5)     (1.0'da tepe)
 f_sellers   = min(1, seller_count / target_sellers)
 f_buyers    = min(1, buyer_count / target_buyers)
 f_depth     = min(1, inventory_depth_ticks / 12)
-f_stability = 1 − min(1, price_volatility_24h / 0.35)
+f_stability = 1 − min(1, price_volatility_24h / 0.35)      ← işlem yoksa 0
 f_playerShare = min(1, player_share / product.npc_target_market_share)
 ```
-Ağırlıklar `game_configs` üzerinden admin panelden değiştirilebilir.
+Ağırlıklar `game_configs` üzerinden admin panelden değiştirilebilir; toplamları
+1 olmasa bile skor normalize edilir, aksi halde bant sınırları anlamsızlaşır.
+
+**★ İşlem görmeyen piyasa istikrarlı sayılmaz (R26).** Oynaklık tek başına
+yanıltıcıdır: hiç işlem olmayan ölü bir piyasada oynaklık sıfırdır ve istikrar
+puanı tam çıkar. Fiyat sinyali olmayan piyasa istikrarlı değil, yoktur — bu
+yüzden pencerede işlem yoksa `f_stability = 0`. Bu düzeltme olmadan üretimi
+tamamen durmuş bir ürün EMERGENCY yerine STIMULATE bandında kalıyor ve acil
+rezerv hiç devreye giremiyordu.
+
+**★ Soğuk başlangıç kuralı (R27).** Dünyada hiç aktif oyuncu şirketi yokken
+`f_playerShare` her ürün için 0 çıkar ve skoru kalıcı 15 puan aşağı çeker.
+Üstelik ED'nin hiçbir kaldıracı oyuncu getiremez: müdahale edilemez bir
+eksiklik için sürekli müdahale edilir. Bu yüzden oyuncusuz dünyada bileşen
+nötrlenir (hedef 0 → katsayı 1). İlk oyuncu girdiği anda ölçüm normale döner.
 
 ## 8. NPC payının otomatik geri çekilmesi (madde 31)
 
@@ -181,6 +240,28 @@ sinyalini de yok eder** — piyasa o ürünün pahalılaştığını göremez.
 
 İki kaldıraç birbirinden bağımsızdır ve çarpışmaz: `npcCapacityCap` NPC'nin
 piyasa payını, `outputThrottle` tek tesisin doluluk geri beslemesini yönetir.
+
+### 8.2 Formülün doğrudan uygulanamayan yanı (F7)
+
+`hedef_npc_share = clamp(1 − oyuncu_payı × 1,15, 0,10, 0,85)` oyuncu payı
+SIFIRKEN bile 0,85 verir. Bunu tesis kullanım oranı olarak uygularsak
+oyuncusuz bir dünyada NPC arzı kalıcı olarak %15 kısılır ve boşluğu dolduracak
+kimse olmadığı için kıtlık doğar — ED'nin önlemesi gereken şeyi ED üretir.
+
+Bu yüzden hedef pay, NPC'nin mevcut payına göre bir **tavana** çevrilir:
+
+```
+tavan = oyuncu_payı > 0 ? min(1, hedef_npc_payı / (1 − oyuncu_payı)) : 1
+```
+
+Oyuncu payı 0 iken tavan 1'dir (kısma yok). Oyuncu payı %30'a çıktığında hedef
+NPC payı 0,655, mevcut NPC payı 0,70 → tavan 0,936, yani NPC %6,4 geri çekilir.
+
+**Kademelilik TAVANA uygulanır, hedef paya değil.** Hedef payı adım adım
+yürütüp tavanı ondan türetirsek tavan uzun süre 1'de kalır; 1 olduğu sürece
+direktif yazılmadığı için yürüyüşün durumu da saklanmaz ve geri çekilme hiç
+başlamaz. Kademeliliği NPC'nin fiilen tükettiği büyüklüğe taşımak bu kilidi
+açar ve madde 31'in amacını korur: tur başına en fazla %2 değişim.
 
 ## 9. NPC arketipleri (madde 24)
 

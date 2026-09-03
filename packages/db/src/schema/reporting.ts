@@ -1,5 +1,6 @@
 import {
-  bigint, doublePrecision, index, integer, numeric, pgTable, primaryKey, smallint, uuid,
+  bigint, bigserial, boolean, doublePrecision, index, integer, jsonb, numeric, pgTable,
+  primaryKey, smallint, text, timestamp, uniqueIndex, uuid,
 } from 'drizzle-orm/pg-core';
 import { moneyCol, qtyCol } from './_types.js';
 import { cities, products } from './world.js';
@@ -120,4 +121,86 @@ export const economySnapshots = pgTable('economy_snapshots', {
   creditShare: doublePrecision('credit_share').notNull().default(0),
   activeLoans: integer('active_loans').notNull().default(0),
   defaults24h: integer('defaults_24h').notNull().default(0),
+  /** Servet dağılımı — 0 eşit, 1 tekelleşmiş. Para arzı ve CPI bunu göstermez. */
+  gini: doublePrecision('gini'),
 });
+
+/**
+ * Piyasa sağlık skoru — madde 29, Ekonomi Direktörü'nün ölçüm yüzeyi.
+ *
+ * `city_id = 0` ULUSAL demektir (price_history ile aynı sözleşme): NULL bir
+ * birincil anahtar kolonunda kullanılamaz.
+ */
+export const marketHealth = pgTable(
+  'market_health',
+  {
+    tickId: bigint('tick_id', { mode: 'bigint' }).notNull(),
+    productId: smallint('product_id').notNull().references(() => products.id),
+    cityId: smallint('city_id').notNull().default(0),
+    score: numeric('score', { precision: 5, scale: 2 }).notNull(),
+    band: text('band').notNull(),
+    supplyUnits: qtyCol('supply_units').notNull().default(0n),
+    demandUnits: qtyCol('demand_units').notNull().default(0n),
+    fSupply: doublePrecision('f_supply').notNull(),
+    fSellers: doublePrecision('f_sellers').notNull(),
+    fBuyers: doublePrecision('f_buyers').notNull(),
+    fDepth: doublePrecision('f_depth').notNull(),
+    fStability: doublePrecision('f_stability').notNull(),
+    fPlayerShare: doublePrecision('f_player_share').notNull(),
+    /** Histerezis: bant değişimi için eşiğin üst üste aşılması gerekir. */
+    streakBand: text('streak_band'),
+    streakCount: smallint('streak_count').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tickId, t.productId, t.cityId] }),
+    index('market_health_product').on(t.productId, t.tickId),
+  ],
+);
+
+/** Dünya olayları — ED'nin ve adminin görünür müdahale kaydı (madde 32). */
+export const worldEvents = pgTable(
+  'world_events',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    tickId: bigint('tick_id', { mode: 'bigint' }).notNull(),
+    kind: text('kind').notNull(),
+    productId: smallint('product_id').references(() => products.id),
+    cityId: smallint('city_id').references(() => cities.id),
+    severity: text('severity').notNull().default('INFO'),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    payload: jsonb('payload').notNull().default({}),
+    /** Aynı olay her turda tekrar duyurulmasın: doğal anahtar. */
+    dedupeKey: text('dedupe_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('world_events_dedupe').on(t.dedupeKey),
+    index('world_events_recent').on(t.tickId),
+  ],
+);
+
+/**
+ * ED direktifleri — NPC davranışına dokunan tek kanal (docs/07 §3).
+ *
+ * F0'da migration'a girmiş ama Drizzle şemasına eklenmemişti; drift testi
+ * yalnız Drizzle → DB yönünü koruduğu için fark edilmedi. F7'de ters yön de
+ * teste eklendi.
+ */
+export const npcDirectives = pgTable(
+  'npc_directives',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    issuedTick: bigint('issued_tick', { mode: 'bigint' }).notNull(),
+    expiresTick: bigint('expires_tick', { mode: 'bigint' }).notNull(),
+    scope: text('scope').notNull(),
+    productId: smallint('product_id').references(() => products.id),
+    cityId: smallint('city_id').references(() => cities.id),
+    lever: text('lever').notNull(),
+    magnitude: doublePrecision('magnitude').notNull(),
+    reason: text('reason').notNull(),
+    healthScoreAtIssue: numeric('health_score_at_issue', { precision: 5, scale: 2 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('npc_directives_active').on(t.productId, t.expiresTick)],
+);

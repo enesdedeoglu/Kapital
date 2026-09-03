@@ -193,6 +193,12 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'npc.population',   value: { perProductPerCity: 1.2, priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35 } },
   { key: 'npc.inventory',    value: { minTicks: 4, targetTicks: 12, maxTicks: 24 } },
   { key: 'npc.throttle',     value: { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 } },
+  { key: 'npc.investment',   value: { threshold: 0.55, cashBufferRatio: 1.5, maxFacilities: 4 } },
+  // Ekonomi Direktörü — madde 29-33. Ağırlıklar admin panelden ayarlanabilir.
+  { key: 'director',         value: { hysteresisTicks: 6, directiveTtlTicks: 96,
+                                      targetSellers: 4, targetBuyers: 6 } },
+  { key: 'director.reserve', value: { emergencyTicks: 12, priceMultiplier: 1.75,
+                                      supplyPerTick: 200 } },
   { key: 'npc.simpleSellers', value: simpleNpcSellers },
 ];
 

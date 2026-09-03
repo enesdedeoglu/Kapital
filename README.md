@@ -7,9 +7,10 @@ Fiyatlar merkezi olarak belirlenmez; arz-talep, üretim maliyeti, kalite, lojist
 oyuncu davranışıyla oluşur. Ekonomi **15 dakikalık turlarla**, oyuncu çevrimdışıyken
 de çalışır.
 
-> **Durum: F0–F6 tamamlandı.** MVP-0, üretim zinciri, toptan piyasa, lojistik,
-> dış ticaret, bankacılık ve NPC ekonomisi çalışıyor. Oyuncusuz bir dünya
-> 500 tur boyunca kendi kendine koşuyor. Sıradaki faz: F7 — Ekonomi Direktörü.
+> **Durum: F0–F7 tamamlandı.** MVP-0, üretim zinciri, toptan piyasa, lojistik,
+> dış ticaret, bankacılık, NPC ekonomisi ve Ekonomi Direktörü çalışıyor.
+> Oyuncusuz bir dünya 500 tur boyunca kendi kendine koşuyor; arz şoklarını
+> ölçüyor ve müdahale ediyor. Sıradaki faz: F8 — simülasyon ve denge kapısı.
 > Yol haritası: [docs/09-roadmap.md](docs/09-roadmap.md)
 
 ## Hızlı başlangıç
@@ -186,6 +187,36 @@ salınım) · **0 iflas** / 65 NPC · **10/10** ürün işlem görüyor.
 
 ```bash
 pnpm --filter @kapital/engine exec tsx src/cli/run-ticks.ts 500 50
+```
+
+### F7 — Ekonomi Direktörü
+
+ED ekonomiyi **yönetmez, sınırlarını korur** (ADR-0004). Fiyat belirleyemez,
+emir veremez, şirket nakdine dokunamaz. Elinde yalnız altı kaldıraç var ve
+hepsi NPC davranışına dokunur.
+
+| Alan | Durum |
+|---|---|
+| Market Health Score — 6 bileşen, ağırlıklar config'ten | ✅ |
+| Müdahale bantları + **6 tur histerezis** (EMERGENCY'ye düşüş beklemez) | ✅ |
+| Kaldıraçların **yönü arz/talep oranından** gelir — bolluk varken kısar (R24) | ✅ |
+| Geçersiz kalan direktifler anında iptal edilir — tutarlı duruş (R25) | ✅ |
+| İthal edilemeyen üründe boş kaldıraç yayınlanmaz, durum olduğu gibi duyurulur | ✅ |
+| `SYS_RESERVE` son çare: 12 tur EMERGENCY + sıfır üretim, referansın 1,75 katı | ✅ |
+| NPC payının oyuncu arzına göre kademeli geri çekilmesi (madde 31) | ✅ |
+| NPC stratejik yatırımı — inşa halindeki kapasiteyi görür (R28) | ✅ |
+| `world_events` — her müdahale görünür duyuru | ✅ |
+| Gini katsayısı `economy_snapshots`'ta | ✅ |
+
+**ED aktifken 500 turluk koşu** F6 ile aynı: para arzı +%1,1 · CPI 1,028 ·
+0 iflas · 10/10 ürün. ED'nin maliyeti tur başına ~60 ms (%5).
+
+**Arz şoku (domates, 60 tur):** 83,4 HEALTHY → 55,0 ADJUST → onarımdan sonra
+70,0 WATCH ve satışlar şok öncesinin üstünde (1.383 → 2.089 birim).
+
+```bash
+# Arz şoku senaryosu: ısınma → üretimi durdur + stoğu imha et → gözle → onar
+pnpm --filter @kapital/engine exec tsx src/cli/scenario-shock.ts TOMATO 40 60 60
 ```
 
 ### Doğrulanmış çıkış kriterleri

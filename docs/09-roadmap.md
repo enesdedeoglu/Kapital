@@ -200,18 +200,90 @@ sermaye akışını yönetirken. Nihai denge ayarı → F8.
 
 ---
 
-## F7 — Economic Director · 1,5 hafta
-- `market_health` skorlaması (7 bileşen)
-- ED karar motoru + histerezis + 5 direktif kaldıracı
+## F7 — Economic Director · 1,5 hafta  ✅ TAMAMLANDI (3 Eylül 2026)
+- `market_health` skorlaması — **6 bileşen** (yol haritası "7" diyordu; docs/07 §7
+  formülü altı terim içeriyor ve ağırlıkları 1,00'a toplanıyor)
+- ED karar motoru + histerezis (6 tur) + 6 direktif kaldıracı
 - `npc_directives` yayını ve NPC tarafında tüketimi
-- `SYS_RESERVE` acil rezerv akışı
+- `SYS_RESERVE` acil rezerv akışı (12 tur EMERGENCY + sıfır üretim)
 - NPC payının oyuncu arzına göre kademeli geri çekilmesi (madde 31)
-- `economy_snapshots`: para arzı, Game CPI, Gini
-- **Kur modeli** (`fx_rates`): PPP çıpası + ticaret dengesi baskısı, tur ±%0,5 / gün ±%3
-- **`IMPORT_QUOTA`** altıncı kaldıraç; müdahale sıralaması: önce ithalat, sonra `SYS_RESERVE`
+- NPC stratejik yatırımı (F6'dan devredildi) — `INVESTMENT_BIAS` kaldıracının tüketicisi
+- `economy_snapshots`: para arzı, Game CPI, **Gini**
+- **Kur modeli** F4'te kurulmuştu; `IMPORT_QUOTA` tüketimi de oradaydı
+- `world_events` — her müdahale görünür duyuru olur
+- `scenario-shock.ts` — arz şoku senaryosu aracı
 
 **Çıkış:** Bir ürünün üretimi kasıtlı durdurulduğunda ekonomi kendini toparlıyor —
 önce ithalat kapısı açılarak, ancak o yetmezse rezervle.
+
+### Bulunan ve düzeltilen tasarım kusurları
+
+500 turluk koşu ve arz şoku senaryosu, ancak bu ölçekte görünen altı kusur
+ortaya çıkardı (ayrıntı: docs/10 R24–R29):
+
+| Kod | Kusur | Etki |
+|---|---|---|
+| R24 | ED bolluğu kıtlık sanıp teşvik veriyordu | buğday oranı 1,93 iken üretim +%15 |
+| R25 | Eski direktifler 96 tur yaşıyordu | ED aynı anda kısıp teşvik ediyordu |
+| R26 | Ölü piyasa "istikrarlı" sayılıyordu | acil rezerv hiç tetiklenemiyordu |
+| R27 | `f_playerShare` oyuncusuz dünyada ceza | 10 ürün kalıcı ADJUST |
+| R28 | Eşzamanlı yatırım balonu | 120 turda 43 tesis, para arzı −%11,3 |
+| — | Ara mal talebi gerçekleşen üretimden ölçülüyordu | arz şoku GÖRÜNMEZ oluyordu |
+
+Sonuncusu en incesiydi: çelik bitince mobilya fabrikası da durur, dolayısıyla
+ölçülen çelik talebi de düşer ve arz/talep oranı 1,00'da kalır. Talep artık
+aşağı halkanın **kapasitesinden** ölçülüyor — girdisizlikten duran tesis o
+girdiyi istemeye devam eder.
+
+### ED aktifken 500 turluk oyuncusuz koşu
+
+ED'nin sağlıklı bir ekonomiyi bozmadığını doğrular — müdahale yalnız gereken
+yere dokunmalı:
+
+| Ölçüt | F6 (ED yok) | F7 (ED aktif) |
+|---|---|---|
+| Para arzı | +%1,1 | **+%1,1** |
+| Game CPI | 1,029 | **1,028** |
+| İflas | 0 / 65 | **0 / 65** |
+| İşlem gören ürün | 10 / 10 | **10 / 10** |
+| Tur süresi (ort) | 1.202 ms | 1.263 ms |
+
+ED'nin maliyeti tur başına ~60 ms (%5); bütçe 37.000 ms.
+
+### Çıkış kriteri ölçümü — arz şoku senaryosu
+
+`scenario-shock.ts` bir ürünün üretimini durdurur, stoğunu imha eder, gözler ve
+sonra üretimi geri açar. Depoları dolu bırakan bir "şok" aslında şok değil
+duraklamadır: mobilya üretimi 80 tur durdurulduğu halde raflar dolu kaldığı
+için skor YÜKSELDİ. Bu yüzden şok stoğu da imha eder.
+
+**Domates (ithal edilemez, perakende ürünü):**
+
+| Aşama | Skor | Bant | Arz/talep | Direktif | 24t satış |
+|---|---|---|---|---|---|
+| ısınma sonu | 83,41 | HEALTHY | 0,72 | — | 1.383 |
+| şok +20 | 54,98 | WATCH | 0,48 | 1 | 589 |
+| şok +40 | 54,98 | ADJUST | 0,36 | 3 | 0 |
+| şok sonu | 54,99 | ADJUST | 0,27 | 3 | 0 |
+| onarım +20 | 65,78 | WATCH | 0,26 | 1 | 398 |
+| onarım sonu | 69,97 | WATCH | 0,42 | 1 | **2.089** |
+
+Kademeli tırmanış (HEALTHY → WATCH → ADJUST), direktiflerin yoğunlaşması ve
+onarımdan sonra şok ÖNCESİNİN üstüne çıkan satış. Skor 54,98'de sabitken bandın
+WATCH'tan ADJUST'a geçmesi histerezisin çalıştığını gösterir: eşik aşılıyor ama
+bant 6 tur beklemeden değişmiyor.
+
+Domates ithal edilemediği için ithalat kapısı açılmadı — tasarım gereği
+(docs/07 §4.1). İthalat ve acil rezerv yolları `director.test.ts` içinde
+belirlenimci olarak doğrulanıyor: ithal edilebilir üründe `IMPORT_QUOTA` ilk
+kaldıraç, ithal edilemeyende 12 tur EMERGENCY sonrası `SYS_RESERVE` referansın
+1,75 katından satışa çıkıyor.
+
+**Devredilen (F8):** CAPEX'in para arzını sızdırması (R29) ölçüldü ama çözümü
+dairesel akış tasarımına dokunuyor; simülasyon kapısında karara bağlanacak.
+Ayrıca sağlık skorunun tabanı: arz/talep 0,27 ve sıfır satışta bile skor ~55'te
+kalıyor, çünkü arz dışı bileşenler (satıcı, alıcı, derinlik, istikrar) ağırlığın
+%70'ini taşıyor. Ağırlık kalibrasyonu F8'de.
 
 ---
 

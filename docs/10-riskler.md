@@ -487,6 +487,131 @@ FURNITURE_FACTORY tesis tipi ve `10 kg çelik → 1 mobilya` reçetesi eklendi.
 
 ---
 
+## R24 — ED tek yönlü müdahale ediyordu: bolluğu kıtlık sanıp büyütüyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F7 ilk koşusu · **Durum:** ✅ çözüldü
+
+`f_supply` ÇİFT YÖNLÜdür: arz/talep oranı 1,0'da tepe yapar, hem kıtlık hem
+aşırı arz skoru düşürür (madde 29). Ama madde 30'un bant tablosu düşük sağlığın
+her zaman kıtlık demek olduğunu varsayar ve **hep teşvik** verir: daha çok stok,
+daha çok üretim, daha çok alım, ithalat kapısı.
+
+Ölçülen sonuç: buğday arzı 4.108, ara talep 2.128 → oran 1,93 → `f_supply` 0 →
+ADJUST → `PRODUCTION_BIAS` +%15 → daha çok buğday. ED, düzeltmesi gereken
+sorunu her turda büyütüyordu.
+
+**Çözüm:** `directivesForBand(band, supplyRatio, importable)`. Oran 1'in
+üstündeyse kaldıraçların işareti tersine döner (kısma), ithalat ve yatırım
+kaldıraçları hiç yayınlanmaz. Acil bolluk krizinde ise ithalat açmak felaket
+olurdu; onun yerine üretim −1, stok −0,625, yatırım −1 verilir.
+
+**Test:** `director.test.ts` — talebi olmayan bir üründe üretim başlayınca
+`PRODUCTION_BIAS` negatif çıkar ve `IMPORT_QUOTA` hiç yayınlanmaz.
+
+---
+
+## R25 — ED'nin duruşu tutarsız kalıyordu: bir eliyle kısıp diğeriyle teşvik
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F7 arz şoku senaryosu · **Durum:** ✅ çözüldü
+
+Direktifler `expires_tick` ile kendiliğinden sönümlenir (docs/07 §4) — 96 tur.
+Bant veya yön değiştiğinde ESKİ direktifler bu süre boyunca yürürlükte kalıyordu.
+
+Ölçülen örnek: un arzı fazlaya döndüğünde ED üretimi kısarken
+(`PRODUCTION_BIAS −0,50`, `INVENTORY_TARGET −0,25`) aynı anda önceki kıtlık
+dönemine ait `IMPORT_QUOTA +0,50` ve `INVESTMENT_BIAS +0,80` hâlâ etkindi.
+İthalat kotası fazla arz varken 2,5 katına çıkmış durumdaydı.
+
+**Çözüm:** her turda, o ürünün mevcut plana AİT OLMAYAN aktif direktifleri
+`expires_tick = tick.seq` ile anında iptal et. `CAPACITY_CAP` bunun dışındadır:
+onu bant değil oyuncu payı yönetir.
+
+**Etki:** aynı senaryoda ED bolluk döneminde tek direktife (`INVENTORY_TARGET
+−0,25`), sağlıklı bantta ise sıfır direktife indi.
+
+---
+
+## R26 — Ölü piyasa "istikrarlı" sayılıyordu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F7 · **Durum:** ✅ çözüldü
+
+`f_stability = 1 − min(1, oynaklık / 0,35)`. Hiç işlem görmeyen bir piyasada
+oynaklık sıfırdır, dolayısıyla istikrar puanı TAM çıkıyordu. Oysa fiyat sinyali
+olmayan piyasa istikrarlı değil, **yoktur**.
+
+Sonuç: üretimi tamamen durmuş bir ürün, ölü olduğu için 15 puan istikrar
+kazanıyor ve EMERGENCY yerine STIMULATE bandında kalıyordu — acil rezerv hiç
+devreye giremiyordu.
+
+**Çözüm:** `HealthInput.tradeCount`. Pencerede işlem yoksa istikrar sıfırdır.
+
+---
+
+## R27 — `f_playerShare` oyuncusuz dünyada müdahale edilemez bir ceza
+
+**Şiddet:** 🟡 Orta · **Bulunma:** F7 · **Durum:** ✅ çözüldü (soğuk başlangıç kuralı)
+
+Bileşen oyuncuların ekonomiyi devralma ilerlemesini ölçer. Hiç oyuncu yokken
+her ürün için 0 çıkar ve skoru kalıcı 15 puan aşağı çeker; ekonomi kusursuz
+işlese bile her ürün ADJUST bandında kalır ve ED sürekli müdahale eder.
+
+Daha kötüsü: ED'nin elindeki hiçbir kaldıraç oyuncu getiremez. Müdahale
+edilemez bir eksiklik için sürekli müdahale edilir — R11'in (soğuk başlangıç)
+ED'ye yansıyan hali.
+
+**Çözüm:** dünyada aktif oyuncu şirketi yokken hedef pay 0 verilir ve bileşen
+nötrlenir. İlk oyuncu girdiği anda ölçüm normale döner.
+
+**Etki:** oyuncusuz koşuda bantlar 10 ürün ADJUST'tan 3 HEALTHY / 7 WATCH'a.
+
+---
+
+## R28 — Aynı sinyale eşzamanlı yatırım: sermaye balonu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F7 · **Durum:** ✅ çözüldü
+
+NPC'ler yatırım kararını inşa halindeki kapasiteyi GÖRMEDEN veriyordu. Bilgi
+mükemmel ve kararlar eşzamanlı olduğu için 65 NPC aynı açığa aynı anda cevap
+verdi: 120 turda **43 tesis**, 1.597.500 ₺ CAPEX, para arzında −%11,3.
+
+İkinci bir hata bunu büyütüyordu: yatırım skorundaki marj hesabı girdi
+maliyetini atlıyor ve `output_quantity`'yi Qty ölçeğinden (×1000) çevirmiyordu;
+sonuçta her ürünün marjı 1,00 (doygun) çıkıyordu.
+
+**Çözüm:**
+- Marj tam birim maliyetten hesaplanır (girdiler dahil, ölçek düzeltildi).
+- Açığı kapatacak kapasite zaten inşa halindeyse yatırım yapılmaz.
+
+**Etki:** 43 → 10 tesis · CAPEX 1.597.500 → 337.500 ₺ · para arzı −%11,3 → −%2,9.
+Perakende cirosu 6.987 → 8.082 ₺/tur (yeni kapasite üretime girdi).
+
+---
+
+## R29 — CAPEX para arzını kalıcı olarak sızdırıyor
+
+**Şiddet:** 🟡 Orta · **Bulunma:** F7 · **Durum:** ⏳ ölçüldü, karar F8'de
+
+Tesis inşası nakdi `SYS_SINK`'e aktarır: para ekonomiden ÇIKAR, karşılığında
+şirket değeri artar. Servet korunur ama para arzı korunmaz.
+
+Bu ekonomide musluk (perakende talebi) DIŞSAL, giderler İÇSELdir. Yatırım
+arttıkça arz daralır. Oyuncular geldiğinde inşaat hızı artacağı için etki
+büyür.
+
+Ölçüm (120 tur, 10 tesis): CAPEX 337.500 ₺ · para arzı −%2,9 · CPI 1,028
+(fiyatlar etkilenmedi, çünkü mal hacmi de arttı).
+
+**Seçenekler (F8'de simülasyonla karara bağlanacak):**
+1. Perakende talep bütçesini ödenen ücretlere bağlamak — dairesel akış. En
+   doğrusu ama madde 18–20'ye dokunur.
+2. CAPEX'in bir kısmını `SYS_CONSUMER`'a yönlendirmek (inşaat işçisi ücreti).
+3. Kabul etmek: yatırım para arzını daraltır, ED bunu ithalat/kredi ile dengeler.
+
+---
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -514,3 +639,9 @@ FURNITURE_FACTORY tesis tipi ve `10 kg çelik → 1 mobilya` reçetesi eklendi.
 | R21 | Kapasiteye üretim para arzını sızdırıyor | 🟠 Yüksek | ✅ F6 — `utilization` + `outputThrottle` |
 | R22 | Tohum fiyatları tariflerle tutarsız | 🟠 Yüksek | ✅ F6 mekanizma · ince ayar F8 |
 | R23 | Ürün grafı tohuma karşı doğrulanmıyor | 🟡 Orta | ✅ F6 — `seed-data.test.ts` |
+| R24 | ED bolluğu kıtlık sanıp büyütüyor | 🔴 Kritik | ✅ F7 — yön duyarlı direktifler |
+| R25 | ED duruşu tutarsız (eski direktifler yaşıyor) | 🟠 Yüksek | ✅ F7 — anında iptal |
+| R26 | Ölü piyasa "istikrarlı" sayılıyor | 🟠 Yüksek | ✅ F7 — `tradeCount` |
+| R27 | `f_playerShare` oyuncusuz dünyada ceza | 🟡 Orta | ✅ F7 — soğuk başlangıç kuralı |
+| R28 | Eşzamanlı yatırım balonu | 🟠 Yüksek | ✅ F7 — boru hattı farkındalığı |
+| R29 | CAPEX para arzını sızdırıyor | 🟡 Orta | ⏳ F8 (ölçüldü) |

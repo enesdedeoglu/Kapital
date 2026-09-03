@@ -15,7 +15,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "run": "tsx src/cli/run-ticks.ts"
+    "run": "tsx src/cli/run-ticks.ts",
+    "shock": "tsx src/cli/scenario-shock.ts"
   },
   "dependencies": {
     "@kapital/config": "workspace:*",

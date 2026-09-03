@@ -1,17 +1,20 @@
-import type { Sql } from '@kapital/db';
+import { transfer, type Sql } from '@kapital/db';
 import {
-  decidePrice, inputBid, outputThrottle, planInventory, representativeDistance,
-  shippingPerUnit, type PriceDecision,
+  decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
+  planInventory, representativeDistance, shippingPerUnit, softFloor,
+  type DirectiveLever, type PriceDecision,
 } from '@kapital/economy';
 import { asMoney, asQty, qtyFromNumber, TICKS_PER_DAY, type Money } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices, type ReferencePrices } from '../reference-prices.js';
+import { runDirector, type DirectorResult } from './director.js';
 
 interface NpcRow {
   company_id: string; name: string; cash: bigint;
   archetype: string; target_margin: number; price_aggressiveness: number;
   inventory_target_ticks: number; cash_reserve_ratio: number;
   strategy_interval_ticks: number; last_strategy_tick: bigint;
+  investment_aggressiveness: number; home_city_id: number;
 }
 
 interface NpcFacilityRow {
@@ -33,6 +36,8 @@ export interface GovernPhaseResult {
   retailOffers: number;
   strategicDecisions: number;
   throttled: number;
+  built: number;
+  director: DirectorResult;
 }
 
 /** Perakendede satılabilen ürünler — NPC perakendecileri bunları stoklar. */
@@ -63,15 +68,20 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
     tick, 'npc.throttle', { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 },
   );
 
+  // ★ DİREKTÖR ÖNCE KOŞAR: bu turda yayınladığı direktifleri NPC'ler aynı
+  // turda tüketir. Sonra koşsaydı direktifler bir tur gecikir ve acil
+  // müdahalenin etkisi bir tur sonra görünürdü.
+  const director = await runDirector(sql, tick);
+
   const npcs = await sql<NpcRow[]>`
-    SELECT c.id AS company_id, c.name, c.cash, p.archetype, p.target_margin,
+    SELECT c.id AS company_id, c.name, c.cash, c.home_city_id, p.archetype, p.target_margin,
            p.price_aggressiveness, p.inventory_target_ticks, p.cash_reserve_ratio,
-           p.strategy_interval_ticks, p.last_strategy_tick
+           p.strategy_interval_ticks, p.last_strategy_tick, p.investment_aggressiveness
     FROM npc_profiles p
     JOIN companies c ON c.id = p.company_id AND c.kind = 'NPC' AND c.status = 'ACTIVE'`;
   if (npcs.length === 0) {
     return { npcs: 0, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-             strategicDecisions: 0, throttled: 0 };
+             strategicDecisions: 0, throttled: 0, built: 0, director };
   }
 
   const references = await loadReferencePrices(sql, tick.seq);
@@ -83,8 +93,12 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const retailDemand = await loadRetailProducts(sql);
   const freight = await buildFreightTable(sql, tick);
 
+  const directives = await loadDirectives(sql, tick);
+  const support = await loadSupportGuard(sql, tick);
+  const opportunities = await loadOpportunities(sql, tick);
+
   const out = { npcs: npcs.length, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-                strategicDecisions: 0, throttled: 0 };
+                strategicDecisions: 0, throttled: 0, built: 0, director };
   const byCompany = new Map<string, NpcFacilityRow[]>();
   for (const f of facilities) {
     (byCompany.get(f.company_id) ?? byCompany.set(f.company_id, []).get(f.company_id)!).push(f);
@@ -103,9 +117,12 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
         for (const input of inputs.get(facility.recipe_id) ?? []) {
           const needPerTick = perTick * Number(input.quantity) / Number(facility.output_quantity ?? 1n);
           const held = stockOf(stock, facility.inventory_id, input.product_id);
+          // ED direktifi: hedef stok tur sayısı ±%40'a kadar kaydırılabilir.
           const plan = planInventory({
             onHand: asQty(held.available), consumptionPerTick: needPerTick,
-            minTicks: invCfg.minTicks, targetTicks: npc.inventory_target_ticks,
+            minTicks: invCfg.minTicks,
+            targetTicks: npc.inventory_target_ticks
+              * lever(directives, input.product_id, 'INVENTORY_TARGET'),
             maxTicks: invCfg.maxTicks,
           });
           if (plan.buyQuantity <= 0n) continue;
@@ -121,7 +138,8 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           const placed = await upsertOrder(sql, tick, openOrders, {
             companyId: npc.company_id, facilityId: facility.facility_id,
             cityId: facility.city_id, productId: input.product_id, side: 'BUY',
-            quantity: plan.buyQuantity, price: bid, budget,
+            quantity: biasedQuantity(plan.buyQuantity, directives, support, input.product_id),
+            price: bid, budget,
           });
           if (placed > 0n) { out.buyOrders++; budget -= placed; }
         }
@@ -146,15 +164,21 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
         // Kapasiteye üreten tesis, malı satılmasa bile her tur işçilik öder ve
         // o para ekonomiden çıkar. Kapsam = kaç turluk üretim satılmadan duruyor.
         const coverage = perTick > 0 ? Number(output.available) / 1000 / perTick : 0;
-        const nextUtilization = outputThrottle({
+        // ED direktifi: kıtlıkta üretim teşviki, bolluk yönünde kısma. Kaldıraç
+        // HEDEFİ kaydırır, sonucu değil — kademelilik (≤%5/tur) korunur.
+        const bias = lever(directives, facility.output_product_id, 'PRODUCTION_BIAS');
+        const nextUtilization = Math.min(1, outputThrottle({
           coverageTicks: coverage,
-          targetTicks: throttleCfg.targetTicks,
+          targetTicks: throttleCfg.targetTicks * bias,
           previous: facility.utilization,
           maxStep: throttleCfg.maxStepPerTick,
           floor: throttleCfg.floor,
-        });
-        if (Math.abs(nextUtilization - facility.utilization) > 1e-9) {
-          await sql`UPDATE facilities SET utilization = ${nextUtilization}
+        }) * bias);
+        // CAPACITY_CAP bir ÇARPAN değil, doğrudan TAVANdır (docs/07 §3: 0..1).
+        const cap = rawLever(directives, facility.output_product_id, 'CAPACITY_CAP') ?? 1;
+        const capped = Math.min(nextUtilization, cap);
+        if (Math.abs(capped - facility.utilization) > 1e-9) {
+          await sql`UPDATE facilities SET utilization = ${capped}
                      WHERE id = ${facility.facility_id}::uuid`;
           out.throttled++;
         }
@@ -184,7 +208,9 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           // Stok tamamla
           const plan = planInventory({
             onHand: asQty(held.available), consumptionPerTick: salesPerTick,
-            minTicks: RETAIL_BUFFER_TICKS, targetTicks: Math.min(npc.inventory_target_ticks, 10),
+            minTicks: RETAIL_BUFFER_TICKS,
+            targetTicks: Math.min(npc.inventory_target_ticks, 10)
+              * lever(directives, product.id, 'INVENTORY_TARGET'),
             maxTicks: invCfg.maxTicks,
           });
           if (plan.buyQuantity <= 0n) continue;
@@ -199,7 +225,8 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           const placed = await upsertOrder(sql, tick, openOrders, {
             companyId: npc.company_id, facilityId: facility.facility_id,
             cityId: facility.city_id, productId: product.id, side: 'BUY',
-            quantity: plan.buyQuantity, price: bid, budget,
+            quantity: biasedQuantity(plan.buyQuantity, directives, support, product.id),
+            price: bid, budget,
           });
           if (placed > 0n) { out.buyOrders++; budget -= placed; }
         }
@@ -211,6 +238,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
       await sql`UPDATE npc_profiles SET last_strategy_tick = ${tick.seq}
                  WHERE company_id = ${npc.company_id}::uuid`;
       out.strategicDecisions++;
+      if (await maybeInvest(sql, tick, npc, directives, opportunities, invCfg)) out.built++;
     }
   }
 
@@ -430,4 +458,258 @@ async function loadMarketHealth(sql: Sql, tick: EngineTick): Promise<Map<number,
     WHERE tick_id = (SELECT MAX(tick_id) FROM market_health WHERE tick_id < ${tick.seq})
       AND city_id = 0`.catch(() => [] as { product_id: number; score: string }[]);
   return new Map(rows.map((r) => [r.product_id, Number(r.score)]));
+}
+
+/* ------------------------------------------------------------------ */
+/*  EKONOMİ DİREKTÖRÜ DİREKTİFLERİNİN TÜKETİMİ                          */
+/* ------------------------------------------------------------------ */
+
+type DirectiveMap = Map<number, Map<DirectiveLever, number>>;
+
+/**
+ * Geçerli direktifler — ürün başına kaldıraç → büyüklük.
+ *
+ * Süresi dolmuş direktif okunmaz; ED'nin müdahalesi bu yüzden kendiliğinden
+ * söner (docs/07 §4). `scope = 'GLOBAL'` (product_id NULL) direktifler tüm
+ * ürünlere uygulanır ve ürün bazlı olanla çakışırsa ürün bazlı kazanır.
+ */
+async function loadDirectives(sql: Sql, tick: EngineTick): Promise<DirectiveMap> {
+  const rows = await sql<{ product_id: number | null; lever: string; magnitude: number }[]>`
+    SELECT product_id, lever, magnitude FROM npc_directives
+     WHERE issued_tick <= ${tick.seq} AND expires_tick > ${tick.seq}
+     ORDER BY product_id NULLS FIRST`;
+  const map: DirectiveMap = new Map();
+  const global = new Map<DirectiveLever, number>();
+  for (const row of rows) {
+    if (row.product_id === null) { global.set(row.lever as DirectiveLever, row.magnitude); continue; }
+    const forProduct = map.get(row.product_id) ?? new Map(global);
+    forProduct.set(row.lever as DirectiveLever, row.magnitude);
+    map.set(row.product_id, forProduct);
+  }
+  if (global.size > 0) map.set(0, global); // 0 = ürünü olmayanlar için taban
+  return map;
+}
+
+/** Direktifin HAM büyüklüğü; çarpana çevrilmeyen kaldıraçlar için (CAPACITY_CAP). */
+function rawLever(
+  directives: DirectiveMap, productId: number, name: DirectiveLever,
+): number | undefined {
+  return directives.get(productId)?.get(name) ?? directives.get(0)?.get(name);
+}
+
+/** Kaldıracın çarpanı; direktif yoksa 1 (etkisiz). */
+function lever(directives: DirectiveMap, productId: number, name: DirectiveLever): number {
+  const magnitude = directives.get(productId)?.get(name) ?? directives.get(0)?.get(name);
+  return magnitude === undefined ? 1 : leverMultiplier(name, magnitude);
+}
+
+/**
+ * Alım desteği tabanı — madde 33.
+ *
+ * ED fiyat çöktüğünde `BUY_BIAS` verir, ama destek SINIRSIZ DEĞİLDİR: piyasa
+ * fiyatı referansın %55'inin altına düştüyse ED desteği çekilir ve piyasa
+ * temizlensin diye bırakılır. Oyuncu kötü yatırım yaptıysa zarar eder —
+ * bu bilinçlidir.
+ *
+ * Sonuç: ürün başına "ED desteği geçerli mi" haritası.
+ */
+async function loadSupportGuard(sql: Sql, tick: EngineTick): Promise<Set<number>> {
+  const rows = await sql<{ product_id: number; median: bigint; ema: bigint }[]>`
+    SELECT product_id, weighted_median AS median, ema_reference AS ema
+      FROM price_history
+     WHERE city_id = 0
+       AND tick_id = (SELECT MAX(tick_id) FROM price_history WHERE tick_id < ${tick.seq})`;
+  const allowed = new Set<number>();
+  for (const row of rows) {
+    // İşlem olmayan turda medyan 0 gelir; destek o zaman ZATEN gerekir.
+    if (row.median === 0n || row.median >= softFloor(row.ema)) allowed.add(row.product_id);
+  }
+  return allowed;
+}
+
+/**
+ * `BUY_BIAS` uygulanmış alış miktarı — madde 33.
+ *
+ * ED yalnızca NPC'yi "daha çok almaya EĞİLİMLİ" yapabilir; fiyata dokunamaz
+ * (docs/07 §3: fiyat belirlemek ED'nin yapamadıkları arasında). Destek tabanı
+ * kırılmışsa kaldıraç hiç uygulanmaz: piyasa temizlensin diye bırakılır.
+ */
+function biasedQuantity(
+  quantity: bigint, directives: DirectiveMap, support: Set<number>, productId: number,
+): bigint {
+  if (!support.has(productId)) return quantity;
+  const multiplier = lever(directives, productId, 'BUY_BIAS');
+  if (multiplier === 1) return quantity;
+  return (quantity * BigInt(Math.round(multiplier * 1000))) / 1000n;
+}
+
+/* ------------------------------------------------------------------ */
+/*  STRATEJİK YATIRIM (madde 27) — INVESTMENT_BIAS'ın tüketicisi         */
+/* ------------------------------------------------------------------ */
+
+interface Opportunity {
+  product_id: number;
+  facility_type_id: number;
+  facility_code: string;
+  recipe_id: number;
+  base_cost: bigint;
+  build_ticks: number;
+  unlock_level: number;
+  /** Sağlık bileşenleri: skor ne kadar düşükse fırsat o kadar büyük. */
+  demand_gap: number;
+  price_trend: number;
+  competition: number;
+  margin: number;
+  /** Tur başına açık (birim): talep − arz. Negatifse fazla arz var. */
+  gap_per_tick: number;
+  /** Şu anda İNŞA HALİNDE olan, henüz üretmeyen kapasite (birim/tur). */
+  pipeline_per_tick: number;
+}
+
+/**
+ * Yatırım fırsatları — ürün başına tek satır.
+ *
+ * Fırsat sinyalleri ED'nin ölçtüğü `market_health` bileşenlerinden türetilir:
+ * ayrı bir ölçüm yapmak, ED ile NPC'nin farklı gerçeklikler görmesi demek
+ * olurdu. NPC ile ED aynı tabloya bakar; ayrıcalık yok (ADR-0004).
+ */
+async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunity[]> {
+  return sql<Opportunity[]>`
+    WITH saglik AS (
+      SELECT product_id, f_supply, f_sellers, f_stability,
+             (demand_units - supply_units) / 1000.0 / 96.0 AS gap_per_tick
+        FROM market_health
+       WHERE city_id = 0
+         AND tick_id = (SELECT MAX(tick_id) FROM market_health WHERE tick_id <= ${tick.seq})
+    ),
+    -- ★ İnşa halindeki kapasite. Görülmezse tüm NPC'ler aynı açığa aynı anda
+    -- cevap verir ve piyasa aşırı yatırımla dolar (ölçüldü: 120 turda 41 fırın).
+    boru_hatti AS (
+      SELECT r2.output_product_id AS product_id,
+             SUM(ft2.base_capacity)::float AS units
+        FROM facilities f2
+        JOIN facility_types ft2 ON ft2.id = f2.facility_type_id
+        JOIN production_recipes r2 ON r2.id = f2.active_recipe_id
+       WHERE f2.closed_at IS NULL AND f2.construction_complete_at_tick > ${tick.seq}
+       GROUP BY 1
+    ),
+    fiyat AS (
+      SELECT ph.product_id,
+             (MAX(ph.ema_reference) - MIN(ph.ema_reference))::float
+               / NULLIF(MIN(ph.ema_reference), 0) AS trend
+        FROM price_history ph
+       WHERE ph.city_id = 0 AND ph.tick_id > ${tick.seq - 96n}
+       GROUP BY 1
+    )
+    SELECT r.output_product_id AS product_id, ft.id AS facility_type_id,
+           ft.code AS facility_code, r.id AS recipe_id,
+           ft.base_cost, ft.construction_ticks AS build_ticks, ft.unlock_level,
+           -- Arz açığı: f_supply düştükçe fırsat büyür
+           GREATEST(0, 1 - COALESCE(s.f_supply, 1)) AS demand_gap,
+           GREATEST(0, LEAST(1, COALESCE(f.trend, 0))) AS price_trend,
+           COALESCE(s.f_sellers, 1) AS competition,
+           COALESCE(s.gap_per_tick, 0)::float8 AS gap_per_tick,
+           COALESCE(bh.units, 0)::float8 AS pipeline_per_tick,
+           -- Marj: referans ÷ TAM birim maliyet (girdiler dahil), 1,5 katta doyar.
+           -- Girdi maliyeti atlanırsa marj her üründe ~1 çıkar ve NPC sağlıklı
+           -- piyasada bile yatırım yapar (F7 ilk koşusu: 120 turda 43 tesis).
+           LEAST(1, GREATEST(0,
+             (p.base_reference_price::float / NULLIF(
+               ((r.labor_cost + r.energy_cost)::float + COALESCE(gm.girdi, 0))
+               / NULLIF(r.output_quantity / 1000.0, 0), 0)
+              - 1) / 1.5)) AS margin
+      FROM production_recipes r
+      JOIN facility_types ft ON ft.id = r.facility_type_id
+      JOIN products p ON p.id = r.output_product_id
+      LEFT JOIN saglik s ON s.product_id = r.output_product_id
+      LEFT JOIN fiyat f ON f.product_id = r.output_product_id
+      LEFT JOIN boru_hatti bh ON bh.product_id = r.output_product_id
+      LEFT JOIN LATERAL (
+        SELECT SUM(ri.quantity * ip.base_reference_price / 1000.0)::float AS girdi
+          FROM recipe_inputs ri JOIN products ip ON ip.id = ri.product_id
+         WHERE ri.recipe_id = r.id
+      ) gm ON TRUE
+     WHERE r.is_active`;
+}
+
+/**
+ * NPC yatırım kararı — madde 27.
+ *
+ * Yatırım ANINDA tamamlanmaz: `build_ticks` kadar inşaat sürer. Bu yüzden
+ * NPC'ler arz açığına gecikmeli tepki verir — gerçekçidir ve oyuncuya önce
+ * girme fırsatı bırakır.
+ *
+ * ED'nin `INVESTMENT_BIAS` kaldıracı EŞİĞİ düşürür, skoru değil: ED "şunu
+ * inşa et" diyemez, yalnız "yatırım iştahını artır" der.
+ */
+async function maybeInvest(
+  sql: Sql, tick: EngineTick, npc: NpcRow, directives: DirectiveMap,
+  opportunities: Opportunity[], cfg: { minTicks: number },
+): Promise<boolean> {
+  const invest = configValue<{ threshold: number; cashBufferRatio: number; maxFacilities: number }>(
+    tick, 'npc.investment', { threshold: 0.55, cashBufferRatio: 1.5, maxFacilities: 4 },
+  );
+
+  const [owned] = await sql<{ count: bigint }[]>`
+    SELECT COUNT(*) AS count FROM facilities
+     WHERE company_id = ${npc.company_id}::uuid AND closed_at IS NULL`;
+  if (Number(owned?.count ?? 0n) >= invest.maxFacilities) return false;
+
+  let best: { opportunity: Opportunity; score: number } | null = null;
+  for (const o of opportunities) {
+    // Açığı kapatacak kapasite zaten inşa halindeyse yatırım yapma. Bu kural
+    // olmadan bilgi mükemmel + kararlar eşzamanlı olduğu için her NPC aynı
+    // açığa cevap verir ve piyasa aşırı yatırımla dolar.
+    if (o.pipeline_per_tick >= Math.max(0, o.gap_per_tick)) continue;
+    const score = investmentScore({
+      profitMargin: o.margin,
+      demandGap: o.demand_gap,
+      priceTrend: o.price_trend,
+      // Stratejik ihtiyaç: kendi zincirinde eksik halka — MVP-1'de sabit.
+      strategicNeed: 0.5,
+      competition: o.competition,
+      // Arketip iştahı 1 etrafında ölçekler: 0,5 iştah → ×1,0, 0,9 → ×1,4.
+    }) * (0.5 + npc.investment_aggressiveness);
+    if (!best || score > best.score) best = { opportunity: o, score };
+  }
+  if (!best) return false;
+
+  // ED eşiği düşürür: INVESTMENT_BIAS 1,5 ise eşik 0,55 → 0,367.
+  const threshold = invest.threshold / lever(directives, best.opportunity.product_id, 'INVESTMENT_BIAS');
+  if (best.score < threshold) return false;
+
+  const [city] = await sql<{ id: number; land_cost_index: number }[]>`
+    SELECT id, land_cost_index FROM cities WHERE id = ${npc.home_city_id}`;
+  if (!city) return false;
+  const cost = (best.opportunity.base_cost
+    * BigInt(Math.round(city.land_cost_index * 1000))) / 1000n;
+
+  // Nakit tamponu: yatırım şirketi işletme sermayesiz bırakmamalı.
+  const required = (cost * BigInt(Math.round(invest.cashBufferRatio * 100))) / 100n;
+  if (npc.cash < required) return false;
+
+  const [sink] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = 'SYS_SINK'`;
+  if (!sink) return false;
+
+  const [type] = await sql<{ storage_capacity: bigint }[]>`
+    SELECT storage_capacity FROM facility_types WHERE id = ${best.opportunity.facility_type_id}`;
+
+  const [facility] = await sql<{ id: string }[]>`
+    INSERT INTO facilities (company_id, facility_type_id, city_id, name, storage_capacity,
+                            construction_complete_at_tick, active_recipe_id)
+    VALUES (${npc.company_id}::uuid, ${best.opportunity.facility_type_id}, ${city.id},
+            ${`${npc.name} — ${best.opportunity.facility_code}`}, ${type!.storage_capacity},
+            ${tick.seq + BigInt(best.opportunity.build_ticks)}, ${best.opportunity.recipe_id})
+    RETURNING id`;
+
+  await sql.begin((tx) => transfer(tx as unknown as Sql, {
+    tickId: tick.seq,
+    fromCompanyId: npc.company_id, toCompanyId: sink!.id,
+    amount: asMoney(cost), account: 'CAPEX', reason: 'NPC yatırım kararı',
+    refType: 'facility', refId: facility!.id,
+  }));
+
+  await logDecision(sql, tick, npc.company_id, best.opportunity.product_id, 'INVEST',
+    cost, asMoney(cost), `skor ${best.score.toFixed(2)} ≥ eşik ${threshold.toFixed(2)}`);
+  return true;
 }

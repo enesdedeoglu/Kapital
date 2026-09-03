@@ -174,6 +174,46 @@ kısaltmak yerine tamamlamayı tercih ettim.
 
 ---
 
+### C7. ED direktiflerine YÖN eklendi 🔴 *(F7, 3 Eylül 2026)*
+Madde 30'un bant tablosu tek yönlüdür: sağlık düştükçe daha çok teşvik verir.
+Oysa madde 29'un `f_supply` bileşeni çift yönlüdür — arz/talep oranı 1,0'da tepe
+yapar. İkisi birlikte uygulandığında ED bolluk gördüğünde üretimi artırıyor ve
+sorunu büyütüyordu (ölçüldü: buğday oranı 1,93 iken `PRODUCTION_BIAS` +%15).
+
+`directivesForBand` artık arz/talep oranını ve ithal edilebilirliği alıyor.
+Oran 1'in üstündeyse kaldıraçların işareti ters çevriliyor; ithalat ve yatırım
+kaldıraçları bollukta hiç yayınlanmıyor.
+
+**Karar: eklendi.** Spec'in bant tablosu korundu, üzerine yön katmanı geldi.
+
+---
+
+### C8. `market_health` skoru 7 değil 6 bileşen 🟢 *(F7, 3 Eylül 2026)*
+Yol haritası "7 bileşen" diyordu; docs/07 §7'deki formül altı terim içeriyor ve
+ağırlıkları (0,30 + 0,15 + 0,10 + 0,15 + 0,15 + 0,15) tam 1,00'a toplanıyor.
+Altı bileşen uygulandı; yedincinin ne olacağı hiçbir yerde tanımlı değildi.
+
+**Karar: 6 bileşen.** Ağırlıklar config'ten değiştirilebilir ve toplamları 1
+olmasa bile skor normalize edilir.
+
+---
+
+### C9. Ara mal talebi kapasiteden ölçülür 🔴 *(F7, 3 Eylül 2026)*
+Bir ürünün talebini, onu girdi olarak kullananların GERÇEKLEŞEN üretiminden
+ölçmek arz şokunu görünmez kılar: çelik bitince mobilya fabrikası da durur,
+dolayısıyla ölçülen çelik talebi de düşer ve arz/talep oranı 1,00'da kalır.
+Ölçüldü: tüm çelik üretimi durdurulduğu halde skor 75 → 70'te kaldı ve hiçbir
+müdahale tetiklenmedi.
+
+Talep artık aşağı halkanın kapasitesinden ölçülüyor
+(`base_capacity × seviye × kullanım_oranı × girdi_oranı`). Girdisizlikten duran
+tesis o girdiyi istemeye devam eder; kasıtlı kısılmış tesis ise gerçekten daha
+az ister — bu yüzden kullanım oranı çarpanı korunuyor.
+
+**Karar: kapasiteden ölçülür.**
+
+---
+
 ### C6. Tohum referans fiyatları yeniden dengelendi 🟠 *(F6, 3 Eylül 2026)*
 Spec'in ürün tablosundaki referans fiyatlar, benim yazdığım tariflerin maliyet
 yapısıyla tutarsızdı. En uç örnek sigara: referans 80 ₺, tarif maliyeti 1,95 ₺.

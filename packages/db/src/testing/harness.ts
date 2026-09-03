@@ -35,6 +35,10 @@ export async function truncateGameState(sql: Sql): Promise<void> {
   // BAĞIMLI olur — NPC testleri koştuktan sonra motor testleri sessizce
   // satıcısız bir dünyada koşar.
   //
+  // Ekonomi Direktörü'nün tabloları da temizlenir: `market_health` histerezis
+  // durumunu, `npc_directives` yürürlükteki müdahaleyi taşır. Bırakılırsa bir
+  // testin bıraktığı EMERGENCY serisi diğerinde acil rezervi tetikleyebilir.
+  //
   // TOHUM NPC ŞİRKETLERİ silinmez: basit satıcılar tohumdan gelir ve P0 onları
   // yeniden yaratmaz, yalnız isimle bulup emrini tazeler. Testlerin kendi
   // yarattıkları (`TEST_NPC_PREFIX`) ise silinir, yoksa her koşuda birikirler.
@@ -44,7 +48,8 @@ export async function truncateGameState(sql: Sql): Promise<void> {
              market_orders, market_trades, shipments, trade_flags,
              fx_trades, foreign_trades, retail_offers, retail_sales,
              production_jobs, production_records,
-             npc_profiles, npc_decisions RESTART IDENTITY CASCADE;
+             npc_profiles, npc_decisions, npc_directives,
+             market_health, world_events RESTART IDENTITY CASCADE;
     DELETE FROM companies WHERE kind = 'PLAYER'
         OR (kind = 'NPC' AND name LIKE '${TEST_NPC_PREFIX}%');
     UPDATE companies SET cash = 0, usd_balance = 0, company_value = 0

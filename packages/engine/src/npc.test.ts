@@ -130,19 +130,33 @@ describe('NPC operasyonel kararları (P6)', () => {
 });
 
 describe('üretim kısma — satılmayan stok (madde 31)', () => {
+  /*
+   * ★ Bu testler KARŞILAŞTIRMALIdır, mutlak değer beklemez.
+   *
+   * F7'den sonra `utilization`'a iki şey dokunur: tesisin kendi stok geri
+   * beslemesi (`outputThrottle`) ve Ekonomi Direktörü'nün `PRODUCTION_BIAS`
+   * direktifi. Mutlak bir sayı beklemek, ED'nin o turda ne yaptığına bağımlı
+   * kırılgan bir test demektir. Aynı turda, aynı ED etkisi altında iki tesisi
+   * karşılaştırmak kısmanın kendi katkısını yalıtır.
+   */
   it('çıktı stoğu birikince kapasite kullanımı düşer', async () => {
-    const field = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
+    const dolu = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
+    const bos = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
     // WHEAT_FIELD kapasitesi 30/tur; 8 turluk hedefin çok üstünde stok koyalım
     await runInTransaction(sql, (tx) => addBatch(tx, {
-      inventoryId: field.inventoryId, productId: WHEAT,
+      inventoryId: dolu.inventoryId, productId: WHEAT,
       quantity: qty(3000), unitCost: money(5), quality: 70, producedAtTick: 0n,
     }));
-    expect(await utilizationOf(field.facilityId)).toBe(1);
+    expect(await utilizationOf(dolu.facilityId)).toBe(1);
 
     await runTick(sql);
-    const afterOne = await utilizationOf(field.facilityId);
-    expect(afterOne).toBeLessThan(1);
-    expect(afterOne).toBeGreaterThanOrEqual(0.94); // tek turda en fazla %5 iner
+    const stokla = await utilizationOf(dolu.facilityId);
+    const stoksuz = await utilizationOf(bos.facilityId);
+
+    expect(stokla).toBeLessThan(stoksuz); // ★ kısmanın kendi katkısı
+    expect(stokla).toBeLessThan(1);
+    // Kademelilik: kısma tek turda en fazla %5 indirir, tabana çakmaz.
+    expect(stokla).toBeGreaterThanOrEqual(stoksuz * 0.94);
   });
 
   it('kısma kademelidir — arz tek turda çökmez', async () => {
@@ -161,10 +175,17 @@ describe('üretim kısma — satılmayan stok (madde 31)', () => {
     expect(path.at(-1)!).toBeGreaterThan(0.10); // tabana bir turda çakılmaz
   });
 
-  it('stoğu olmayan tesis tam kapasitede kalır', async () => {
+  it('stoğu olmayan tesis kısma yüzünden kısılmaz', async () => {
+    // Stok geri beslemesi devreye girmez; kalan tek etki ED direktifidir.
     const field = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
     await runTick(sql);
-    expect(await utilizationOf(field.facilityId)).toBe(1);
+
+    const utilization = await utilizationOf(field.facilityId);
+    const [directive] = await sql<{ magnitude: number }[]>`
+      SELECT magnitude FROM npc_directives
+       WHERE lever = 'PRODUCTION_BIAS' AND product_id = ${WHEAT}`;
+    const edEtkisi = directive ? 1 + directive.magnitude * 0.30 : 1;
+    expect(utilization).toBeCloseTo(Math.min(1, edEtkisi), 6);
   });
 
   it('kısma üretimi gerçekten azaltır', async () => {

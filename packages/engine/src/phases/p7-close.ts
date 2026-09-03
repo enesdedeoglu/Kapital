@@ -1,9 +1,11 @@
 import { checkInvariants, type Sql } from '@kapital/db';
+import { giniCoefficient } from '@kapital/economy';
 import { asMoney, formatMoney, toJson } from '@kapital/shared';
 import type { EngineTick } from '../context.js';
 
 export interface ClosePhaseResult {
   moneySupply: string;
+  gini: number;
   notifications: number;
   invariantsOk: boolean;
   violations: unknown[];
@@ -48,15 +50,27 @@ export async function runClosePhase(sql: Sql, tick: EngineTick): Promise<ClosePh
   const [bankruptcies] = await sql<{ count: number }[]>`
     SELECT COUNT(*)::int AS count FROM companies WHERE status = 'BANKRUPT'`;
 
+  // Gini: ekonomi "sağlıklı" görünüp aslında tek şirkete akıyor olabilir —
+  // para arzı ve CPI bunu göstermez. Sistem şirketleri hariç tutulur.
+  const wealth = await sql<{ company_value: bigint }[]>`
+    SELECT company_value FROM companies
+     WHERE kind <> 'SYSTEM' AND status = 'ACTIVE' AND company_value > 0`;
+  const gini = giniCoefficient(wealth.map((w) => w.company_value));
+
+  // CPI P5'te hesaplanır ve `fx_rates`e yazılır; anlık görüntüye de kopyalanır
+  // ki admin paneli tek tabloya baksın.
+  const [fx] = await sql<{ game_cpi: number | null }[]>`
+    SELECT game_cpi FROM fx_rates WHERE tick_id = ${tick.seq}`;
+
   await sql`
     INSERT INTO economy_snapshots (tick_id, total_money_supply, player_money, npc_money,
                                    faucet_in, sink_out, median_company_value, active_companies,
                                    credit_outstanding, credit_share, active_loans,
-                                   defaults_24h, bankruptcies_24h)
+                                   defaults_24h, bankruptcies_24h, gini, game_cpi)
     VALUES (${tick.seq}, ${supply!.total}, ${supply!.player}, ${supply!.npc},
             ${supply!.faucet}, ${supply!.sink}, ${median!.value}, ${supply!.active},
             ${credit!.outstanding}, ${creditShare}, ${credit!.loans},
-            ${credit!.defaults}, ${bankruptcies!.count})
+            ${credit!.defaults}, ${bankruptcies!.count}, ${gini}, ${fx?.game_cpi ?? null})
     ON CONFLICT (tick_id) DO NOTHING`;
 
   // Satış yapan her şirkete tur özeti. dedupe_key idempotency sağlar.
@@ -104,6 +118,7 @@ export async function runClosePhase(sql: Sql, tick: EngineTick): Promise<ClosePh
 
   return {
     moneySupply: supply!.total,
+    gini,
     notifications: sales.length + depleted.length,
     invariantsOk: report.ok,
     violations: report.violations,

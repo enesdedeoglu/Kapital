@@ -41,3 +41,52 @@ it('Drizzle şeması ile veritabanı ayrışmamış', async () => {
   expect(tableCount).toBeGreaterThan(15);
   expect(missing).toEqual([]);
 });
+
+/**
+ * ★ TERS YÖN. Yukarıdaki test yalnız Drizzle → DB yönünü korur: Drizzle'da
+ * tanımlı olup DB'de olmayanı yakalar. DB'de olup Drizzle'da OLMAYAN tablo ise
+ * sessizce yaşar.
+ *
+ * `npc_directives` F0'dan beri tam olarak böyleydi — migration'a girmiş, şemaya
+ * girmemişti; F7'de Ekonomi Direktörü onu kullanmaya başlayınca fark edildi.
+ *
+ * Partition'lar ve migration defteri hariç tutulur: onlar Drizzle'da temsil
+ * edilmez, ana tablo zaten tanımlıdır.
+ */
+it('veritabanında Drizzle şemasında olmayan tablo yok', async () => {
+  const dbTables = await sql<{ table_name: string }[]>`
+    SELECT c.relname AS table_name
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      LEFT JOIN pg_inherits i ON i.inhrelid = c.oid
+     WHERE n.nspname = 'public'
+       AND c.relkind IN ('r', 'p')
+       AND i.inhrelid IS NULL`;
+
+  /*
+   * Bilinen borç — F0–F5'ten kalma, Drizzle'a hiç eklenmemiş tablolar.
+   *
+   * Bu liste bir MUAFİYET değil, GÖRÜNÜRLÜK aracıdır: yeni bir tablo eklenip
+   * şemaya yazılmazsa test düşer. Listedekiler ise sayılıdır ve ayrı bir işte
+   * kapatılacaktır. Kodda hepsi ham SQL ile kullanılıyor; Drizzle bu projede
+   * tipleme yüzeyidir (ADR-0006), sorgu katmanı değil.
+   */
+  const bilinenBorc = new Set<string>([
+    'city_distances', 'foreign_trade_capacity', 'foreign_trades', 'fx_rates',
+    'fx_trades', 'idempotency_keys', 'loan_payments', 'npc_decisions',
+    'npc_profiles', 'outbox', 'production_jobs', 'recipe_inputs',
+    'production_records', 'refresh_tokens', 'shipments', 'tick_phase_runs',
+    'trade_flags',
+  ]);
+
+  const known = new Set<string>(['_migrations', ...bilinenBorc]);
+  for (const value of Object.values(schema)) {
+    if (value instanceof PgTable) known.add(getTableName(value));
+  }
+
+  const orphans = dbTables
+    .map((r) => r.table_name)
+    .filter((name) => !known.has(name));
+
+  expect(orphans).toEqual([]);
+});
