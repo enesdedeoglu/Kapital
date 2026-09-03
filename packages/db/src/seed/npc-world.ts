@@ -20,26 +20,43 @@ interface NpcPlan {
   readonly cash: number;
 }
 
+/*
+ * ★ DÜNYA ÜRETİM AĞIRLIKLI KURULUR, PERAKENDE AĞIRLIKLI DEĞİL.
+ *
+ * İlk tasarımda tam tersiydi ve F8 simülasyonu bunu ortaya çıkardı: 114
+ * perakende noktasına karşı 35 üretim tesisi, tüm dünyada 5 sebze bahçesi.
+ * Domates arzı talebin dörtte biriydi ve domates, seviye 1 oyuncunun
+ * satabildiği TEK üründür. Sonuç: oyuncuların alış emirlerinin %98'i mal
+ * bulamadan süresi doluyordu (787 emrin 16'sı doldu), raflar boş kalıyordu,
+ * bakım gideri ciroyu yiyordu ve hiç kimse Lv2'ye çıkamıyordu.
+ *
+ * Perakendeyi OYUNCULAR doldurur — madde 31'in amacı zaten NPC payının
+ * zamanla geri çekilmesi. NPC'nin asıl işi, oyuncunun satacağı malı üretmek.
+ *
+ * Toplam 60 NPC korunur; ağırlık tarımdan yana kaydırılır.
+ */
 const PLAN: readonly NpcPlan[] = [
-  // Hammadde arzı — tarım bonusu yüksek şehirlerde
-  { archetype: 'AGRI', count: 10, cities: ['KON', 'ANK', 'IZM'], cash: 250_000,
-    facilities: [['WHEAT_FIELD', 'WHEAT'], ['VEG_GARDEN', 'TOMATO'], ['TOBACCO_FARM', 'TOBACCO']] },
+  // Hammadde arzı — tarım bonusu yüksek şehirlerde.
+  // VEG_GARDEN listede İKİ KEZ: domates giriş ürünüdür ve arzı bol olmalı.
+  { archetype: 'AGRI', count: 20, cities: ['KON', 'ANK', 'IZM'], cash: 250_000,
+    facilities: [['VEG_GARDEN', 'TOMATO'], ['WHEAT_FIELD', 'WHEAT'],
+                 ['VEG_GARDEN', 'TOMATO'], ['TOBACCO_FARM', 'TOBACCO']] },
   // Maden ve ara ürün — sanayi bonusu yüksek şehirlerde
   { archetype: 'INDUSTRIAL', count: 14, cities: ['BRS', 'IST', 'ANK'], cash: 550_000,
     facilities: [['COAL_MINE', 'COAL'], ['IRON_MINE', 'IRON'], ['MILL', 'FLOUR'],
                  ['BAKERY', 'BREAD'], ['CIG_FACTORY', 'CIGARETTE'], ['STEEL_MILL', 'STEEL'],
                  ['FURNITURE_FACTORY', 'FURNITURE']] },
   // Perakende zinciri — tüm şehirlerde, paranın oyuna giriş kapısı
-  { archetype: 'RETAIL_CHAIN', count: 12, cities: ['IST', 'ANK', 'IZM', 'KON', 'BRS'], cash: 150_000,
+  { archetype: 'RETAIL_CHAIN', count: 8, cities: ['IST', 'ANK', 'IZM', 'KON', 'BRS'], cash: 150_000,
     facilities: [['GREENGROCER', null], ['KIOSK', null], ['MARKET', null]] },
   // Tüccarlar — üretmez, alıp satar; likidite ve fiyat oluşumu sağlar
-  { archetype: 'DISCOUNTER', count: 8, cities: ['IST', 'ANK', 'IZM', 'BRS'], cash: 200_000,
+  { archetype: 'DISCOUNTER', count: 6, cities: ['IST', 'ANK', 'IZM', 'BRS'], cash: 200_000,
     facilities: [['MARKET', null]] },
-  { archetype: 'VOLUME', count: 8, cities: ['IST', 'IZM', 'BRS', 'KON'], cash: 300_000,
+  { archetype: 'VOLUME', count: 6, cities: ['IST', 'IZM', 'BRS', 'KON'], cash: 300_000,
     facilities: [['MARKET', null]] },
-  { archetype: 'PREMIUM', count: 5, cities: ['IST', 'IZM'], cash: 250_000,
+  { archetype: 'PREMIUM', count: 4, cities: ['IST', 'IZM'], cash: 250_000,
     facilities: [['MARKET', null]] },
-  { archetype: 'SPECULATOR', count: 3, cities: ['IST', 'ANK'], cash: 350_000,
+  { archetype: 'SPECULATOR', count: 2, cities: ['IST', 'ANK'], cash: 350_000,
     facilities: [['MARKET', null]] },
 ];
 

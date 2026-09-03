@@ -67,6 +67,9 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const throttleCfg = configValue<{ targetTicks: number; maxStepPerTick: number; floor: number }>(
     tick, 'npc.throttle', { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 },
   );
+  const retailCfg = configValue<{ retailMarkup: number }>(
+    tick, 'economy.retail', { retailMarkup: 1.35 },
+  );
 
   // ★ DİREKTÖR ÖNCE KOŞAR: bu turda yayınladığı direktifleri NPC'ler aynı
   // turda tüketir. Sonra koşsaydı direktifler bir tur gecikir ve acil
@@ -192,7 +195,28 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
 
           // Rafa fiyat koy
           if (held.available > 0n) {
-            const decision = priceFor(npc, held.unit_cost, product.id, references, health, npcCfg, facility.facility_id);
+            /*
+             * ★ PERAKENDE ÇIPASI TOPTAN REFERANSI DEĞİLDİR.
+             *
+             * Üretici için ürünün referansı sattığı malın fiyatıdır — doğru
+             * çıpa. Perakendeci için ise aynı referans bir MALİYET çıpasıdır:
+             * ona göre fiyatlamak, raf fiyatını toptan seviyesine çeker ve
+             * perakende marjını yapısal olarak siler.
+             *
+             * F8'de ölçüldü (domates): toptan 15,39 ₺ + navlun 1,28 = 16,67 ₺
+             * maliyet, raf 17,08 ₺ → brüt marj %2,4. Bakım 2 ₺/tur. Sonuç:
+             * NPC'ler de oyuncular da zarar ediyordu (NPC net −53.288 ₺).
+             *
+             * Raf çıpası artık toptan referansın `retailMarkup` katıdır. Bu
+             * dükkânın kendi giderlerinin (bakım, fire, raf) karşılığıdır;
+             * tüketicinin rezervasyon tavanı (referans × 3) çok üstünde
+             * olduğu için talep kırılmaz.
+             */
+            const retailAnchor = new Map(references);
+            retailAnchor.set(product.id, asMoney(
+              (references.get(product.id)! * BigInt(Math.round(retailCfg.retailMarkup * 1000))) / 1000n,
+            ));
+            const decision = priceFor(npc, held.unit_cost, product.id, retailAnchor, health, npcCfg, facility.facility_id);
             if (decision) {
               await sql`
                 INSERT INTO retail_offers (facility_id, product_id, selling_price, enabled)

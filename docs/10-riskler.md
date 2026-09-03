@@ -757,6 +757,67 @@ belgede, karar bekliyor.
 
 ---
 
+## R34 — Perakende raf fiyatı TOPTAN referansa çıpalanıyordu: katman yapısal olarak zararda
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 simülasyonu · **Durum:** ✅ çözüldü
+
+Üretici için bir ürünün referansı, SATTIĞI malın fiyatıdır — doğru çıpa.
+Perakendeci için aynı referans bir **maliyet** çıpasıdır: ona göre fiyatlamak
+raf fiyatını toptan seviyesine çeker ve perakende marjını yapısal olarak siler.
+
+Ölçüm (domates, 96 tur):
+
+| Kalem | ₺ |
+|---|---|
+| Toptan işlem fiyatı | 15,39 |
+| + navlun | 1,28 |
+| **Rafa inen maliyet** | **16,67** |
+| Raf satış fiyatı | 17,08 |
+| **Brüt marj** | **%2,4** |
+
+Bakım 2 ₺/tur. Sonuç: **hem oyuncular hem NPC'ler zarar ediyordu** — oyuncu
+net −9.152 ₺, NPC net −53.288 ₺ (96 tur). Bu bir oyuncu davranışı sorunu
+değildi; hiç kimsenin kâr edemediği bir katmandı.
+
+**Çözüm:** `economy.retail.retailMarkup` (1,35). Raf çıpası artık toptan
+referansın bu katıdır — dükkânın kendi giderlerinin (bakım, fire, raf)
+karşılığı. Tüketicinin rezervasyon tavanı referansın 3 katı olduğu için talep
+kırılmaz.
+
+**Etki (aynı tohum, 96 tur):**
+
+| | Önce | Sonra |
+|---|---|---|
+| Oyuncu brüt marjı | %11,1 | **%25,7** |
+| Oyuncu net kârı | −9.152 ₺ | **+7.045 ₺** |
+| NPC net kârı | −53.288 ₺ | **+116.099 ₺** |
+
+---
+
+## R35 — Tohum dünyası perakende ağırlıklı kuruluyordu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F8 simülasyonu · **Durum:** ✅ çözüldü
+
+114 perakende noktasına karşı 35 üretim tesisi; tüm dünyada **5 sebze
+bahçesi**. Domates arzı talebin dörtte biriydi ve domates, seviye 1 oyuncunun
+satabildiği tek üründür. Oyuncuların alış emirlerinin %98'i mal bulamadan
+süresi doluyordu (787 emrin 16'sı doldu).
+
+Perakendeyi OYUNCULAR doldurur — madde 31'in amacı zaten NPC payının zamanla
+geri çekilmesi. NPC'nin asıl işi oyuncunun satacağı malı üretmektir.
+
+**Çözüm:** NPC dünya planı üretim ağırlıklı hale getirildi (toplam 60 NPC
+korunarak): AGRI 10 → 20 ve `VEG_GARDEN` listede iki kez; perakende
+arketipleri 36 → 26. Sonuç: 5 → **13 sebze bahçesi**, tarım 26 tesis.
+
+**Etki:** oyuncu alış emri dolum oranı %2 → %14, oyuncu cirosu 24.258 →
+88.709 ₺/96 tur.
+
+---
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -793,4 +854,6 @@ belgede, karar bekliyor.
 | R30 | Seviye merdiveni kilitli — Lv1 geçilemiyor | 🔴 Kritik | ✅ F8 — ilerleme + merdiven düzeltmesi |
 | R31 | Çoklu sevkiyat turu düşürüyor | 🔴 Kritik | ✅ F8 — kapasite izleme |
 | R32 | Dünya talebi oyuncu tabanıyla ölçeklenmiyor | 🔴 Kritik | ⏳ F8 — mekanizma kuruldu, varsayılan kapalı |
-| R33 | Giriş yolu tek ürüne bağlı ve o ürün kıt | 🔴 Kritik | ⏳ F8 — ölçüldü, tasarım kararı bekliyor |
+| R33 | Giriş yolu tek ürüne bağlı ve o ürün kıt | 🔴 Kritik | ✅ F8 — bahçe kilidi Lv2 + dünya dengesi |
+| R34 | Perakende marjı yapısal olarak sıfır | 🔴 Kritik | ✅ F8 — `retailMarkup` |
+| R35 | Tohum dünyası perakende ağırlıklı | 🟠 Yüksek | ✅ F8 — üretim ağırlıklı plan |

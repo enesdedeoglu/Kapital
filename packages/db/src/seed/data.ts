@@ -91,7 +91,7 @@ export const facilityTypes = [
   { id: 1,  code: 'GREENGROCER', name: 'Manav',            category: 'RETAIL',      cost: 8_000, capacity: 0, maintenance: upkeep(8_000), storage: 2_000,  ticks: 1, unlock: 1,  port: false },
   { id: 2,  code: 'KIOSK',       name: 'Büfe',             category: 'RETAIL',      cost: 8_000, capacity: 0, maintenance: upkeep(8_000), storage: 1_500,  ticks: 1, unlock: 1,  port: false },
   { id: 3,  code: 'MARKET',      name: 'Market',           category: 'RETAIL',      cost: 35_000, capacity: 0, maintenance: upkeep(35_000), storage: 8_000,  ticks: 4, unlock: 2,  port: false },
-  { id: 4,  code: 'VEG_GARDEN',  name: 'Sebze Bahçesi',    category: 'AGRICULTURE', cost: 20_000, capacity: 18, maintenance: upkeep(20_000), storage: 4_000,  ticks: 6, unlock: 4,  port: false },
+  { id: 4,  code: 'VEG_GARDEN',  name: 'Sebze Bahçesi',    category: 'AGRICULTURE', cost: 20_000, capacity: 18, maintenance: upkeep(20_000), storage: 4_000,  ticks: 6, unlock: 2,  port: false },
   { id: 5,  code: 'WHEAT_FIELD', name: 'Buğday Tarlası',   category: 'AGRICULTURE', cost: 25_000, capacity: 30, maintenance: upkeep(25_000), storage: 6_000,  ticks: 8, unlock: 5,  port: false },
   { id: 6,  code: 'MILL',        name: 'Değirmen',         category: 'INDUSTRY',    cost: 45_000, capacity: 22, maintenance: upkeep(45_000), storage: 6_000,  ticks: 8, unlock: 6,  port: false },
   { id: 7,  code: 'BAKERY',      name: 'Fırın',            category: 'INDUSTRY',    cost: 30_000, capacity: 40, maintenance: upkeep(30_000), storage: 3_000,  ticks: 6, unlock: 6,  port: false },
@@ -116,7 +116,9 @@ export const recipes: {
   cycleTicks: number; labor: number; energy: number; unlock: number;
   inputs: { code: string; qty: number; minQuality?: number }[];
 }[] = [
-  { facilityCode: 'VEG_GARDEN',  outputCode: 'TOMATO',    outputQty: 1, cycleTicks: 1, labor: 8,   energy: 3,  unlock: 4,  inputs: [] },
+  // ★ Kilit Lv4 → Lv2 (F8, R33). Tesis tipi VE reçete birlikte düşer: yalnız
+  // birini indirmek, kurulabilen ama üretemeyen bir tesis bırakırdı.
+  { facilityCode: 'VEG_GARDEN',  outputCode: 'TOMATO',    outputQty: 1, cycleTicks: 1, labor: 8,   energy: 3,  unlock: 2,  inputs: [] },
   { facilityCode: 'WHEAT_FIELD', outputCode: 'WHEAT',     outputQty: 1, cycleTicks: 1, labor: 4,   energy: 2,  unlock: 5,  inputs: [] },
   { facilityCode: 'TOBACCO_FARM',outputCode: 'TOBACCO',   outputQty: 1, cycleTicks: 1, labor: 15,  energy: 7,  unlock: 7,  inputs: [] },
   { facilityCode: 'IRON_MINE',   outputCode: 'IRON',      outputQty: 1, cycleTicks: 1, labor: 11,  energy: 7,  unlock: 13, inputs: [] },
@@ -168,9 +170,10 @@ export const loanTerms = [
 export const companyLevels = [
   { level: 1,  xp: 0,       value: 0,         volume: 0,        units: 0,     products: 0, title: 'Esnaf' },
   // Lv2–4 perakendeyle çıkılır: onboarding zinciri de üretim içermez (docs/08).
-  { level: 2,  xp: 700,     value: 45_000,    volume: 15_000,   units: 0,     products: 0, title: 'Dükkân Sahibi' },
+  { level: 2,  xp: 700,     value: 45_000,    volume: 15_000,   units: 0,     products: 0, title: 'Bahçe Sahibi' },
   { level: 3,  xp: 2_000,   value: 80_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
-  { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 0, title: 'Bahçe Sahibi' },
+  // Sebze Bahçesi artık Lv2'de açılıyor (R33); başlık Lv2'ye taşındı.
+  { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },
   // Lv4'te Sebze Bahçesi açıldı: artık üretim şartı konabilir.
   { level: 5,  xp: 9_000,   value: 240_000,   volume: 320_000,  units: 500,   products: 1, title: 'Çiftçi' },
   { level: 6,  xp: 17_000,  value: 400_000,   volume: 620_000,  units: 2_000, products: 2, title: 'Değirmenci' },
@@ -202,7 +205,11 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   // kalibrasyon koludur; `sweep.ts` ile taranır.
   { key: 'economy.demandScale', value: { baseMultiplier: 1, baselineCompanies: 65,
                                          elasticity: 0.85, max: 20 } },
-  { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12 } },
+  // ★ `retailMarkup`: raf fiyatının toptan referansa oranı — perakendecinin
+  // kendi giderlerinin (bakım, fire, raf) karşılığı. Bu olmadan raf fiyatı
+  // toptan seviyesine çöküyor ve perakende katmanı YAPISAL olarak zarar
+  // ediyordu; F8'de ölçüldü: brüt marj %2,4, NPC net −53.288 ₺/96 tur.
+  { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12, retailMarkup: 1.35 } },
   { key: 'economy.pricing',  value: { emaAlpha: 0.25, trimLowPct: 0.10, trimHighPct: 0.90, shockClampPct: 0.15, referenceWindowTicks: 96 } },
   { key: 'economy.shipping', value: { baseRatePerKgDistance: money(0.35).toString() } },
   { key: 'economy.fx',       value: { rate0: FX_RATE_0, alpha: 0.05, tradeBalanceK: 0.02, spreadPct: 0.015, clampPerTick: 0.005, clampPerDay: 0.03, unlockLevel: 7 } },

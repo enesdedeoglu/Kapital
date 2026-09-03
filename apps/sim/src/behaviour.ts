@@ -71,6 +71,12 @@ export interface DecisionContext {
   readonly freight: (cityId: number, productId: number) => Money;
   /** Ürün → rakiplerin ortalama raf fiyatı. Fiyat konumlanması buna göre. */
   readonly marketPrices: ReadonlyMap<number, bigint>;
+  /**
+   * Raf fiyatının toptan referansa oranı (`economy.retail.retailMarkup`).
+   * Perakendeci toptan referansa göre fiyatlarsa marjı sıfırlanır: o referans
+   * onun için bir MALİYET çıpasıdır, fiyat çıpası değil.
+   */
+  readonly retailMarkup: number;
 }
 
 /** Karar girdileri — tek turda tek sorgu seti. */
@@ -107,9 +113,13 @@ export async function loadDecisionContext(
     SELECT product_id, AVG(selling_price)::bigint AS price
       FROM retail_offers WHERE enabled GROUP BY 1`;
   const marketPrices = new Map(shelfRows.map((r) => [r.product_id, r.price]));
+  const [retailCfg] = await sql<{ value: { retailMarkup?: number } }[]>`
+    SELECT value FROM game_configs WHERE key = 'economy.retail'
+     ORDER BY version DESC LIMIT 1`;
+  const retailMarkup = retailCfg?.value?.retailMarkup ?? 1.35;
   return {
     references, retailProducts, recipeInputs, buildable, recipeByFacilityType,
-    freight, marketPrices,
+    freight, marketPrices, retailMarkup,
   } satisfies DecisionContext;
 }
 
@@ -231,7 +241,10 @@ export async function actPlayer(
           productCode: s.product_code,
           sellingPrice: toNumber(retailPrice(
             profile, asMoney(s.unit_cost),
-            asMoney(ctx.references.get(s.product_id) ?? s.unit_cost),
+            // Perakende çıpası: toptan referansın markup katı, toptanın kendisi değil.
+            asMoney(BigInt(Math.round(
+              Number(ctx.references.get(s.product_id) ?? s.unit_cost) * ctx.retailMarkup,
+            ))),
             asMoney(ctx.marketPrices.get(s.product_id) ?? 0n),
           )),
           enabled: true,
