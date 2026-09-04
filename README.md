@@ -228,7 +228,10 @@ pnpm --filter @kapital/engine exec tsx src/cli/scenario-shock.ts TOMATO 40 60 60
 | **Gerçek servis yollarını kullanır** — kural kopyalanmaz | ✅ |
 | 12 metriklik geçiş kapısı raporu (madde 56) | ✅ |
 | Parametre tarama (`sweep.ts`) | ✅ |
-| **Denge kapısı geçildi mi** | ❌ henüz |
+| Kıtlıkta adil dağıtım (R40) — kazanan hepsini almasın | ✅ |
+| Kalıcı emirler (R41) — oyuncu yokken şirketi çalışsın | ✅ |
+| Dünya olayları — kuraklık, bayram, enerji krizi | ✅ |
+| **Denge kapısı** | **9/12** (5 tohum) |
 
 Simüle edilen oyuncu, gerçek oyuncunun geçtiği kod yolundan geçer
 (`@kapital/api/services`): aynı doğrulamalar, aynı seviye kilitleri, aynı nakit

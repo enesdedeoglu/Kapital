@@ -1144,8 +1144,31 @@ oyuncu koyar; gizli sübvansiyon yoktur:
 | Lv3+ oyuncu | 17 | **10** (ama Lv2'de 30) |
 | Geçen metrik | 9/12 | **9/12** |
 
-183 kural kuruldu, 154'ü çalıştı. `day1_growth` takılı üç metrikten biriydi ve
-hedefe girdi.
+183 kural kuruldu, 154'ü çalıştı.
+
+### Çok tohumlu doğrulama: 7/12 → **9/12**
+
+Aynı beş tohum, 134 dakika. Bu sefer tek koşunun sonucu doğrulandı:
+
+| Metrik | Adil dağıtım | + Kalıcı emir | |
+|---|---|---|---|
+| İlk gün büyümesi | %4,6 · 0/5 | **%15,5 · 5/5** | ▲ |
+| Kur değişimi | %28,8 · 1/5 | **%17,7 · 4/5** | ▲ |
+| Fiyat hareketi | %11,5 · 4/5 | **%7,4 · 5/5** | ▲ |
+| NPC üretim payı | %53,8 · 1/5 | %65,0 · 2/5 | ▲ |
+| 1. hafta medyanı | 38.103 ₺ | 40.261 ₺ | → |
+| Arz/talep bandı | 3/10 · 0/5 | 2/10 · 0/5 | → |
+
+`day1_growth` yalnız geçmedi, **kararlı** da geçti: beş tohumun beşinde,
+yayılma 0,97×–1,08×. Kalıcı emir olmayan bir dünyada oyuncunun ilk günü
+giriş sıklığına bağlıydı; artık değil.
+
+★ **NPC payı medyanı %65 ile bandın İÇİNDE ama yalnız 2/5 tohumda tutuyor.**
+Kapının iki koşullu kuralı tam da bunu yakalamak için: medyan geçiyor, çoğunluk
+geçmiyor → metrik geçmez. Tohum bazında %36,5'ten %89,1'e savruluyor; bu,
+oyuncuların üretime ne kadar geçtiğinin dünya olaylarına bağlı olması demek.
+Eşiğin kendisi "launch NPC payı" için yazılmış; oyunun ilerleyen evresinde
+oyuncuların üretimi devralması zaten madde 31'in amacı.
 
 ---
 

@@ -352,6 +352,19 @@ kazanç gerçek ama medyanda değil dağılımda — 1. hafta p75 98.055 → 147
 p90 151.865 → 206.826 ₺, ikisi de hedef bandın içinde. Çok tohumlu kapının
 kurulma sebebi tam olarak buydu.
 
+### Çok tohumlu kapı: **9/12** (5 × 60 × 700, 134 dk)
+
+| Geçen | Kalan |
+|---|---|
+| fiyat hareketi · **ilk gün büyümesi** · para arzı · iflas oranı · kredi payı · **kur** · dış ticaret payı · bant yapışması · tur süresi | arz/talep bandı · NPC payı · 1. hafta medyanı |
+
+Adil dağıtım (R40) ve kalıcı emirler (R41) kapıyı 7/12'den 9/12'ye taşıdı.
+`day1_growth` %4,6 → %15,5 ve beş tohumun beşinde tutuyor (yayılma
+0,97×–1,08×) — oyuncunun ilk günü artık giriş sıklığına bağlı değil.
+
+NPC payının medyanı %65 ile bandın içinde ama yalnız 2/5 tohumda tutuyor:
+kapının "medyan VE çoğunluk" kuralı bunu yakalıyor.
+
 ### İlk çok tohumlu koşu (5 × 60 × 700, 118 dk): **7/12**
 
 Geçenler: fiyat hareketi · para arzı · iflas oranı · kredi payı · dış ticaret
