@@ -1073,7 +1073,35 @@ dağıtmak, 10 alıcıya 10'ar birim vermekten kötüdür.
 | 1. hafta medyanı | 30.507 ₺ | **44.680 ₺** |
 | Geçen metrik | 7/12 | **9/12** |
 
-Kalan üç metrik: arz/talep bandı, ilk gün büyümesi (%6,0), 1. hafta medyanı.
+### Çok tohumlu doğrulama — tek koşu yine iyimser çıktı
+
+Tek koşuda 9/12 görünmüştü. **Aynı beş tohumla koşulan kapı yine 7/12 verdi.**
+Çok tohumlu kapının kurulma sebebi tam olarak buydu.
+
+| Metrik | Önce (medyan · tutan) | Sonra |
+|---|---|---|
+| Arz/talep bandı | 1/10 · 0/5 | **3/10** · 0/5 |
+| Fiyat hareketi | %12,7 · 3/5 | %11,5 · **4/5** ▲ |
+| NPC üretim payı | %56,3 · 2/5 | %53,8 · **1/5** ▼ |
+| İlk gün büyümesi | %2,6 · 0/5 | **%4,6** · 0/5 |
+| 1. hafta medyanı | 30.507 ₺ | **38.103 ₺** |
+| 1. hafta p75 / p90 | 98.055 / 151.865 ₺ | **147.661 / 206.826 ₺** |
+| Kur değişimi | %30,3 · 2/5 | %28,8 · **1/5** ▼ |
+| Bant yapışması | %10,0 | **%2,8** |
+
+**Kazanç gerçek ama medyanda değil, DAĞILIMDA.** 1. hafta p75 ve p90'ı artık
+hedef bandın (100.000–250.000 ₺) rahatça içinde; beş tohumun dördünde medyan
+da yükseldi (30.042→38.103, 30.507→43.662, 30.592→47.757, 38.716→34.190).
+Medyanı hâlâ pasif kuyruk aşağı çekiyor.
+
+★ **NPC üretim payı KÖTÜLEŞTİ — ama iyi bir sebeple.** Oyuncular artık mal
+bulabildiği için üretime geçiyor ve NPC payı %53,8'e düştü; hedef %60–80.
+Yani oyuncular hedefin ÜSTÜNE çıktı. Eşiğin kendisi "launch NPC payı" için
+yazılmış (madde 56); oyuncuların ekonomiyi devralması zaten madde 31'in
+amacı. Bu, eşiğin oyunun ilerleyen aşaması için yeniden düşünülmesi gereken
+bir yer — kusur değil.
+
+Kalan üç yapısal metrik: arz/talep bandı, ilk gün büyümesi, 1. hafta medyanı.
 
 ---
 

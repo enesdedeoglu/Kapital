@@ -347,6 +347,11 @@ dağıtılıyor.
 | Lv1'i geçen oyuncu | ~19 | **32** |
 | 1. hafta medyanı | 30.507 ₺ | **44.680 ₺** |
 
+★ Bu TEK KOŞU sonucuydu (9/12). Aynı beş tohumla koşulan kapı **7/12** verdi:
+kazanç gerçek ama medyanda değil dağılımda — 1. hafta p75 98.055 → 147.661 ₺,
+p90 151.865 → 206.826 ₺, ikisi de hedef bandın içinde. Çok tohumlu kapının
+kurulma sebebi tam olarak buydu.
+
 ### İlk çok tohumlu koşu (5 × 60 × 700, 118 dk): **7/12**
 
 Geçenler: fiyat hareketi · para arzı · iflas oranı · kredi payı · dış ticaret
