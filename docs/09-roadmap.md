@@ -336,7 +336,20 @@ tek başına durumu KÖTÜLEŞTİRDİĞİNİ gösterdi:
 
 Üretim kapasitesi sabitken talebi büyütmek yalnız kıtlığı derinleştiriyor.
 
-### Kapının önündeki asıl engel (R33)
+### Kalibrasyon turları — nereye gelindi
+
+| Yapılandırma | Geçen metrik |
+|---|---|
+| Başlangıç | 6 / 12 |
+| + perakende marjı (R34) + üretim ağırlıklı dünya (R35) | 6 / 12 |
+| + Lv2 duvarı 34.000 ₺ (R36 ön adımı) | 7 / 12 |
+| **+ talep ×3** | **8 / 12** |
+
+Kalan dört metrik (week1_value, npc_share, supply_demand, volatility) tek bir
+sayıdan çıkıyor: **tesis geri ödeme süresi 36 gün**, hedefin gerektirdiği ~4
+güne karşı. Ayrıntı ve seçenekler: docs/10 **R36**.
+
+### Önceki engel (R33) — çözüldü
 
 Seviye 1'de bir oyuncu yalnız **domates** ticareti yapabilir; diğer perakende
 ürünlerinin kilidi Lv6, Lv8 ve Lv12'de. Tüm yeni oyuncu nüfusu tek bir ürünün

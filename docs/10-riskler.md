@@ -818,6 +818,60 @@ arketipleri 36 → 26. Sonuç: 5 → **13 sebze bahçesi**, tarım 26 tesis.
 
 ---
 
+## R36 — Tesis geri ödeme süresi büyüme hedefiyle ~9 kat tutarsız
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 kalibrasyon koşuları · **Durum:** ⏳ ölçüldü, TASARIM KARARI bekliyor
+
+Kapıda kalan dört metriğin (week1_value, npc_share, supply_demand, volatility)
+dördü de tek bir sayıdan çıkıyor: **bir tesis kendini kaç günde amorti ediyor.**
+
+Ölçüm (60 oyuncu, 700 tur, Lv2 duvarı 34.000, talep ×3):
+
+| Ölçüt | Değer |
+|---|---|
+| Oyuncu tesisi | 84 |
+| Ortalama kurulum maliyeti | 8.000 ₺ |
+| Tesis başına günlük net kâr | 221,8 ₺ |
+| **Geri ödeme süresi** | **36 gün** |
+
+Madde 56'nın hedefi (30.000 → 100.000–250.000 ₺, 7 gün) bileşik %19–35/gün
+büyüme demektir; bu da yaklaşık **4 günlük** geri ödeme gerektirir. Aradaki
+fark ~9 kat.
+
+Zincirleme sonuçlar:
+- Oyuncu ikinci tesisi 36 günde açabildiği için **ölçek büyütemiyor**
+  → medyan şirket değeri 30.000'de sabit.
+- Ölçek büyütemediği için **üretime geçemiyor** → NPC üretim payı %100.
+- Üretim NPC'de kaldığı için arz talebe yetişemiyor → **supply/demand bandı
+  tutmuyor**.
+- Fiyatlar NPC bantları içinde kaldığı için **volatilite %0,1** (hedef %5–15):
+  piyasa çok sakin, çünkü içinde rekabet eden oyuncu yok.
+
+**Bu bir mühendislik kusuru değil, bir kalibrasyon çelişkisidir.** İki sayı
+birbirine bakmadan yazılmış: tesis maliyeti/kapasitesi (madde 12) ve büyüme
+hedefi (madde 56).
+
+**Seçenekler:**
+
+1. **Tesis ekonomisini güçlendir** — kapasite artır, kurulum maliyetini düşür
+   veya bakımı azalt. Geri ödeme 36 → ~4 güne inmeli. Oyunun büyüme hissi
+   spec'teki gibi kalır; ekonomi hızlanır, enflasyon baskısı artar.
+2. **Büyüme hedefini ekonomiye uydur** — 1. hafta hedefini 45.000–80.000 ₺'ye
+   çek. Daha yavaş, daha "gerçekçi" bir eğri; mobil oyun alışkanlıklarına
+   göre yavaş kalabilir.
+3. **Karma** — tesis ekonomisini 3–4 kat güçlendir, hedefi de bir miktar
+   indir. İkisi ortada buluşur.
+
+**En iyi bilinen yapılandırma (8/12 metrik geçiyor):** Lv2 şartı 34.000 ₺,
+`economy.demandScale.baseMultiplier` 3. Geçenler: ilk gün büyümesi %17,8 ·
+para arzı %32,1 · iflas %0 · kredi payı %0 · kur %15,4 · dış ticaret payı %0 ·
+bant yapışması %3,8 · tur p95 3,80 sn.
+
+---
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -857,3 +911,4 @@ arketipleri 36 → 26. Sonuç: 5 → **13 sebze bahçesi**, tarım 26 tesis.
 | R33 | Giriş yolu tek ürüne bağlı ve o ürün kıt | 🔴 Kritik | ✅ F8 — bahçe kilidi Lv2 + dünya dengesi |
 | R34 | Perakende marjı yapısal olarak sıfır | 🔴 Kritik | ✅ F8 — `retailMarkup` |
 | R35 | Tohum dünyası perakende ağırlıklı | 🟠 Yüksek | ✅ F8 — üretim ağırlıklı plan |
+| R36 | Tesis geri ödemesi büyüme hedefiyle ~9 kat tutarsız | 🔴 Kritik | ⏳ F8 — tasarım kararı bekliyor |

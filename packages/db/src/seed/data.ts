@@ -169,8 +169,23 @@ export const loanTerms = [
  */
 export const companyLevels = [
   { level: 1,  xp: 0,       value: 0,         volume: 0,        units: 0,     products: 0, title: 'Esnaf' },
-  // Lv2–4 perakendeyle çıkılır: onboarding zinciri de üretim içermez (docs/08).
-  { level: 2,  xp: 700,     value: 45_000,    volume: 15_000,   units: 0,     products: 0, title: 'Bahçe Sahibi' },
+  /*
+   * ★ Lv2 İLK GÜN İÇİNDE ULAŞILABİLİR OLMALI.
+   *
+   * Onboarding zinciri (docs/08) 7 adımda 700 XP verir ve oyuncuyu Lv2'ye
+   * çıkarmayı hedefler: şehir seç → manav aç → 200 kg domates al → fiyat koy →
+   * ilk satış → ilk kâr raporu. Ama şart 45.000 ₺ şirket değeriydi — 30.000 ₺
+   * başlangıçtan **%50 büyüme**. Tek oturumda imkânsız.
+   *
+   * F8'de ölçüldü: 60 oyuncunun 57'si 700 tur (7,3 gün) boyunca Lv1'de kaldı.
+   * Duvarı geçen 3 oyuncu bahçe kurdu, kendi arzını üretti, marjı sıçradı ve
+   * 154.000–357.000 ₺'ye çıktı. Yani ilerleme bir EŞİK ETKİSİ: geçen uçuyor,
+   * geçemeyen sıkışıyor. Duvarın kendisi tasarımda yoktu, kazara oluşmuştu.
+   *
+   * Şartlar ilk günün gerçek getirisine indirildi. Sonraki basamaklar aynı
+   * kaldı: asıl mesele merdivenin İLK basamağıydı.
+   */
+  { level: 2,  xp: 700,     value: 34_000,    volume: 6_000,    units: 0,     products: 0, title: 'Bahçe Sahibi' },
   { level: 3,  xp: 2_000,   value: 80_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
   // Sebze Bahçesi artık Lv2'de açılıyor (R33); başlık Lv2'ye taşındı.
   { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },

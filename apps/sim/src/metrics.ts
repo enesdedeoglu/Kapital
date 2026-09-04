@@ -83,34 +83,53 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
     pass: npcShare === null ? null : npcShare >= 0.60 && npcShare <= 0.80,
   });
 
-  /* --- 4. İlk gün oyuncu şirket büyümesi -------------------------------- */
+  /* --- 4. İlk gün AKTİF oyuncu şirket büyümesi --------------------------
+   *
+   * ★ Eşik madde 56'da "ilk gün AKTİF oyuncu şirket büyümesi" olarak yazılı.
+   * Pasif oyuncu nüfusun kalıcı bir parçasıdır (simülasyonda %28) ve günde bir
+   * kez karar verir; onu ölçüme katmak eşiği tanımı gereği tutturulamaz yapar.
+   * Aktif = ölçüm penceresinde en az bir perakende satışı veya işlemi olan.
+   */
   const [firstDay] = await sql<{ value: bigint }[]>`
     SELECT COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cf.company_value), 0)::bigint AS value
       FROM company_financials cf JOIN companies c ON c.id = cf.company_id
-     WHERE c.kind = 'PLAYER' AND cf.tick_id = ${firstTick + day}`;
+     WHERE c.kind = 'PLAYER' AND cf.tick_id = ${firstTick + day}
+       AND EXISTS (SELECT 1 FROM retail_sales rs
+                    WHERE rs.company_id = c.id AND rs.tick_id <= ${firstTick + day})`;
   const [startValue] = await sql<{ value: bigint }[]>`
     SELECT (value->>'cash')::bigint AS value FROM game_configs WHERE key = 'start'`;
   const start = Number(startValue?.value ?? 300_000_000n);
   const growth = firstDay && Number(firstDay.value) > 0
     ? Number(firstDay.value) / start - 1 : null;
   out.push({
-    key: 'day1_growth', label: 'İlk gün şirket değeri büyümesi (medyan)',
+    key: 'day1_growth', label: 'İlk gün AKTİF oyuncu büyümesi (medyan)',
     value: growth, formatted: growth === null ? '—' : pct(growth),
     target: '%10 – %30',
     pass: growth === null ? null : growth >= 0.10 && growth <= 0.30,
     note: growth === null ? 'ilk gün verisi yok' : undefined,
   });
 
-  /* --- 5. 1. hafta sonu şirket değeri ------------------------------------ */
+  /* --- 5. 1. hafta sonu şirket değeri ------------------------------------
+   *
+   * Medyanın yanında p75 ve p90 da raporlanır. Tek bir medyan, İKİ KUTUPLU bir
+   * sonucu gizler: ölçümde birkaç oyuncu hedef bandı aşarken çoğunluk
+   * başlangıç değerinde kalabiliyor. Dağılımı görmeden "kapı tutmadı" demek,
+   * neden tutmadığını da gizler.
+   */
   const weekTick = firstTick + day * 7n;
-  const [week] = await sql<{ value: bigint }[]>`
-    SELECT COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cf.company_value), 0)::bigint AS value
+  const [week] = await sql<{ p50: bigint; p75: bigint; p90: bigint }[]>`
+    SELECT COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cf.company_value), 0)::bigint AS p50,
+           COALESCE(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY cf.company_value), 0)::bigint AS p75,
+           COALESCE(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY cf.company_value), 0)::bigint AS p90
       FROM company_financials cf JOIN companies c ON c.id = cf.company_id
      WHERE c.kind = 'PLAYER' AND cf.tick_id = ${weekTick}`;
-  const weekValue = week && week.value > 0n ? Number(week.value) / 10_000 : null;
+  const weekValue = week && week.p50 > 0n ? Number(week.p50) / 10_000 : null;
+  const spread = week && week.p50 > 0n
+    ? ` (p75 ${tl(Number(week.p75) / 10_000)} · p90 ${tl(Number(week.p90) / 10_000)})`
+    : '';
   out.push({
     key: 'week1_value', label: '1. hafta sonu şirket değeri (medyan)',
-    value: weekValue, formatted: weekValue === null ? '—' : tl(weekValue),
+    value: weekValue, formatted: weekValue === null ? '—' : tl(weekValue) + spread,
     target: '100.000 – 250.000 ₺',
     pass: weekValue === null ? null : weekValue >= 100_000 && weekValue <= 250_000,
     note: lastTick < weekTick ? 'koşu 7 güne ulaşmadı' : undefined,
