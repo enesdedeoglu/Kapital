@@ -46,7 +46,7 @@ export async function runProgression(sql: Sql, tick: EngineTick): Promise<Progre
     retail: bigint; trade: bigint; produced: bigint; built: number;
     company_value: bigint; total_trade: bigint; total_produced: bigint; distinct_products: number;
   }[]>`
-    SELECT c.id AS company_id, c.level, s.experience,
+    SELECT c.id AS company_id, c.level, c.experience,
            COALESCE(r.revenue, 0)::bigint AS retail,
            COALESCE(t.volume, 0)::bigint AS trade,
            COALESCE(p.produced, 0)::bigint AS produced,
@@ -103,10 +103,12 @@ export async function runProgression(sql: Sql, tick: EngineTick): Promise<Progre
       // ★ `distinct_products_produced`, `total_retail_revenue` ve
       //   `peak_company_value` F8'e kadar hiç güncellenmiyordu; ilki bir
       //   seviye şartı, diğerleri şirket ekranının kaynağı.
+      // ★ Deneyim `companies`te: seviye orada ve şirket ekranı oradan okuyor.
+      await sql`UPDATE companies SET experience = ${experience}
+                 WHERE id = ${row.company_id}::uuid`;
       await sql`
         UPDATE company_stats
-           SET experience = ${experience},
-               distinct_products_produced = ${row.distinct_products},
+           SET distinct_products_produced = ${row.distinct_products},
                total_retail_revenue = total_retail_revenue + ${row.retail},
                peak_company_value = GREATEST(peak_company_value, ${row.company_value}),
                distinct_cities = (SELECT COUNT(DISTINCT city_id) FROM facilities

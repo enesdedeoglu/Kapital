@@ -54,6 +54,7 @@ const line = '─'.repeat(78);
 console.log(`\n${line}`);
 console.log(`${ticks} tur · ${((Date.now() - started) / 1000).toFixed(1)} sn`);
 console.log(`  oyuncu eylemleri: ${result.counters.retailPrices} fiyat · ` +
+  `${result.counters.standingRules} kalıcı emir · ` +
   `${result.counters.buyOrders} alış · ${result.counters.sellOrders} satış · ` +
   `${result.counters.builds} tesis (${result.counters.recipes} reçete) · ` +
   `${result.counters.loans} kredi · ${result.counters.errors} reddedildi`);

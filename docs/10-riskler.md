@@ -1108,6 +1108,70 @@ Kalan üç yapısal metrik: arz/talep bandı, ilk gün büyümesi, 1. hafta medy
 
 ---
 
+## R41 — Çevrimdışı oyuncu geriliyordu: ekonomi devam ediyor, oyuncu edemiyor
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 · **Durum:** ✅ çözüldü (kalıcı emirler)
+
+docs/00'ın 3. ilkesi "oyuncu offline'ken ekonomi devam eder" diyor. Motor
+gerçekten devam ediyordu — ama oyuncuya offline'ken **katılma yolu**
+verilmemişti. Girmeyen oyuncunun rafı boşalıyor, satışı duruyor, bakımı
+işlemeye devam ediyordu. Ekonomi ilerlerken oyuncu geriliyordu.
+
+Ölçüldü (5 tohum): medyan şirket değeri 38.103 ₺, p75 147.661 ₺. Aradaki farkı
+yaratan yetenek değil, **giriş sıklığı**.
+
+Spec'in cevabı çalışan sistemi (madde 38) ama o F11'e ertelendi (docs/11 B2).
+Bu ertelemenin maliyeti göründüğünden büyüktü: onsuz oyunun temel vaadi
+("ekonomi siz yokken de yaşar") oyuncu için bir tehdide dönüşüyordu.
+
+**Çözüm:** `standing_orders` — oyuncu kuralı tanımlar, motor uygular.
+
+★ Bu bir OTOMASYON değil, DELEGE EDİLMİŞ KARARdır. Hedefi ve fiyat sınırını
+oyuncu koyar; gizli sübvansiyon yoktur:
+- nakit yetmezse miktar kısılır, yetmiyorsa alım olmaz
+- seviye kilidi burada da geçerli — kapalı ürün açılmaz
+- maliyetin altına satılmaz
+- aynı şirketin iki kuralı aynı parayı iki kez harcayamaz
+- emirler elle verilenle aynı yoldan geçer, aynı tayına (R40) tabidir
+
+**Etki (60 oyuncu, 700 tur):**
+
+| | Önce | Sonra |
+|---|---|---|
+| **İlk gün aktif oyuncu büyümesi** | %6,0 ✗ | **%15,6 ✓** |
+| Fiyat hareketi | %5,0 | %7,9 ✓ |
+| Lv1'de kalan oyuncu | 28 | **20** |
+| Lv3+ oyuncu | 17 | **10** (ama Lv2'de 30) |
+| Geçen metrik | 9/12 | **9/12** |
+
+183 kural kuruldu, 154'ü çalıştı. `day1_growth` takılı üç metrikten biriydi ve
+hedefe girdi.
+
+---
+
+## R42 — İki ölü alan: başlangıç tesisi kurulmuyor, deneyim iki yerde
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F8 kalıcı emir testleri · **Durum:** ✅ çözüldü
+
+Kalıcı emir uçlarını test ederken iki bağımsız kusur çıktı:
+
+**(a) `CompanyService.create` başlangıç tesisini kurmuyordu.** `facilityTypeCode`
+alınıyor, `start.facilityChoices`e karşı doğrulanıyor ve ATILIYORDU. Madde 4
+"İlk tesis: Manav | Büfe (seçmeli)" diyor ve başlangıç durumunun parçası sayıyor;
+oyuncu ise tesissiz kuruluyordu. Kurulum maliyeti alınmaz: bu tesis başlangıç
+sermayesinin parçasıdır, satın alınan bir yatırım değil.
+
+**(b) `experience` hem `companies` hem `company_stats` tablosundaydı.** Şirket
+ekranı `companies.experience`'ı OKUYOR ama oraya hiçbir yerde yazılmıyordu;
+F8'de eklenen ilerleme `company_stats.experience`'a yazıyordu. Seviye doğru
+ilerliyor, oyuncu XP'sini hep 0 görüyordu. Kolonu ekleyen ben olduğum için
+(0013) taşımak da bana düştü: tek kaynak `companies.experience` (seviye orada).
+
+---
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -1152,3 +1216,5 @@ Kalan üç yapısal metrik: arz/talep bandı, ilk gün büyümesi, 1. hafta medy
 | R38 | Volatilite ölçütü kendi tasarımıyla çelişiyor | 🟡 Orta | ✅ F8 — haftalık aralığa taşındı |
 | R39 | Rastgele dünya tek koşuluk kapıyı güvenilmez kılıyor | 🟡 Orta | ✅ çok tohumlu kapı (`gate.ts`) |
 | R40 | Kıtlıkta kazanan hepsini alıyor | 🔴 Kritik | ✅ F8 — `scarcityRation` |
+| R41 | Çevrimdışı oyuncu geriliyor | 🔴 Kritik | ✅ F8 — kalıcı emirler |
+| R42 | Başlangıç tesisi kurulmuyor · deneyim iki yerde | 🟠 Yüksek | ✅ F8 |

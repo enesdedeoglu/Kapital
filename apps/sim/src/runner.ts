@@ -39,9 +39,11 @@ export async function runSimulation(
 ): Promise<RunResult> {
   const services = makeServices(sql);
   const counters: ActionCounters = {
-    retailPrices: 0, buyOrders: 0, sellOrders: 0, builds: 0, recipes: 0,
-    loans: 0, errors: 0, errorsByCode: new Map(),
+    retailPrices: 0, standingRules: 0, buyOrders: 0, sellOrders: 0, builds: 0,
+    recipes: 0, loans: 0, errors: 0, errorsByCode: new Map(),
   };
+  // Kurulmuş kalıcı emirler — her turda yeniden kurulmaya çalışılmasın.
+  const standingSet = new Set<string>();
   const samples: TickSample[] = [];
   let firstTick = 0n;
 
@@ -76,6 +78,7 @@ export async function runSimulation(
         await actPlayer(
           services, player, ctx, playerState,
           facilitiesByCompany.get(player.companyId) ?? [], stockByInventory, counters,
+          standingSet,
         );
       }
     }

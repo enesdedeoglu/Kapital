@@ -9,7 +9,9 @@
  * atmak turu dakikalara çıkarırdı. Kararın girdisi tek sorguda toplanır,
  * eylem tek tek servisten geçer.
  */
-import { FacilityService, LoanService, OrderService, RetailService } from '@kapital/api/services';
+import {
+  FacilityService, LoanService, OrderService, RetailService, StandingService,
+} from '@kapital/api/services';
 import type { Sql } from '@kapital/db';
 import { representativeDistance, shippingPerUnit } from '@kapital/economy';
 import { asMoney, type Money } from '@kapital/shared';
@@ -50,6 +52,7 @@ export interface StockState {
 
 export interface ActionCounters {
   retailPrices: number;
+  standingRules: number;
   buyOrders: number;
   sellOrders: number;
   builds: number;
@@ -205,6 +208,7 @@ interface Services {
   orders: OrderService;
   retail: RetailService;
   loans: LoanService;
+  standing: StandingService;
 }
 
 export function makeServices(sql: Sql): Services {
@@ -213,6 +217,7 @@ export function makeServices(sql: Sql): Services {
     orders: new OrderService(sql),
     retail: new RetailService(sql),
     loans: new LoanService(sql),
+    standing: new StandingService(sql),
   };
 }
 
@@ -226,7 +231,7 @@ export function makeServices(sql: Sql): Services {
 export async function actPlayer(
   services: Services, player: SimPlayer, ctx: DecisionContext,
   state: PlayerState, facilities: FacilityState[], stockByInventory: Map<string, StockState[]>,
-  counters: ActionCounters,
+  counters: ActionCounters, standingSet: Set<string>,
 ): Promise<void> {
   const { profile } = player;
 
@@ -252,6 +257,35 @@ export async function actPlayer(
       if (prices.length > 0) {
         await attempt(counters, () => services.retail.setPrices(player.userId, facility.facility_id, { prices }));
         counters.retailPrices += prices.length;
+      }
+
+      /*
+       * ★ KALICI EMİR — oyuncu girmediği turlarda da rafı dolsun.
+       *
+       * Gerçek oyuncu her 15 dakikada bir giremez; pasif profil günde bir
+       * karar veriyor ve rafı boşalınca bakım ödemeye devam ediyordu. Kuralı
+       * bir kez kurmak, sonraki her turda motorun onun yerine alım yapması
+       * demek — oyuncunun kendi koyduğu hedef ve fiyat sınırıyla.
+       */
+      for (const product of ctx.retailProducts) {
+        if (!standingSet.has(`${facility.facility_id}:${product.id}`)) {
+          const reference = ctx.references.get(product.id);
+          if (!reference) continue;
+          const target = BigInt(profile.inventoryTargetTicks) * 40n * 1000n;
+          const ok = await attempt(counters, () => services.standing.set(player.userId, {
+            facilityId: facility.facility_id, productCode: product.code,
+            kind: 'RESTOCK', targetQuantity: Number(target) / 1000,
+            // Tavan: referansın payı + navlun. Oyuncu bunu kendi koyar.
+            maxPricePerUnit: toNumber(restockBid(
+              profile, asMoney(reference), ctx.freight(facility.city_id, product.id),
+            )),
+            enabled: true,
+          }));
+          if (ok) {
+            standingSet.add(`${facility.facility_id}:${product.id}`);
+            counters.standingRules++;
+          }
+        }
       }
 
       // Stok tamamla: rafı boşalan ürün için alış emri

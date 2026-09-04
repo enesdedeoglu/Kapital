@@ -1,6 +1,6 @@
 import {
-  bigint, doublePrecision, index, numeric, pgTable, primaryKey, smallint, text,
-  timestamp, uuid,
+  bigint, bigserial, boolean, doublePrecision, index, numeric, pgTable, primaryKey,
+  smallint, text, timestamp, uniqueIndex, uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { companyKind, companyStatus } from './enums.js';
@@ -71,4 +71,30 @@ export const companyProducts = pgTable(
     firstTick: bigint('first_tick', { mode: 'bigint' }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.companyId, t.productId] })],
+);
+
+/**
+ * Kalıcı emirler — oyuncunun önceden tanımladığı kural, motor her tur uygular.
+ *
+ * docs/00'ın 3. ilkesi "oyuncu offline'ken ekonomi devam eder" der; bu tablo
+ * oyuncunun o ekonomiye offline'ken KATILMASINI sağlar. Otomasyon değil,
+ * delege edilmiş karardır: hedefi ve fiyat sınırını oyuncu koyar.
+ */
+export const standingOrders = pgTable(
+  'standing_orders',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    companyId: uuid('company_id').notNull().references(() => companies.id, { onDelete: 'cascade' }),
+    facilityId: uuid('facility_id').notNull(),
+    productId: smallint('product_id').notNull().references(() => products.id),
+    kind: text('kind').notNull(),
+    targetQuantity: qtyCol('target_quantity').notNull(),
+    maxPrice: moneyCol('max_price'),
+    minPrice: moneyCol('min_price'),
+    enabled: boolean('enabled').notNull().default(true),
+    lastRunTick: bigint('last_run_tick', { mode: 'bigint' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('standing_orders_unique').on(t.facilityId, t.productId, t.kind)],
 );

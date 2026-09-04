@@ -54,8 +54,9 @@ export class CompanyService {
         SELECT id FROM companies WHERE system_code = 'SYS_TREASURY'`;
 
       // Başlangıç sermayesi de deftere yazılır: para arzı her kuruşu izlenebilir (I1).
+      const tickSeq = await currentTickSeq(tx);
       await transfer(tx, {
-        tickId: await currentTickSeq(tx),
+        tickId: tickSeq,
         fromCompanyId: treasury!.id,
         toCompanyId: company!.id,
         amount: startingCash,
@@ -64,6 +65,32 @@ export class CompanyService {
         refType: 'company',
         refId: company!.id,
       });
+
+      /*
+       * ★ İLK TESİS ŞİRKETLE BİRLİKTE KURULUR — madde 4: "İlk tesis:
+       * Manav | Büfe (seçmeli)".
+       *
+       * `facilityTypeCode` doğrulanıp ATILIYORDU: oyuncu seçimini yapıyor,
+       * kural kontrol ediliyor, sonra hiçbir şey olmuyordu. Şirket tesissiz
+       * kuruluyor ve oyuncu ayrıca bir tesis kurmak zorunda kalıyordu.
+       *
+       * Kurulum maliyeti ALINMAZ: bu tesis başlangıç sermayesinin bir parçası,
+       * satın alınan bir yatırım değil (madde 4'te nakit 30.000 ₺ VE ilk tesis
+       * birlikte veriliyor).
+       */
+      const [type] = await tx<{ id: number; name: string; storage_capacity: bigint }[]>`
+        SELECT id, name, storage_capacity FROM facility_types
+         WHERE code = ${dto.facilityTypeCode} AND is_active`;
+      if (!type) throw new NotFound('Tesis türü', dto.facilityTypeCode);
+
+      await tx`
+        INSERT INTO facilities (company_id, facility_type_id, city_id, name,
+                                storage_capacity, construction_complete_at_tick)
+        VALUES (${company!.id}::uuid, ${type.id}, ${city.id}, ${type.name},
+                ${type.storage_capacity}, ${tickSeq})`;
+      await tx`UPDATE company_stats SET facilities_built = 1
+                WHERE company_id = ${company!.id}::uuid`;
+
       return company!.id;
     });
 

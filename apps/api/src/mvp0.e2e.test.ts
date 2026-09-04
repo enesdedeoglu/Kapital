@@ -140,9 +140,13 @@ describe('MVP-0 — Domates Döngüsü', () => {
     expect(financials!.revenue).toBeGreaterThan(0n);
     expect(financials!.cogs).toBeGreaterThan(0n);
     // Bakım tohumda kurulum maliyetinden türetilir (%0,025/tur); sabit yazılmaz.
+    // Şirket kuruluşta bir başlangıç tesisiyle gelir (madde 4), test bir tane
+    // daha kuruyor → iki tesisin bakımı.
     const [shopType] = await sql<{ maintenance_cost: bigint }[]>`
       SELECT maintenance_cost FROM facility_types WHERE code = 'GREENGROCER'`;
-    expect(financials!.maintenance).toBe(shopType!.maintenance_cost);
+    const [{ count }] = await sql<{ count: bigint }[]>`
+      SELECT COUNT(*) AS count FROM facilities WHERE company_id = ${companyId}::uuid`;
+    expect(financials!.maintenance).toBe(shopType!.maintenance_cost * count);
     expect(financials!.net_profit).toBeGreaterThan(0n); // ★ kâr etti
     expect(financials!.company_value).toBeGreaterThan(money(15_000)); // stok + tesis dahil
 

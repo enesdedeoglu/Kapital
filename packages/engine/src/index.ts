@@ -11,6 +11,7 @@ export * from './phases/loans.js';
 export * from './phases/p5-settle.js';
 export * from './phases/wash-trade.js';
 export * from './phases/foreign-capacity.js';
+export * from './phases/standing-orders.js';
 export * from './phases/p6-govern.js';
 export * from './phases/progression.js';
 export * from './phases/p7-close.js';

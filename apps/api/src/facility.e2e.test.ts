@@ -218,9 +218,11 @@ describe('tesis kurma', () => {
     expect(res.status).toBe(422);
     expect(res.body.code).toBe('INSUFFICIENT_FUNDS');
 
+    // Şirket kuruluşta bir başlangıç tesisiyle gelir (madde 4); reddedilen
+    // kurulum ona bir şey EKLEMEMELİ.
     const [{ count }] = await sql<{ count: bigint }[]>`
       SELECT COUNT(*) AS count FROM facilities WHERE company_id = ${companyId}::uuid`;
-    expect(count).toBe(0n);
+    expect(count).toBe(1n);
     expect((await checkInvariants(sql)).ok).toBe(true);
   });
 
@@ -287,7 +289,8 @@ describe('stok görünümü', () => {
 
     const res = await call('/inventory', { token });
     expect(res.status).toBe(200);
-    expect(res.body.facilities).toHaveLength(2);
+    // Başlangıç tesisi + testin kurduğu iki tesis (madde 4)
+    expect(res.body.facilities).toHaveLength(3);
     // 500 kg × 11,60 ₺ = 5.800 ₺ maliyet değeri
     expect(res.body.totalCostValueFormatted).toBe('5.800,00 ₺');
   });

@@ -8,6 +8,7 @@ import { asMoney, asQty, qtyFromNumber, TICKS_PER_DAY, type Money } from '@kapit
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices, type ReferencePrices } from '../reference-prices.js';
 import { runDirector, type DirectorResult } from './director.js';
+import { runStandingOrders, type StandingOrderResult } from './standing-orders.js';
 
 interface NpcRow {
   company_id: string; name: string; cash: bigint;
@@ -38,6 +39,7 @@ export interface GovernPhaseResult {
   throttled: number;
   built: number;
   director: DirectorResult;
+  standing: StandingOrderResult;
 }
 
 /** Perakendede satılabilen ürünler — NPC perakendecileri bunları stoklar. */
@@ -76,6 +78,13 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   // müdahalenin etkisi bir tur sonra görünürdü.
   const director = await runDirector(sql, tick);
 
+  /*
+   * ★ Kalıcı emirler NPC kararlarından ÖNCE işlenir. Oyuncunun önceden
+   * tanımladığı kural, NPC'nin o turki kararından önce defterde yerini
+   * almalı: aksi halde oyuncu her turda NPC'nin arkasına düşerdi.
+   */
+  const standing = await runStandingOrders(sql, tick);
+
   const npcs = await sql<NpcRow[]>`
     SELECT c.id AS company_id, c.name, c.cash, c.home_city_id, p.archetype, p.target_margin,
            p.price_aggressiveness, p.inventory_target_ticks, p.cash_reserve_ratio,
@@ -84,7 +93,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
     JOIN companies c ON c.id = p.company_id AND c.kind = 'NPC' AND c.status = 'ACTIVE'`;
   if (npcs.length === 0) {
     return { npcs: 0, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-             strategicDecisions: 0, throttled: 0, built: 0, director };
+             strategicDecisions: 0, throttled: 0, built: 0, director, standing };
   }
 
   const references = await loadReferencePrices(sql, tick.seq);
@@ -101,7 +110,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const opportunities = await loadOpportunities(sql, tick);
 
   const out = { npcs: npcs.length, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-                strategicDecisions: 0, throttled: 0, built: 0, director };
+                strategicDecisions: 0, throttled: 0, built: 0, director, standing };
   const byCompany = new Map<string, NpcFacilityRow[]>();
   for (const f of facilities) {
     (byCompany.get(f.company_id) ?? byCompany.set(f.company_id, []).get(f.company_id)!).push(f);

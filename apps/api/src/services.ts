@@ -18,3 +18,4 @@ export { LoanService } from './modules/loan/loan.service.js';
 export { OrderService } from './modules/market/order.service.js';
 export { MarketService } from './modules/market/market.service.js';
 export { RetailService } from './modules/retail/retail.service.js';
+export { StandingService } from './modules/standing/standing.service.js';
