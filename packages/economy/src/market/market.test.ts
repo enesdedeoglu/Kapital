@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { asQty, money, qty, type Money } from '@kapital/shared';
 import { shippingCost, shippingPerUnit } from './shipping.js';
-import { matchBuyOrder, bookDepth, type BookOrder, type MatchCandidate } from './matching.js';
+import { matchBuyOrder, bookDepth, type BookOrder, type MatchCandidate, scarcityRation,
+} from './matching.js';
 import { valuateStock } from './valuation.js';
 import { fxConversion, foreignPrices, nextFxRate, worldPriceUsd } from './fx.js';
 
@@ -233,5 +234,60 @@ describe('kur işlemi (S4)', () => {
   it('kur dönüşümü ölçeği doğru düşürür', () => {
     const r = fxConversion(money(100), money(35), 0, 'BUY_USD');
     expect(r.tryAmount).toBe(money(3500)); // 100 $ × 35 ₺
+  });
+});
+
+describe('kıtlıkta adil dağıtım (F8)', () => {
+  const base = { buyerCount: 10, minLot: qty(10) };
+
+  it('arz talebi karşılıyorsa tayın uygulanmaz', () => {
+    expect(scarcityRation({ ...base, totalSupply: qty(1000), totalDemand: qty(800) })).toBeNull();
+    expect(scarcityRation({ ...base, totalSupply: qty(1000), totalDemand: qty(1000) })).toBeNull();
+  });
+
+  it('★ kıtlıkta alıcı başına tavan konur', () => {
+    // 1.000 birim arz, 10 alıcı → kişi başı 100
+    expect(scarcityRation({ ...base, totalSupply: qty(1000), totalDemand: qty(5000) }))
+      .toBe(qty(100));
+  });
+
+  it('★ tek alıcı varsa tayın anlamsızdır', () => {
+    expect(scarcityRation({
+      ...base, buyerCount: 1, totalSupply: qty(100), totalDemand: qty(5000),
+    })).toBeNull();
+  });
+
+  it('arz yoksa tayın yok — bölünecek bir şey de yok', () => {
+    expect(scarcityRation({ ...base, totalSupply: qty(0), totalDemand: qty(5000) })).toBeNull();
+  });
+
+  it('★ pay çok küçülürse asgari lota yükseltilir', () => {
+    // 100 birim arz, 50 alıcı → kişi başı 2. Bu kimseye yaramaz; 10'ar birim
+    // veren bir dağıtım (10 alıcıya) 2'şer birim vermekten (50 alıcıya) iyidir.
+    expect(scarcityRation({
+      ...base, buyerCount: 50, totalSupply: qty(100), totalDemand: qty(5000),
+    })).toBe(qty(10));
+  });
+
+  it('pay asgari lotun üstündeyse olduğu gibi kalır', () => {
+    expect(scarcityRation({
+      ...base, buyerCount: 4, totalSupply: qty(1000), totalDemand: qty(5000),
+    })).toBe(qty(250));
+  });
+
+  it('kıtlık derinleştikçe pay küçülür', () => {
+    const hafif = scarcityRation({ ...base, totalSupply: qty(900), totalDemand: qty(1000) })!;
+    const agir = scarcityRation({ ...base, totalSupply: qty(200), totalDemand: qty(1000) })!;
+    expect(agir).toBeLessThan(hafif);
+  });
+
+  it('★ ölçülen senaryo: 60 alıcı, arz talebin dörtte biri', () => {
+    // F8'de görülen durum. Tayın olmadan 6 alıcı %85'ini alıyordu.
+    const ration = scarcityRation({
+      totalSupply: qty(2400), totalDemand: qty(9600), buyerCount: 60, minLot: qty(10),
+    })!;
+    expect(ration).toBe(qty(40));
+    // 60 alıcı × 40 = 2.400 → arzın tamamı dağıtılabilir, kimse sıfır kalmaz.
+    expect(ration * 60n).toBe(qty(2400));
   });
 });

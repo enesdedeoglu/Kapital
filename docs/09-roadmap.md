@@ -332,6 +332,21 @@ Kararsızlık ölçüsü sayısal yayılma değil karar ayrılığıdır: `(max�
 kullanıldığında para arzı yanlışlıkla kararsız çıktı (medyan %0,1, aralık
 %−1,3…%1,4 — mutlak olarak minicik, orana göre 27 kat).
 
+### Kıtlıkta adil dağıtım (R40) — tek koşuda 7/12 → **9/12**
+
+Eşleştirme fiyat önceliğiyle çalışıyor ve en yüksek teklif doyana kadar
+doldurulyordu. Kıtlıkta 6 oyuncu domatesin %85'ini alıyor, 54'ü sıfır
+alıyordu. `scarcityRation` alıcı başına tur tavanı koyuyor; fiyat önceliği
+pay İÇİNDE korunuyor, tavan dolduktan sonra artan mal ikinci turda tavansız
+dağıtılıyor.
+
+| | Önce | Sonra |
+|---|---|---|
+| En büyük alıcının domates payı | %85 | **%5,1** |
+| Mal alabilen oyuncu | 6 / 60 | **28 / 60** |
+| Lv1'i geçen oyuncu | ~19 | **32** |
+| 1. hafta medyanı | 30.507 ₺ | **44.680 ₺** |
+
 ### İlk çok tohumlu koşu (5 × 60 × 700, 118 dk): **7/12**
 
 Geçenler: fiyat hareketi · para arzı · iflas oranı · kredi payı · dış ticaret

@@ -1037,6 +1037,49 @@ Bu bir kusur değil, ama eşiklerin böyle bir dünyada nasıl tanımlanacağı
 
 ---
 
+## R40 — Kıtlıkta "kazanan hepsini alır": piyasa kendini kilitliyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 · **Durum:** ✅ çözüldü
+
+Eşleştirme motoru fiyat önceliğiyle çalışır: en yüksek teklif önce ve DOYANA
+KADAR doldurulur. Gerçek bir borsada doğrudur — ama kıtlıkta oyunu kırar.
+
+Ölçüldü: domates arzı talebin dörtte biriyken **6 oyuncu arzın %85'ini aldı,
+54 oyuncu sıfır aldı** ve 2.103 alış emri mal bulamadan öldü. Rafı hiç dolmayan
+oyuncu satamaz, satamayan büyüyemez, büyüyemeyen bir daha o 6 oyuncuyla
+yarışamaz. Kıtlık kendini besleyen bir kilide dönüşüyordu.
+
+**Çözüm:** `scarcityRation()` — arz talebi karşılamıyorsa her alıcı ŞİRKET bu
+turda en fazla adil payını (`arz ÷ alıcı sayısı`) alır.
+
+★ Fiyat önceliği KALKMAZ: pay içinde yine en yüksek teklif önce eşleşir ve
+ucuz teklif hiç eşleşmeyebilir. Değişen tek şey, bir alıcının tüm arzı
+süpürememesi.
+
+★ İki tur: önce tavanlı, sonra **tavansız**. İkincisi, fiyat veya mesafe
+yüzünden eşleşemeyen alıcıların bıraktığı malı dağıtır — adalet uğruna mal
+çürütülmez. Testle sabitlendi.
+
+★ `minLot` payın anlamsız küçüklüğe inmesini engeller: 50 alıcıya 2'şer birim
+dağıtmak, 10 alıcıya 10'ar birim vermekten kötüdür.
+
+**Etki (60 oyuncu, 700 tur, aynı yapılandırma):**
+
+| | Önce | Sonra |
+|---|---|---|
+| En büyük alıcının domates payı | %85 (6 oyuncu) | **%5,1** |
+| Mal alabilen oyuncu | 6 | **28** |
+| Lv1'i geçen oyuncu | ~19 | **32** |
+| 1. hafta medyanı | 30.507 ₺ | **44.680 ₺** |
+| Geçen metrik | 7/12 | **9/12** |
+
+Kalan üç metrik: arz/talep bandı, ilk gün büyümesi (%6,0), 1. hafta medyanı.
+
+---
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -1080,3 +1123,4 @@ Bu bir kusur değil, ama eşiklerin böyle bir dünyada nasıl tanımlanacağı
 | R37 | Toptan satış tesise yazılmıyordu | 🔴 Kritik | ✅ F8 — satış emri üzerinden atıf |
 | R38 | Volatilite ölçütü kendi tasarımıyla çelişiyor | 🟡 Orta | ✅ F8 — haftalık aralığa taşındı |
 | R39 | Rastgele dünya tek koşuluk kapıyı güvenilmez kılıyor | 🟡 Orta | ✅ çok tohumlu kapı (`gate.ts`) |
+| R40 | Kıtlıkta kazanan hepsini alıyor | 🔴 Kritik | ✅ F8 — `scarcityRation` |

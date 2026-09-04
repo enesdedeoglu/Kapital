@@ -1,9 +1,10 @@
 import { addBatch, consumeFefo, transfer, type Sql } from '@kapital/db';
 import {
-  matchBuyOrder, shippingPerUnit, type BookOrder, type Match, type MatchCandidate,
+  matchBuyOrder, scarcityRation, shippingPerUnit,
+  type BookOrder, type Match, type MatchCandidate,
 } from '@kapital/economy';
 import {
-  asMoney, asQty, deterministicUuid, InsufficientFunds, priceTimesQty, type Money,
+  InsufficientFunds, asMoney, asQty, deterministicUuid, priceTimesQty, qtyFromNumber, type Money,
 } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 
@@ -18,6 +19,8 @@ interface OrderRow {
 }
 
 export interface ExchangePhaseResult {
+  /** Kaç üründe kıtlık tayını uygulandı. */
+  rationedProducts: number;
   products: number;
   matches: number;
   volume: bigint;
@@ -48,6 +51,7 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
   const baseRate = asMoney(BigInt(shippingCfg.baseRatePerKgDistance));
 
   const result: ExchangePhaseResult = {
+    rationedProducts: 0,
     products: 0, matches: 0, volume: 0n, goodsValue: 0n, shippingValue: 0n,
     shipmentsDispatched: 0, shipmentsDelivered: 0, deliveredUnits: 0n,
   };
@@ -55,6 +59,8 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
 
   const distances = await loadDistances(sql);
   const [sink] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = 'SYS_SINK'`;
+  // Kıtlık tayını: asgari lot, payın anlamsız küçüklüğe inmesini engeller.
+  const rationCfg = configValue<{ minLot: number }>(tick, 'economy.rationing', { minLot: 10 });
 
   // Yalnız alış emri olan ürünler taranır (madde 54)
   const products = await sql<{ id: number; weight_per_unit: number; shelf_life_ticks: number | null }[]>`
@@ -73,8 +79,49 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
 
     const remainingSell = new Map(sells.map((s) => [s.id, s.remaining_quantity]));
 
+    /*
+     * ★ KITLIKTA ADİL DAĞITIM.
+     *
+     * Alış emirleri fiyata göre sıralanır ve sırayla DOYANA KADAR doldurulur.
+     * Gerçek bir borsada doğrudur; kıtlıkta oyunu kırar. Ölçüldü (F8): domates
+     * arzı talebin dörtte biriyken 6 oyuncu arzın %85'ini aldı, 54 oyuncu
+     * sıfır aldı ve 2.103 emri mal bulamadan öldü.
+     *
+     * Kıtlık varsa her ALICI ŞİRKET bu turda en fazla adil payını alır. Fiyat
+     * önceliği kalkmaz: pay içinde yine en yüksek teklif önce eşleşir. Değişen
+     * tek şey, bir alıcının tüm arzı süpürememesi.
+     *
+     * İki tur: önce tavanlı, sonra tavansız. İkincisi, fiyat veya mesafe
+     * yüzünden eşleşemeyen alıcıların bıraktığı malı dağıtır — adalet uğruna
+     * mal çürütülmez.
+     */
+    const totalSupply = sells.reduce((sum, s) => sum + s.remaining_quantity, 0n);
+    const totalDemand = buys.reduce((sum, b) => sum + b.remaining_quantity, 0n);
+    const buyerCount = new Set(buys.map((b) => b.company_id)).size;
+    const ration = scarcityRation({
+      totalSupply: asQty(totalSupply), totalDemand: asQty(totalDemand),
+      buyerCount, minLot: qtyFromNumber(rationCfg.minLot),
+    });
+    if (ration !== null) out.rationedProducts++;
+
+    /** Bu turda alıcı şirkete verilen toplam — tayın tavanı buna bakar. */
+    const takenByCompany = new Map<string, bigint>();
+
+    /** Emir bazında bu turda dolan miktar — ikinci turda kalanı bundan bulunur. */
+    const filledByOrder = new Map<bigint, bigint>();
+
+    for (const pass of ration === null ? [null] : [ration, null]) {
     for (const buyRow of buys) {
-      let buyRemaining = buyRow.remaining_quantity;
+      // `buyRow` veritabanı anlık görüntüsüdür; ilk turda dolan miktar
+      // düşülmezse ikinci tur aynı emri baştan doldurmaya çalışır.
+      let buyRemaining = buyRow.remaining_quantity - (filledByOrder.get(buyRow.id) ?? 0n);
+      if (buyRemaining <= 0n) continue;
+      if (pass !== null) {
+        const already = takenByCompany.get(buyRow.company_id) ?? 0n;
+        const headroom = (pass as bigint) - already;
+        if (headroom <= 0n) continue;
+        if (buyRemaining > headroom) buyRemaining = headroom;
+      }
 
       // Bir satıcıyla uzlaşma başarısız olabilir (malı gitmiş, alıcının parası
       // yetmemiş). Bu durumda emir tur boyunca kilitlenmemeli: satıcı devre dışı
@@ -125,6 +172,11 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
           out.shippingValue += applied.shippingTotal;
           out.shipmentsDispatched++;
           buyRemaining -= applied.quantity;
+          filledByOrder.set(buyRow.id, (filledByOrder.get(buyRow.id) ?? 0n) + applied.quantity);
+          takenByCompany.set(
+            buyRow.company_id,
+            (takenByCompany.get(buyRow.company_id) ?? 0n) + applied.quantity,
+          );
           remainingSell.set(
             match.sell.orderId,
             (remainingSell.get(match.sell.orderId) ?? 0n) - applied.quantity,
@@ -132,6 +184,7 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
         }
         if (!progressed && matches.length === 0) break;
       }
+    }
     }
   }
 

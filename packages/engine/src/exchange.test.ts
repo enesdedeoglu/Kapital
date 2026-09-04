@@ -310,3 +310,116 @@ describe('★ aynı depoya çoklu sevkiyat (F8 bulgusu)', () => {
     expect(inv!.used).toBeLessThanOrEqual(inv!.capacity);
   });
 });
+
+describe('★ kıtlıkta adil dağıtım (F8)', () => {
+  /**
+   * Ölçülen sorun: domates arzı talebin dörtte biriyken 6 oyuncu arzın
+   * %85'ini aldı, 54 oyuncu SIFIR aldı ve 2.103 emri mal bulamadan öldü.
+   * Rafı hiç dolmayan oyuncu satamaz, satamayan büyüyemez.
+   */
+  async function scarceMarket(buyerCount: number, supply: bigint) {
+    const seller = await makePlayer(sql, money(100_000), 'Tek Satıcı');
+    const sellerFacility = await makeFacility(sql, seller.id, { typeCode: 'MARKET', cityId: 1 });
+    await runInTransaction(sql, (tx) => addBatch(tx, {
+      inventoryId: sellerFacility.inventoryId, productId: IRON,
+      quantity: supply, unitCost: money(10), quality: 70, producedAtTick: 0n,
+    }));
+    await placeOrder(sql, {
+      companyId: seller.id, facilityId: sellerFacility.id, cityId: 1, productId: IRON,
+      side: 'SELL', quantity: supply, price: money(12),
+    });
+
+    const buyers = [];
+    for (let i = 0; i < buyerCount; i++) {
+      const buyer = await makePlayer(sql, money(500_000), `Alıcı ${i}`);
+      const facility = await makeFacility(sql, buyer.id, { typeCode: 'MARKET', cityId: 1 });
+      // Talep arzın çok üstünde: her alıcı tek başına tüm arzı isteyebilir.
+      await placeOrder(sql, {
+        companyId: buyer.id, facilityId: facility.id, cityId: 1, productId: IRON,
+        side: 'BUY', quantity: supply, price: money(30 - i * 0.1), // hafif farklı fiyatlar
+      });
+      buyers.push(buyer);
+    }
+    return { seller, buyers };
+  }
+
+  const receivedBy = async (companyId: string) => {
+    const [row] = await sql<{ units: bigint }[]>`
+      SELECT COALESCE(SUM(quantity), 0)::bigint AS units FROM market_trades
+       WHERE buyer_company_id = ${companyId}::uuid`;
+    return row!.units;
+  };
+
+  it('kıt mal tek alıcıya gitmez — herkes payını alır', async () => {
+    const { buyers } = await scarceMarket(5, qty(500));
+    await runTick(sql);
+
+    const received = await Promise.all(buyers.map((b) => receivedBy(b.id)));
+    const servedCount = received.filter((r) => r > 0n).length;
+
+    // Tayın olmasaydı en yüksek teklif 500'ün tamamını alırdı.
+    expect(servedCount).toBeGreaterThan(1);
+    expect(Math.max(...received.map(Number))).toBeLessThan(Number(qty(500)));
+  });
+
+  it('★ adil pay uygulanır: kimse payının kat kat üstünü alamaz', async () => {
+    const { buyers } = await scarceMarket(5, qty(500));
+    await runTick(sql);
+
+    const received = await Promise.all(buyers.map((b) => receivedBy(b.id)));
+    const fairShare = Number(qty(500)) / 5;
+    for (const amount of received) {
+      expect(Number(amount)).toBeLessThanOrEqual(fairShare * 1.05);
+    }
+  });
+
+  it('★ arz talebi karşılıyorsa tayın uygulanmaz — fiyat önceliği bozulmaz', async () => {
+    // Tek alıcı, bol arz: emrinin tamamını almalı.
+    const { buyers } = await scarceMarket(1, qty(500));
+    const tick = await runTick(sql);
+    const exchange = tick.phases.EXCHANGE!.result as { rationedProducts: number };
+
+    expect(exchange.rationedProducts).toBe(0);
+    expect(await receivedBy(buyers[0]!.id)).toBe(qty(500));
+  });
+
+  it('artan mal ikinci turda dağıtılır — adalet uğruna mal çürütülmez', async () => {
+    // 5 alıcı ama biri çok düşük teklif veriyor: onun payı boşa gitmemeli.
+    const seller = await makePlayer(sql, money(100_000), 'Satıcı');
+    const sellerFacility = await makeFacility(sql, seller.id, { typeCode: 'MARKET', cityId: 1 });
+    await runInTransaction(sql, (tx) => addBatch(tx, {
+      inventoryId: sellerFacility.inventoryId, productId: IRON,
+      quantity: qty(500), unitCost: money(10), quality: 70, producedAtTick: 0n,
+    }));
+    await placeOrder(sql, {
+      companyId: seller.id, facilityId: sellerFacility.id, cityId: 1, productId: IRON,
+      side: 'SELL', quantity: qty(500), price: money(12),
+    });
+
+    const rich = [];
+    for (let i = 0; i < 4; i++) {
+      const buyer = await makePlayer(sql, money(500_000), `Zengin ${i}`);
+      const facility = await makeFacility(sql, buyer.id, { typeCode: 'MARKET', cityId: 1 });
+      await placeOrder(sql, {
+        companyId: buyer.id, facilityId: facility.id, cityId: 1, productId: IRON,
+        side: 'BUY', quantity: qty(500), price: money(30),
+      });
+      rich.push(buyer);
+    }
+    // Fiyatı satıcının altında: hiç eşleşemez.
+    const lowball = await makePlayer(sql, money(500_000), 'Düşük Teklif');
+    const lowFacility = await makeFacility(sql, lowball.id, { typeCode: 'MARKET', cityId: 1 });
+    await placeOrder(sql, {
+      companyId: lowball.id, facilityId: lowFacility.id, cityId: 1, productId: IRON,
+      side: 'BUY', quantity: qty(500), price: money(5),
+    });
+
+    await runTick(sql);
+
+    expect(await receivedBy(lowball.id)).toBe(0n);
+    // Onun payı boşa gitmedi: dört zengin toplamda arzın tamamını aldı.
+    const total = (await Promise.all(rich.map((b) => receivedBy(b.id))))
+      .reduce((sum, r) => sum + r, 0n);
+    expect(total).toBe(qty(500));
+  });
+});

@@ -259,6 +259,10 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'world.events',     value: { chancePerTick: 0.012, maxConcurrent: 3, cooldownTicks: 288 } },
   { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12, retailMarkup: 1.35 } },
   { key: 'economy.pricing',  value: { emaAlpha: 0.25, trimLowPct: 0.10, trimHighPct: 0.90, shockClampPct: 0.15, referenceWindowTicks: 96 } },
+  // Kıtlık tayını (F8): arz talebi karşılamıyorsa alıcı başına tur tavanı
+  // konur. `minLot` payın anlamsız küçüklüğe inmesini engeller — 50 alıcıya
+  // 2'şer birim dağıtmak, 10 alıcıya 10'ar birim vermekten kötüdür.
+  { key: 'economy.rationing', value: { minLot: 10 } },
   { key: 'economy.shipping', value: { baseRatePerKgDistance: money(0.35).toString() } },
   { key: 'economy.fx',       value: { rate0: FX_RATE_0, alpha: 0.05, tradeBalanceK: 0.02, spreadPct: 0.015, clampPerTick: 0.005, clampPerDay: 0.03, unlockLevel: 7 } },
   { key: 'economy.foreign',  value: { exportMultiplier: 0.75, importMultiplier: 1.35, depthPct: 0.15, prorata: true } },

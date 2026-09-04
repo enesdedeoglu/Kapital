@@ -111,3 +111,50 @@ export function bookDepth(orders: readonly BookOrder[]): {
   const best = orders.reduce((b, o) => (b === null || o.pricePerUnit < b ? o.pricePerUnit : b), null as Money | null);
   return { totalQuantity: asQty(total), bestPrice: best, orderCount: orders.length };
 }
+
+/* ------------------------------------------------------------------ */
+
+export interface RationInput {
+  /** Bu turda satışa çıkan toplam miktar. */
+  readonly totalSupply: Qty;
+  /** Açık alış emirlerinin toplam miktarı. */
+  readonly totalDemand: Qty;
+  /** Farklı alıcı sayısı (şirket, emir değil). */
+  readonly buyerCount: number;
+  /**
+   * En küçük anlamlı tahsis. Bunun altına düşen pay kimseye yaramaz: 50
+   * alıcıya 2'şer birim dağıtmak, 10 alıcıya 10'ar birim vermekten kötüdür.
+   */
+  readonly minLot: Qty;
+}
+
+/**
+ * KITLIKTA ADİL DAĞITIM — alıcı başına tur tavanı.
+ *
+ * ★ Eşleştirme motoru fiyat önceliğiyle çalışır: en yüksek teklif önce ve
+ * DOYANA KADAR doldurulur. Gerçek bir borsada doğrudur, ama kıtlıkta oyunu
+ * kırar. Ölçüldü (F8): domates arzı talebin dörtte biriyken 6 oyuncu arzın
+ * %85'ini aldı, 54 oyuncu SIFIR aldı ve 2.103 emri mal bulamadan öldü.
+ * Rafı hiç dolmayan oyuncu satamaz, satamayan büyüyemez, büyüyemeyen bir
+ * daha asla o 6 oyuncuyla yarışamaz — kıtlık kendini besleyen bir kilit
+ * hâline gelir.
+ *
+ * Kural: arz talebi karşılamıyorsa her alıcı bu turda en fazla "adil payını"
+ * alır. Fiyat önceliği KALKMAZ — pay içinde yine en yüksek teklif önce
+ * eşleşir ve ucuz teklif hiç eşleşmeyebilir. Değişen tek şey, tek bir
+ * alıcının tüm arzı süpürememesi.
+ *
+ * Tavan dolduktan sonra artan arz varsa (kimi alıcı fiyat veya mesafe
+ * yüzünden eşleşememişse) ikinci turda tavansız dağıtılır: adalet uğruna mal
+ * çürütülmez.
+ *
+ * @returns Alıcı başına tur tavanı; kıtlık yoksa `null` (tayın uygulanmaz).
+ */
+export function scarcityRation(input: RationInput): Qty | null {
+  if (input.buyerCount <= 1) return null;
+  if (input.totalSupply <= 0n) return null;
+  if (input.totalDemand <= input.totalSupply) return null; // kıtlık yok
+
+  const share = (input.totalSupply as bigint) / BigInt(input.buyerCount);
+  return (share > (input.minLot as bigint) ? share : input.minLot) as Qty;
+}
