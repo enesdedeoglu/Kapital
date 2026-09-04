@@ -88,14 +88,41 @@ export const worldMarket = [
 ];
 
 export const facilityTypes = [
-  { id: 1,  code: 'GREENGROCER', name: 'Manav',            category: 'RETAIL',      cost: 8_000, capacity: 0, maintenance: upkeep(8_000), storage: 2_000,  ticks: 1, unlock: 1,  port: false },
-  { id: 2,  code: 'KIOSK',       name: 'Büfe',             category: 'RETAIL',      cost: 8_000, capacity: 0, maintenance: upkeep(8_000), storage: 1_500,  ticks: 1, unlock: 1,  port: false },
+  /*
+   * ★ BAŞLANGIÇ TESİSLERİ OYUNUN EN KÖTÜ TESİSLERİ OLAMAZ.
+   *
+   * F8 ölçümünde geri ödeme süreleri: Manav 13 gün, Büfe 7 gün — Market 3,
+   * fırın 2, sebze bahçesi 3. Yeni oyuncu merdivenin EN YAVAŞ basamağında
+   * başlıyor ve hızlanamıyordu; 60 oyuncunun 57'si 7 gün boyunca Lv1'de kaldı.
+   *
+   * Maliyet yarıya indirildi. 30.000 ₺ başlangıç sermayesiyle oyuncu artık
+   * ilk oturumda iki-üç dükkân açabilir; geri ödeme Manav 13 → ~6, Büfe
+   * 7 → ~3,5 güne iner. Ekonominin geri kalanına dokunulmadı: ölçüm sorunun
+   * genel değil, YALNIZ bu iki tesiste olduğunu gösterdi.
+   *
+   * Depo da büyütüldü: küçük depo, rafın sürekli boşalması demek.
+   */
+  { id: 1,  code: 'GREENGROCER', name: 'Manav',            category: 'RETAIL',      cost: 4_000, capacity: 0, maintenance: upkeep(4_000), storage: 3_000,  ticks: 1, unlock: 1,  port: false },
+  { id: 2,  code: 'KIOSK',       name: 'Büfe',             category: 'RETAIL',      cost: 4_000, capacity: 0, maintenance: upkeep(4_000), storage: 2_500,  ticks: 1, unlock: 1,  port: false },
   { id: 3,  code: 'MARKET',      name: 'Market',           category: 'RETAIL',      cost: 35_000, capacity: 0, maintenance: upkeep(35_000), storage: 8_000,  ticks: 4, unlock: 2,  port: false },
-  { id: 4,  code: 'VEG_GARDEN',  name: 'Sebze Bahçesi',    category: 'AGRICULTURE', cost: 20_000, capacity: 18, maintenance: upkeep(20_000), storage: 4_000,  ticks: 6, unlock: 2,  port: false },
+  /*
+   * ★ Kilit Lv2 → Lv1 (F8, R33'ün son adımı).
+   *
+   * Lv2'ye çekmek yetmedi: oyuncular Lv2'ye çıkmak için domates almak
+   * zorundaydı, ama domates KIT ve dağıtım "kazanan hepsini alır" biçiminde.
+   * Ölçüldü: 60 oyuncunun 54'ü 96 tur boyunca SIFIR ciro yaptı ve hiçbirinin
+   * rafında mal yoktu; domatesin %85'ini Lv2'yi geçmiş 6 oyuncu aldı.
+   *
+   * Bahçe Lv1'de açılınca oyuncu kendi arzını üretir ve kıt malı kapmak için
+   * yarışmak zorunda kalmaz. Erken oyun "dükkân aç + bahçe ek" olur; bu, hem
+   * onboarding'in "200 kg domates al, sat" adımıyla uyumlu hem de tek ürüne
+   * bağımlılığı kırar.
+   */
+  { id: 4,  code: 'VEG_GARDEN',  name: 'Sebze Bahçesi',    category: 'AGRICULTURE', cost: 20_000, capacity: 18, maintenance: upkeep(20_000), storage: 4_000,  ticks: 6, unlock: 1,  port: false },
   { id: 5,  code: 'WHEAT_FIELD', name: 'Buğday Tarlası',   category: 'AGRICULTURE', cost: 25_000, capacity: 30, maintenance: upkeep(25_000), storage: 6_000,  ticks: 8, unlock: 5,  port: false },
   { id: 6,  code: 'MILL',        name: 'Değirmen',         category: 'INDUSTRY',    cost: 45_000, capacity: 22, maintenance: upkeep(45_000), storage: 6_000,  ticks: 8, unlock: 6,  port: false },
   { id: 7,  code: 'BAKERY',      name: 'Fırın',            category: 'INDUSTRY',    cost: 30_000, capacity: 40, maintenance: upkeep(30_000), storage: 3_000,  ticks: 6, unlock: 6,  port: false },
-  { id: 8,  code: 'TOBACCO_FARM',name: 'Tütün Tarlası',    category: 'AGRICULTURE', cost: 30_000, capacity: 9, maintenance: upkeep(30_000), storage: 3_000,  ticks: 8, unlock: 7,  port: false },
+  { id: 8,  code: 'TOBACCO_FARM',name: 'Tütün Tarlası',    category: 'AGRICULTURE', cost: 30_000, capacity: 16, maintenance: upkeep(30_000), storage: 3_000,  ticks: 8, unlock: 7,  port: false },
   { id: 9,  code: 'CIG_FACTORY', name: 'Sigara Fabrikası', category: 'INDUSTRY',    cost: 70_000, capacity: 14, maintenance: upkeep(70_000), storage: 4_000,  ticks: 12, unlock: 8, port: false },
   { id: 10, code: 'IRON_MINE',   name: 'Demir Madeni',     category: 'MINING',      cost: 60_000, capacity: 26, maintenance: upkeep(60_000), storage: 8_000,  ticks: 12, unlock: 13, port: false },
   { id: 11, code: 'COAL_MINE',   name: 'Kömür Madeni',     category: 'MINING',      cost: 50_000, capacity: 34, maintenance: upkeep(50_000), storage: 8_000,  ticks: 12, unlock: 13, port: false },
@@ -116,9 +143,9 @@ export const recipes: {
   cycleTicks: number; labor: number; energy: number; unlock: number;
   inputs: { code: string; qty: number; minQuality?: number }[];
 }[] = [
-  // ★ Kilit Lv4 → Lv2 (F8, R33). Tesis tipi VE reçete birlikte düşer: yalnız
+  // ★ Kilit Lv4 → Lv1 (F8, R33). Tesis tipi VE reçete birlikte düşer: yalnız
   // birini indirmek, kurulabilen ama üretemeyen bir tesis bırakırdı.
-  { facilityCode: 'VEG_GARDEN',  outputCode: 'TOMATO',    outputQty: 1, cycleTicks: 1, labor: 8,   energy: 3,  unlock: 2,  inputs: [] },
+  { facilityCode: 'VEG_GARDEN',  outputCode: 'TOMATO',    outputQty: 1, cycleTicks: 1, labor: 8,   energy: 3,  unlock: 1,  inputs: [] },
   { facilityCode: 'WHEAT_FIELD', outputCode: 'WHEAT',     outputQty: 1, cycleTicks: 1, labor: 4,   energy: 2,  unlock: 5,  inputs: [] },
   { facilityCode: 'TOBACCO_FARM',outputCode: 'TOBACCO',   outputQty: 1, cycleTicks: 1, labor: 15,  energy: 7,  unlock: 7,  inputs: [] },
   { facilityCode: 'IRON_MINE',   outputCode: 'IRON',      outputQty: 1, cycleTicks: 1, labor: 11,  energy: 7,  unlock: 13, inputs: [] },
@@ -185,7 +212,7 @@ export const companyLevels = [
    * Şartlar ilk günün gerçek getirisine indirildi. Sonraki basamaklar aynı
    * kaldı: asıl mesele merdivenin İLK basamağıydı.
    */
-  { level: 2,  xp: 700,     value: 34_000,    volume: 6_000,    units: 0,     products: 0, title: 'Bahçe Sahibi' },
+  { level: 2,  xp: 700,     value: 34_000,    volume: 6_000,    units: 0,     products: 0, title: 'Dükkân Sahibi' },
   { level: 3,  xp: 2_000,   value: 80_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
   // Sebze Bahçesi artık Lv2'de açılıyor (R33); başlık Lv2'ye taşındı.
   { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },
@@ -218,7 +245,10 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'economy.upgrade',    value: { costMultiplier: 0.75, costExponent: 1.55, maxLevel: 10 } },
   // Dünya talep ölçeği (F8) — talep şirket sayısıyla büyür. `baseMultiplier`
   // kalibrasyon koludur; `sweep.ts` ile taranır.
-  { key: 'economy.demandScale', value: { baseMultiplier: 1, baselineCompanies: 65,
+  // ★ `baseMultiplier` 2: kalibrasyonla seçildi (F8). 1'de büyüme çok yavaş
+  // (p90 53.112 ₺), 3'te para arzı %43,2 ve kur %26,6 ile eşikleri aşıyor.
+  // 2'de NPC üretim payı %61,2 (hedef %60–80), para arzı %38,8, kur %18,0.
+  { key: 'economy.demandScale', value: { baseMultiplier: 2, baselineCompanies: 65,
                                          elasticity: 0.85, max: 20 } },
   // ★ `retailMarkup`: raf fiyatının toptan referansa oranı — perakendecinin
   // kendi giderlerinin (bakım, fire, raf) karşılığı. Bu olmadan raf fiyatı

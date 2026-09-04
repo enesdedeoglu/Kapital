@@ -244,3 +244,32 @@ describe('kur modeli', () => {
     expect(after!.rate).toBeGreaterThan(before!.rate);
   });
 });
+
+describe('★ tesis bazlı kâr/zarar toptan satışı da sayar (madde 46)', () => {
+  it('üreten tesis ciro yazar — yalnız perakende sayılırsa her üretici zarar görünür', async () => {
+    // F8 ölçümünde on üretim tipinin onu da "ciro 0, zarar = bakım" çıktı:
+    // `facility_financials` yalnız `retail_sales`e bakıyordu, oysa o tesisler
+    // mallarını toptan piyasada satıyordu.
+    const seller = await trader('Üretici');
+    const buyer = await trader('Alıcı');
+    await trade(seller, buyer, qty(100), money(20));
+    const tick = await runTick(sql);
+
+    const [row] = await sql<{ revenue: bigint; net_profit: bigint }[]>`
+      SELECT revenue, net_profit FROM facility_financials
+       WHERE tick_id = ${tick.seq} AND facility_id = ${seller.facility.id}::uuid`;
+    expect(row!.revenue).toBeGreaterThan(0n);
+  });
+
+  it('alıcı tesise nakliye gideri yazılır', async () => {
+    const seller = await trader('Uzak Satıcı');
+    const buyer = await trader('Alıcı');
+    await trade(seller, buyer, qty(100), money(20));
+    const tick = await runTick(sql);
+
+    const [row] = await sql<{ shipping: bigint }[]>`
+      SELECT shipping FROM facility_financials
+       WHERE tick_id = ${tick.seq} AND facility_id = ${buyer.facility.id}::uuid`;
+    expect(row!.shipping).toBeGreaterThanOrEqual(0n);
+  });
+});

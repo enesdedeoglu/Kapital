@@ -38,17 +38,24 @@ describe('parti ekleme', () => {
     const [inv] = await sql<{ used: bigint; cap: bigint }[]>`
       SELECT used_capacity AS used, capacity AS cap FROM inventories WHERE id = ${facility.inventoryId}::uuid`;
     expect(inv!.used).toBe(qty(600));
-    expect(inv!.cap).toBe(qty(2000)); // Manav deposu
+    // Kapasite tohumdan gelir; sabit yazılırsa tesis dengesi her
+    // değiştiğinde (F8'de Manav deposu 2.000 → 3.000) bu test kırılır.
+    const [type] = await sql<{ storage_capacity: bigint }[]>`
+      SELECT storage_capacity FROM facility_types WHERE code = 'GREENGROCER'`;
+    expect(inv!.cap).toBe(type!.storage_capacity);
   });
 
   it('depo kapasitesi aşılırsa STORAGE_FULL verir (değişmez I4)', async () => {
-    await add({ quantity: qty(1900), quality: 90, unitCost: money(15) });
+    const [inv0] = await sql<{ cap: bigint }[]>`
+      SELECT capacity AS cap FROM inventories WHERE id = ${facility.inventoryId}::uuid`;
+    const nearlyFull = inv0!.cap - qty(100);
+    await add({ quantity: nearlyFull, quality: 90, unitCost: money(15) });
     await expect(add({ quantity: qty(200), quality: 90, unitCost: money(15) }))
       .rejects.toSatisfy((e: unknown) => e instanceof DomainError && e.code === 'STORAGE_FULL');
 
     const [inv] = await sql<{ used: bigint }[]>`
       SELECT used_capacity AS used FROM inventories WHERE id = ${facility.inventoryId}::uuid`;
-    expect(inv!.used).toBe(qty(1900)); // reddedilen parti sayılmadı
+    expect(inv!.used).toBe(nearlyFull); // reddedilen parti sayılmadı
   });
 });
 

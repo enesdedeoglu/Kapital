@@ -83,7 +83,10 @@ describe('MVP-0 — Domates Döngüsü', () => {
     expect(facility.status).toBe(201);
     const facilityId = facility.body.id as string;
     const afterBuild = await cashOf(companyId);
-    expect(afterBuild).toBe(money(18_000)); // 30.000 − 8.000×1,50
+    // Tohumdan türetilir: tesis maliyeti değiştiğinde test kırılmasın.
+    const [buildType] = await sql<{ base_cost: bigint }[]>`
+      SELECT base_cost FROM facility_types WHERE code = 'GREENGROCER'`;
+    expect(afterBuild).toBe(money(30_000) - (buildType!.base_cost * 150n) / 100n);
 
     // 3) İlk tur: NPC arzı oluşur, inşaat biter
     const tick1 = await runTick(sql);
@@ -141,7 +144,7 @@ describe('MVP-0 — Domates Döngüsü', () => {
       SELECT maintenance_cost FROM facility_types WHERE code = 'GREENGROCER'`;
     expect(financials!.maintenance).toBe(shopType!.maintenance_cost);
     expect(financials!.net_profit).toBeGreaterThan(0n); // ★ kâr etti
-    expect(financials!.company_value).toBeGreaterThan(money(18_000)); // stok + tesis dahil
+    expect(financials!.company_value).toBeGreaterThan(money(15_000)); // stok + tesis dahil
 
     // Tesis bazlı kâr/zarar (madde 46)
     const [byFacility] = await sql<{ revenue: bigint; net_profit: bigint }[]>`

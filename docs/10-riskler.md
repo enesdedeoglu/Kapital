@@ -818,9 +818,40 @@ arketipleri 36 → 26. Sonuç: 5 → **13 sebze bahçesi**, tarım 26 tesis.
 
 ---
 
-## R36 — Tesis geri ödeme süresi büyüme hedefiyle ~9 kat tutarsız
+## R37 — Toptan satış tesise yazılmıyordu: her üretici "zarar" görünüyordu
 
-**Şiddet:** 🔴 Kritik · **Bulunma:** F8 kalibrasyon koşuları · **Durum:** ⏳ ölçüldü, TASARIM KARARI bekliyor
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 ROI ölçümü · **Durum:** ✅ çözüldü
+
+`facility_financials` (madde 46, "oyuncu hangi tesisin kazandırdığını görmeli")
+yalnız `retail_sales`e bakıyordu. Üreten tesis malını TOPTAN piyasada satar;
+o gelir hiçbir yere yazılmıyordu. Sonuç: on üretim tipinin onu da "ciro 0,
+zarar = bakım" görünüyordu.
+
+Bu, tesis ROI tablosunu tamamen yanıltıcı yapmıştı: ilk ölçümde ortalama geri
+ödeme **36 gün** çıkmış ve büyüme hedefiyle 9 kat tutarsız görünmüştü. Atıf
+düzeltilince gerçek tablo çıktı:
+
+| Tesis | Geri ödeme | | Tesis | Geri ödeme |
+|---|---|---|---|---|
+| Sigara fabrikası | 2 gün | | Büfe | 7 gün |
+| Fırın | 2 gün | | Çelik fabrikası | 9 gün |
+| Sebze bahçesi | 3 gün | | Demir madeni | 11 gün |
+| Market | 3 gün | | **Manav** | **13 gün** |
+| Değirmen | 4 gün | | Buğday tarlası | 30 gün |
+
+**Ekonomi zaten 2–4 günlük geri dönüş üretiyordu.** Sorun genel değildi:
+oyuncunun başladığı iki tesis (Manav 13, Büfe 7) oyunun en kötü ikisiydi.
+
+**Çözüm:** `market_trades` satış emri üzerinden satıcı tesise bağlanır
+(`market_orders.facility_id`); üretim maliyeti `production_records`ten gelir
+(girdi → `cogs`, işçilik+enerji → `salary`); alıcı tesise nakliye yazılır.
+Regresyon testi: `pricing.test.ts`.
+
+---
+
+## R36 — Başlangıç tesisleri oyunun en kötü tesisleriydi
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 kalibrasyon koşuları · **Durum:** ✅ çözüldü
 
 Kapıda kalan dört metriğin (week1_value, npc_share, supply_demand, volatility)
 dördü de tek bir sayıdan çıkıyor: **bir tesis kendini kaç günde amorti ediyor.**
@@ -851,21 +882,33 @@ Zincirleme sonuçlar:
 birbirine bakmadan yazılmış: tesis maliyeti/kapasitesi (madde 12) ve büyüme
 hedefi (madde 56).
 
-**Seçenekler:**
+**Uygulanan düzeltmeler (hedefli — ekonominin geneline dokunulmadı):**
 
-1. **Tesis ekonomisini güçlendir** — kapasite artır, kurulum maliyetini düşür
-   veya bakımı azalt. Geri ödeme 36 → ~4 güne inmeli. Oyunun büyüme hissi
-   spec'teki gibi kalır; ekonomi hızlanır, enflasyon baskısı artar.
-2. **Büyüme hedefini ekonomiye uydur** — 1. hafta hedefini 45.000–80.000 ₺'ye
-   çek. Daha yavaş, daha "gerçekçi" bir eğri; mobil oyun alışkanlıklarına
-   göre yavaş kalabilir.
-3. **Karma** — tesis ekonomisini 3–4 kat güçlendir, hedefi de bir miktar
-   indir. İkisi ortada buluşur.
+1. Manav ve Büfe maliyeti 8.000 → **4.000 ₺**, depoları 2.000/1.500 →
+   3.000/2.500. Oyuncu 30.000 ₺ ile artık ilk oturumda iki-üç dükkân açabilir.
+2. Tütün tarlası kapasitesi 9 → **16**: tek zarar eden tesisti, kapasitesi
+   diğer tarlaların yarısıydı.
+3. **Sebze bahçesi kilidi Lv2 → Lv1.** Lv2'ye çekmek yetmedi: oyuncular Lv2'ye
+   çıkmak için domates almak zorundaydı ama domates kıt ve dağıtım "kazanan
+   hepsini alır" biçimindeydi — 60 oyuncunun 54'ü 96 tur boyunca SIFIR ciro
+   yaptı ve hiçbirinin rafında mal yoktu; domatesin %85'ini Lv2'yi geçmiş 6
+   oyuncu aldı. Bahçe Lv1'de açılınca oyuncu kendi arzını üretir.
+4. Lv2 şartı 45.000 → **34.000 ₺**: onboarding zinciri tek oturumda Lv2 vaat
+   ediyordu ama şart %50 büyüme demekti.
+5. `economy.demandScale.baseMultiplier` = **2** (kalibrasyonla seçildi).
 
-**En iyi bilinen yapılandırma (8/12 metrik geçiyor):** Lv2 şartı 34.000 ₺,
-`economy.demandScale.baseMultiplier` 3. Geçenler: ilk gün büyümesi %17,8 ·
-para arzı %32,1 · iflas %0 · kredi payı %0 · kur %15,4 · dış ticaret payı %0 ·
-bant yapışması %3,8 · tur p95 3,80 sn.
+**Etki (60 oyuncu, 700 tur):**
+
+| | Başlangıç | Son |
+|---|---|---|
+| Lv1'i geçen oyuncu | 0 | **19** |
+| Oyuncunun kurduğu sebze bahçesi | 0 | **26** |
+| 1. hafta p75 / p90 değeri | 30.000 / 32.152 ₺ | **120.166 / 165.926 ₺** |
+| NPC üretim payı | %100 | **%61,2** ✓ |
+| Geçen metrik | 6 / 12 | **8 / 12** |
+
+p75 ve p90 hedef bandın (100.000–250.000 ₺) İÇİNDE. Medyan hâlâ 30.000 ₺:
+nüfusun %28'i tasarım gereği PASİF (günde bir karar verir) ve hiç büyümüyor.
 
 ---
 
@@ -911,4 +954,5 @@ bant yapışması %3,8 · tur p95 3,80 sn.
 | R33 | Giriş yolu tek ürüne bağlı ve o ürün kıt | 🔴 Kritik | ✅ F8 — bahçe kilidi Lv2 + dünya dengesi |
 | R34 | Perakende marjı yapısal olarak sıfır | 🔴 Kritik | ✅ F8 — `retailMarkup` |
 | R35 | Tohum dünyası perakende ağırlıklı | 🟠 Yüksek | ✅ F8 — üretim ağırlıklı plan |
-| R36 | Tesis geri ödemesi büyüme hedefiyle ~9 kat tutarsız | 🔴 Kritik | ⏳ F8 — tasarım kararı bekliyor |
+| R36 | Başlangıç tesisleri oyunun en kötüleriydi | 🔴 Kritik | ✅ F8 — maliyet yarıya, bahçe Lv1 |
+| R37 | Toptan satış tesise yazılmıyordu | 🔴 Kritik | ✅ F8 — satış emri üzerinden atıf |

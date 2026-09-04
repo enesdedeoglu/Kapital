@@ -4,7 +4,7 @@ import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { checkInvariants, createSql, runInTransaction, transfer, type Sql } from '@kapital/db';
 import { prepareTestDb, truncateGameState } from '@kapital/db/testing';
-import { money, qty } from '@kapital/shared';
+import { asMoney, formatMoney, money, qty } from '@kapital/shared';
 import { AppModule } from './app.module.js';
 import { DomainErrorFilter } from './common/domain-error.filter.js';
 
@@ -111,9 +111,23 @@ describe('dünya uçları (oturumsuz)', () => {
     expect(port.requiresPort).toBe(true);
     expect(port.unlockLevel).toBe(7);
     const shop = res.body.find((f: { code: string }) => f.code === 'GREENGROCER');
-    expect(shop.baseCostFormatted).toBe('8.000,00 ₺');
+    const [seed] = await sql<{ base_cost: bigint }[]>`
+      SELECT base_cost FROM facility_types WHERE code = 'GREENGROCER'`;
+    expect(shop.baseCostFormatted).toBe(formatMoney(asMoney(seed!.base_cost)));
   });
 });
+
+/**
+ * Tesis tipinin tohum değerleri. Sabit yazmak, tesis dengesi her
+ * değiştiğinde (F8'de Manav 8.000 → 4.000 ₺, depo 2.000 → 3.000) testleri
+ * kırar — oysa bunların kanıtladığı şey mutlak tutar değil, arsa endeksinin
+ * ÖLÇEKLEMESİ ve defterin tutarlılığıdır.
+ */
+async function facilityType(code: string) {
+  const [row] = await sql<{ base_cost: bigint; storage_capacity: bigint }[]>`
+    SELECT base_cost, storage_capacity FROM facility_types WHERE code = ${code}`;
+  return row!;
+}
 
 describe('tesis kurma', () => {
   it('tesisi kurar, maliyeti arsa endeksiyle ölçekler ve deftere CAPEX yazar', async () => {
@@ -128,16 +142,18 @@ describe('tesis kurma', () => {
     expect(res.body.city.code).toBe('IST');
     expect(res.body.isUnderConstruction).toBe(true);
     expect(res.body.ticksRemaining).toBe(1);   // Manav 1 tur
-    expect(res.body.storageCapacity).toBe(qty(2000).toString());
+    const type = await facilityType('GREENGROCER');
+    expect(res.body.storageCapacity).toBe(type.storage_capacity.toString());
 
-    // 8.000 ₺ × 1,50 (İstanbul arsa endeksi) = 12.000 ₺
+    // taban maliyet × 1,50 (İstanbul arsa endeksi)
+    const beklenen = (type.base_cost * 150n) / 100n;
     const [entry] = await sql<{ amount: bigint; account: string }[]>`
       SELECT amount, account FROM ledger_entries
       WHERE company_id = ${companyId}::uuid AND direction = 'DEBIT' AND account = 'CAPEX'`;
-    expect(entry!.amount).toBe(money(12_000));
+    expect(entry!.amount).toBe(beklenen);
 
     const [co] = await sql<{ cash: bigint }[]>`SELECT cash FROM companies WHERE id = ${companyId}::uuid`;
-    expect(co!.cash).toBe(money(18_000));       // 30.000 − 12.000
+    expect(co!.cash).toBe(money(30_000) - beklenen);
 
     expect((await checkInvariants(sql)).ok).toBe(true);
   });
@@ -147,9 +163,10 @@ describe('tesis kurma', () => {
     await call('/facilities', {
       method: 'POST', token, body: { facilityTypeCode: 'GREENGROCER', cityCode: 'KON' },
     });
-    // 8.000 × 0,70 = 5.600 ₺
+    // taban maliyet × 0,70 (Konya arsa endeksi)
+    const type = await facilityType('GREENGROCER');
     const [co] = await sql<{ cash: bigint }[]>`SELECT cash FROM companies WHERE id = ${companyId}::uuid`;
-    expect(co!.cash).toBe(money(24_400));
+    expect(co!.cash).toBe(money(30_000) - (type.base_cost * 70n) / 100n);
   });
 
   it('envanteri tesisle birlikte otomatik oluşturur', async () => {
@@ -159,7 +176,8 @@ describe('tesis kurma', () => {
     });
     const [inv] = await sql<{ capacity: bigint; used_capacity: bigint }[]>`
       SELECT capacity, used_capacity FROM inventories WHERE facility_id = ${res.body.id}::uuid`;
-    expect(inv!.capacity).toBe(qty(1500));
+    const kiosk = await facilityType('KIOSK');
+    expect(inv!.capacity).toBe(kiosk.storage_capacity);
     expect(inv!.used_capacity).toBe(qty(0));
   });
 
@@ -241,7 +259,8 @@ describe('stok görünümü', () => {
     expect(tomato.avgQuality).toBe(61);                       // (95×100 + 52,5×400)/500
     expect(tomato.weightedAvgCostFormatted).toBe('11,60 ₺');  // (18×100 + 10×400)/500
     expect(tomato.batchCount).toBe(2);
-    expect(res.body.freeCapacity).toBe(qty(1500).toString());
+    const kioskType = await facilityType('KIOSK');
+    expect(res.body.freeCapacity).toBe(kioskType.storage_capacity.toString());
   });
 
   it('lotları FEFO sırasıyla ayrı ayrı verir', async () => {

@@ -53,13 +53,15 @@ export const PLAYER_PROFILES: readonly PlayerProfile[] = [
   {
     code: 'RETAILER', name: 'Perakendeci', share: 0.20,
     actEveryTicks: 8, targetMargin: 0.30, investmentAppetite: 0.45,
-    creditAppetite: 0.3, inventoryTargetTicks: 10, builds: 'RETAIL',
+    // ★ 'BOTH': kıt malı kapmak için yarışmak yerine kendi arzını da üretebilir.
+    // Gerçek bir perakendeci de tedarik sıkışınca dikeye iner.
+    creditAppetite: 0.3, inventoryTargetTicks: 10, builds: 'BOTH',
     trades: false, qualityBias: 0.5,
   },
   {
     code: 'DISCOUNTER', name: 'Ucuzcu', share: 0.14,
     actEveryTicks: 6, targetMargin: 0.10, investmentAppetite: 0.5,
-    creditAppetite: 0.45, inventoryTargetTicks: 6, builds: 'RETAIL',
+    creditAppetite: 0.45, inventoryTargetTicks: 6, builds: 'BOTH',
     trades: false, qualityBias: 0.15,
   },
   {

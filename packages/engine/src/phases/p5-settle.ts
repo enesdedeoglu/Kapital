@@ -89,18 +89,56 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
 
   const fxRate = await updateFxRate(sql, tick, gameCpi, windowStart);
 
-  // Tesis bazlı kâr/zarar — madde 46: oyuncu hangi tesisin kazandırdığını görmeli
+  /*
+   * Tesis bazlı kâr/zarar — madde 46: oyuncu hangi tesisin kazandırdığını
+   * görmeli.
+   *
+   * ★ TOPTAN SATIŞ da tesise yazılır. Önceden yalnız `retail_sales` sayılıyordu;
+   * sonuç olarak ÜRETEN her tesis "ciro 0, zarar = bakım" görünüyordu. F8
+   * ölçümünde on üretim tipinin onu da eksi çıktı ve tesis ROI tablosu
+   * anlamsızlaştı — oysa o tesisler mallarını toptan piyasada satıyordu.
+   *
+   * `market_trades`in satıcı TESİSİ yok, yalnız satıcı şirketi var; satış
+   * emri üzerinden bağlanır (`market_orders.facility_id`).
+   *
+   * Üreticinin maliyeti üretim kaydından gelir: girdi bedeli `cogs`e,
+   * işçilik+enerji `salary`e yazılır. Bu bir tahakkuk yaklaşımıdır (bu turda
+   * ÜRETİLENİN maliyeti, bu turda SATILANIN değil) — şirket düzeyindeki
+   * hesapla aynı basitleştirme.
+   */
   await sql`
-    INSERT INTO facility_financials (tick_id, facility_id, company_id, revenue, cogs, maintenance, net_profit)
+    INSERT INTO facility_financials (tick_id, facility_id, company_id, revenue, cogs,
+                                     salary, shipping, maintenance, net_profit)
     SELECT ${tick.seq}, f.id, f.company_id,
-           COALESCE(rs.revenue, 0), COALESCE(rs.cogs, 0), COALESCE(ft.maintenance_cost, 0),
-           COALESCE(rs.revenue, 0) - COALESCE(rs.cogs, 0) - COALESCE(ft.maintenance_cost, 0)
+           COALESCE(rs.revenue, 0) + COALESCE(ws.revenue, 0),
+           COALESCE(rs.cogs, 0) + COALESCE(pr.input_cost, 0),
+           COALESCE(pr.overhead, 0),
+           COALESCE(wb.shipping, 0),
+           COALESCE(ft.maintenance_cost, 0),
+           COALESCE(rs.revenue, 0) + COALESCE(ws.revenue, 0)
+             - COALESCE(rs.cogs, 0) - COALESCE(pr.input_cost, 0)
+             - COALESCE(pr.overhead, 0) - COALESCE(wb.shipping, 0)
+             - COALESCE(ft.maintenance_cost, 0)
     FROM facilities f
     JOIN facility_types ft ON ft.id = f.facility_type_id
     LEFT JOIN LATERAL (
       SELECT SUM(revenue)::bigint AS revenue, SUM(cogs)::bigint AS cogs
       FROM retail_sales WHERE tick_id = ${tick.seq} AND facility_id = f.id
     ) rs ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT SUM(t.quantity * t.price_per_unit / 1000)::bigint AS revenue
+      FROM market_trades t JOIN market_orders o ON o.id = t.sell_order_id
+      WHERE t.tick_id = ${tick.seq} AND o.facility_id = f.id
+    ) ws ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT SUM(t.shipping_cost)::bigint AS shipping
+      FROM market_trades t JOIN market_orders o ON o.id = t.buy_order_id
+      WHERE t.tick_id = ${tick.seq} AND o.facility_id = f.id
+    ) wb ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT SUM(input_cost)::bigint AS input_cost, SUM(overhead_cost)::bigint AS overhead
+      FROM production_records WHERE tick_id = ${tick.seq} AND facility_id = f.id
+    ) pr ON TRUE
     WHERE f.closed_at IS NULL
     ON CONFLICT (tick_id, facility_id) DO NOTHING`;
 
