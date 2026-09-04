@@ -240,9 +240,22 @@ oyuncu teklifi referansın altındaydı, hiç mal alamıyordu · oyuncu rafı
 piyasanın %37 üstündeydi, hiç satamıyordu.
 
 ```bash
+# ★ Geçiş kapısı: N tohum, temiz dünyalar, birleşik karar
+pnpm --filter @kapital/sim exec tsx src/cli/gate.ts 5 60 700 --json rapor.json
+
+# Tek koşu (ayrıntılı ilerleme çıktısı)
 pnpm --filter @kapital/sim exec tsx src/cli/run-sim.ts 60 700 350
+
+# Parametre taraması
 pnpm --filter @kapital/sim exec tsx src/cli/sweep.ts economy.demandScale '{...}' '{...}' -- 40 400
 ```
+
+**Kapı neden çok tohumlu?** Dünya olayları eklendikten sonra her koşu farklı
+bir dünya üretiyor; aynı yapılandırmanın iki koşusunda NPC payı %52,7 ve
+%68,1 çıktı. Tek koşuya bakan bir kapı gürültüyü sinyal sanar. Bir metriğin
+geçmesi için hem tohumların çoğunluğunda tutması hem de medyanının bandın
+içinde olması gerekir; tohumlar kararda anlaşmazsa metrik **kararsız** olarak
+işaretlenir.
 
 ### Doğrulanmış çıkış kriterleri
 

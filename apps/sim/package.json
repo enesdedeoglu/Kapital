@@ -8,7 +8,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "sim": "tsx src/cli/run-sim.ts",
-    "sweep": "tsx src/cli/sweep.ts"
+    "sweep": "tsx src/cli/sweep.ts",
+    "gate": "tsx src/cli/gate.ts"
   },
   "dependencies": {
     "@kapital/api": "workspace:*",

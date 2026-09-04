@@ -984,9 +984,28 @@ biçimde farklı sonuç verdi:
 Bu bir kusur DEĞİL, olayların amaçlanan etkisi: dünya artık her koşuda farklı.
 Ama tek koşuya bakan bir geçiş kapısı, gürültüyü sinyal sanar.
 
-**Gereken:** kapı N tohumla koşmalı ve çoğunluk/medyan üzerinden karar
-vermeli. `run-sim.ts` zaten tohum argümanı alıyor; eksik olan, birden çok
-tohumu koşup sonuçları birleştiren sarmalayıcı.
+**Çözüm:** `apps/sim/src/cli/gate.ts` — N tohumu TEMİZ dünyalarda koşar ve
+kararı birleşik sonuç üzerinden verir.
+
+Bir metrik iki koşulu birden sağlarsa geçer:
+1. Tohumların **çoğunluğunda** eşiği tutmuş olmalı (varsayılan %60).
+2. Tohumlar arası **medyan** değer bandın içinde olmalı.
+
+Yalnız çoğunluğa bakmak yetmez: bir metrik 3/5 tohumda kıl payı geçip 2/5'inde
+uçurumla kalabilir. Yalnız medyana bakmak da yetmez: medyan tutarken koşuların
+yarısı çökebilir.
+
+★ **Kararsızlık ölçüsü, sayısal yayılma değil KARAR AYRILIĞIdır.** İlk
+uygulamada `(max − min) ÷ |medyan|` kullanıldı ve para arzı kararsız
+işaretlendi: medyan %0,1, aralık %−1,3…%1,4 — mutlak olarak minicik, orana
+göre 27 kat. Asıl kararsızlık, aynı yapılandırmanın bir tohumda geçip
+diğerinde kalmasıdır.
+
+```bash
+pnpm --filter @kapital/sim exec tsx src/cli/gate.ts 5 60 700 --json rapor.json
+```
+
+Çıkış kodu 0 = kapı geçildi; CI doğrudan kullanabilir.
 
 ---
 
@@ -1035,4 +1054,4 @@ tohumu koşup sonuçları birleştiren sarmalayıcı.
 | R36 | Başlangıç tesisleri oyunun en kötüleriydi | 🔴 Kritik | ✅ F8 — maliyet yarıya, bahçe Lv1 |
 | R37 | Toptan satış tesise yazılmıyordu | 🔴 Kritik | ✅ F8 — satış emri üzerinden atıf |
 | R38 | Volatilite ölçütü kendi tasarımıyla çelişiyor | 🟡 Orta | ✅ F8 — haftalık aralığa taşındı |
-| R39 | Rastgele dünya tek koşuluk kapıyı güvenilmez kılıyor | 🟡 Orta | ⏳ çok tohumlu koşu gerekiyor |
+| R39 | Rastgele dünya tek koşuluk kapıyı güvenilmez kılıyor | 🟡 Orta | ✅ çok tohumlu kapı (`gate.ts`) |
