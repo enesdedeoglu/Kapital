@@ -1007,6 +1007,31 @@ pnpm --filter @kapital/sim exec tsx src/cli/gate.ts 5 60 700 --json rapor.json
 
 Çıkış kodu 0 = kapı geçildi; CI doğrudan kullanabilir.
 
+### İlk çok tohumlu koşu — aracın haklı olduğunu gösterdi
+
+5 tohum × 60 oyuncu × 700 tur, 118 dakika. Sonuç **7/12** ve üç metrik
+KARARSIZ işaretlendi:
+
+| Metrik | Tohum 1 | 2 | 3 | 4 | 5 | Tutan |
+|---|---|---|---|---|---|---|
+| NPC üretim payı | %50,9 ✗ | %51,4 ✗ | %56,3 ✗ | %64,4 ✓ | %68,6 ✓ | 2/5 |
+| Kur değişimi | %24,3 ✓ | %43,8 ✗ | %30,3 ✗ | %21,8 ✓ | %33,7 ✗ | 2/5 |
+| Fiyat hareketi | %7,6 ✓ | %26,7 ✗ | %12,7 ✓ | %8,4 ✓ | %22,9 ✗ | 3/5 |
+
+★ **Tek koşular beni yanıltmış.** Daha önceki tek koşuda NPC payı %68,1
+çıkmış ve "hedefe girdi" diye kaydetmiştim — beş tohumda yalnız 2'sinde
+tutuyor, medyanı %56,3. Aynı şekilde kur bir koşuda %18,0 iken başka bir
+tohumda %43,8'e çıkıyor.
+
+Bu, kapının kurulma sebebinin ta kendisi: **rastgele bir dünyada tek koşu
+kanıt değildir.**
+
+Kararsızlığın kaynağı da belli: dünya olaylarının hangi sektöre ve ne zaman
+düştüğü. Bir tohumda kuraklık tarımı vuruyor ve NPC payı düşüyor; başka
+tohumda enerji krizi maliyeti şişirip ithalatı tetikliyor ve kur savruluyor.
+Bu bir kusur değil, ama eşiklerin böyle bir dünyada nasıl tanımlanacağı
+(ortalama mı, kötü senaryo mu) F8'in kalan tasarım sorusudur.
+
 ---
 
 

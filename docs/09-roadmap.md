@@ -313,6 +313,37 @@ anlamsızlaşırdı. Simülasyonun kendisi yalnız KARARI verir.
 | — | Oyuncu teklifi referansın altında: hiç mal alamıyor | 138 alış emri, 0 dolum |
 | — | Oyuncu rafı piyasanın %37 üstünde: hiç satamıyor | 87 dükkân, 7.693 ₺ ciro, 17.272 ₺ bakım |
 
+### Kapı çok tohumludur (R39)
+
+Dünya olayları eklendikten sonra her koşu farklı bir dünya üretiyor. Tek koşuya
+bakan bir kapı gürültüyü sinyal sanar; ölçüldü: aynı yapılandırmanın iki
+koşusunda NPC payı %52,7 ve %68,1, kur %22,0 ve %35,9.
+
+```bash
+pnpm --filter @kapital/sim exec tsx src/cli/gate.ts 5 60 700 --json rapor.json
+```
+
+Bir metrik İKİ koşulu birden sağlarsa geçer: tohumların **çoğunluğunda** eşiği
+tutmalı **ve** tohumlar arası **medyanı** bandın içinde olmalı. Tohumlar
+kararda anlaşmazsa metrik **kararsız** işaretlenir — eşiği tutsa bile kapıyı
+ona dayandırmak risklidir.
+
+Kararsızlık ölçüsü sayısal yayılma değil karar ayrılığıdır: `(max−min)÷medyan`
+kullanıldığında para arzı yanlışlıkla kararsız çıktı (medyan %0,1, aralık
+%−1,3…%1,4 — mutlak olarak minicik, orana göre 27 kat).
+
+### İlk çok tohumlu koşu (5 × 60 × 700, 118 dk): **7/12**
+
+Geçenler: fiyat hareketi · para arzı · iflas oranı · kredi payı · dış ticaret
+payı · bant yapışması · tur süresi.
+
+Kalanlar: arz/talep · NPC payı · ilk gün büyümesi · 1. hafta değeri · kur.
+
+★ Üç metrik KARARSIZ (tohumlar kararda anlaşmıyor): NPC payı 2/5, kur 2/5,
+fiyat hareketi 3/5. **Tek koşular yanıltmıştı**: NPC payı bir koşuda %68,1
+çıkıp "hedefe girdi" diye kaydedilmişti; beş tohumda medyanı %56,3 ve yalnız
+2'sinde tutuyor.
+
 ### ★ GEÇİŞ KAPISI 2 — Ekonomi hedefleri
 
 `08-mvp-kapsami.md` sonundaki **12** metrik eşiği tutmalı (yol haritası "8"
