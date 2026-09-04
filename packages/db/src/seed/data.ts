@@ -254,6 +254,9 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   // kendi giderlerinin (bakım, fire, raf) karşılığı. Bu olmadan raf fiyatı
   // toptan seviyesine çöküyor ve perakende katmanı YAPISAL olarak zarar
   // ediyordu; F8'de ölçüldü: brüt marj %2,4, NPC net −53.288 ₺/96 tur.
+  // Dünya olayları — ekonominin havası (madde 30/45). `chancePerTick` 0,012 →
+  // günde ~1 olay; aynı anda en fazla 3, aynı olay 3 gün soğur.
+  { key: 'world.events',     value: { chancePerTick: 0.012, maxConcurrent: 3, cooldownTicks: 288 } },
   { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12, retailMarkup: 1.35 } },
   { key: 'economy.pricing',  value: { emaAlpha: 0.25, trimLowPct: 0.10, trimHighPct: 0.90, shockClampPct: 0.15, referenceWindowTicks: 96 } },
   { key: 'economy.shipping', value: { baseRatePerKgDistance: money(0.35).toString() } },

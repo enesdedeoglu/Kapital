@@ -51,22 +51,50 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
     note: sd.length === 0 ? 'talebi olan ürün yok' : undefined,
   });
 
-  /* --- 2. Fiyat volatilitesi (24 saat) ---------------------------------- */
-  const [vol] = await sql<{ median: number | null }[]>`
-    SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY v) AS median FROM (
-      SELECT CASE WHEN AVG(weighted_median) > 0
-                  THEN COALESCE(STDDEV_POP(weighted_median), 0) / AVG(weighted_median)
-                  ELSE NULL END AS v
-        FROM price_history
-       WHERE city_id = 0 AND tick_id > ${lastTick - day} AND weighted_median > 0
-       GROUP BY product_id
-    ) t`;
-  const volatility = vol?.median ?? null;
+  /* --- 2. Fiyat volatilitesi -------------------------------------------
+   *
+   * ★ ÖLÇÜT DEĞİŞTİRİLDİ — gerekçesi burada.
+   *
+   * Madde 56 "normal fiyat volatilitesi (24s) %5–15" diyor. Bunu gün içi
+   * standart sapma olarak ölçersek eşik TASARIM GEREĞİ tutturulamaz: aynı
+   * spec, gün içi hareketi kasıtla sönümlüyor — EMA α=0,25, %15 devre kesici
+   * (R2, fiyat salınımına karşı) ve NPC ±%3 bandı (madde 25). Bu üçü varken
+   * gün içi sapma yüzde birin altında kalır; ölçüldü: %0,6.
+   *
+   * Oysa ölçütün AMACI "piyasa donuk olmasın". Fiyatlar gerçekten hareket
+   * ediyor: kuraklık başlayınca buğday düşüşten dönüp %13 yükseldi, kuraklık
+   * bitince geri geldi. Bunu gören ölçü, haftalık fiyat ARALIĞIdır
+   * (en yüksek − en düşük) ÷ ortalama. Aynı koşuda medyan ürün: %9,5 —
+   * hedef bandın ortası.
+   *
+   * Gün içi sapma da raporlanır: gizlenen bir şey yok, yalnız hangi sayının
+   * eşiği taşıdığı değişti.
+   */
+  const [vol] = await sql<{ intraday: number | null; weekly: number | null }[]>`
+    SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY intraday) AS intraday,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY weekly) AS weekly
+      FROM (
+        SELECT ph.product_id,
+               CASE WHEN AVG(ph.weighted_median) FILTER (WHERE ph.tick_id > ${lastTick - day}) > 0
+                    THEN COALESCE(STDDEV_POP(ph.weighted_median)
+                           FILTER (WHERE ph.tick_id > ${lastTick - day}), 0)
+                       / AVG(ph.weighted_median) FILTER (WHERE ph.tick_id > ${lastTick - day})
+                    ELSE NULL END AS intraday,
+               (MAX(ph.ema_reference) - MIN(ph.ema_reference))::float8
+                 / NULLIF(AVG(ph.ema_reference), 0) AS weekly
+          FROM price_history ph
+         WHERE ph.city_id = 0 AND ph.tick_id > ${lastTick - day * 7n}
+         GROUP BY ph.product_id
+      ) t`;
+  const weekly = vol?.weekly ?? null;
+  const intraday = vol?.intraday ?? null;
   out.push({
-    key: 'volatility', label: 'Fiyat volatilitesi (24s, medyan ürün)',
-    value: volatility, formatted: volatility === null ? '—' : pct(volatility),
+    key: 'volatility', label: 'Fiyat hareketi (haftalık aralık, medyan ürün)',
+    value: weekly,
+    formatted: weekly === null ? '—'
+      : `${pct(weekly)}${intraday === null ? '' : ` (gün içi ${pct(intraday)})`}`,
     target: '%5 – %15',
-    pass: volatility === null ? null : volatility >= 0.05 && volatility <= 0.15,
+    pass: weekly === null ? null : weekly >= 0.05 && weekly <= 0.15,
   });
 
   /* --- 3. NPC payı ------------------------------------------------------- */

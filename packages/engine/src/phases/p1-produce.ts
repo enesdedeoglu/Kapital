@@ -2,12 +2,14 @@ import { addBatch, consumeFefo, transfer, type Sql } from '@kapital/db';
 import {
   cityBonusFor, expiryTick, outputQuality, productionCapacity, rawInputQuality,
   type FacilityCategory,
+  eventMultipliersFor, type ActiveEvent,
 } from '@kapital/economy';
 import {
   asMoney, asQty, deterministicUuid, divRoundHalfEven, formatQty, InsufficientFunds,
   qtyFromNumber, type Money, type Qty,
 } from '@kapital/shared';
 import { configValue, rngFor, type EngineTick } from '../context.js';
+import { loadActiveEvents } from './world-events.js';
 import { PHASE } from '../phases.js';
 
 interface ProducerRow {
@@ -93,10 +95,14 @@ export async function runProducePhase(sql: Sql, tick: EngineTick): Promise<Produ
 
   const result = { facilities: 0, produced: 0n, jobsStarted: 0, jobsCompleted: 0, halted: 0, overheadCharged: 0n };
 
+  // Dünya olayları arzı ve maliyeti çarpar (madde 45): kuraklık üretimi kısar,
+  // enerji krizi işçilik+enerji giderini şişirir.
+  const events = await loadActiveEvents(sql, tick);
+
   for (const producer of producers) {
     result.facilities++;
     const started = await startJob(sql, tick, producer, inputsByRecipe.get(producer.recipe_id) ?? [], {
-      sinkId: sink!.id, baseQuality, variance,
+      sinkId: sink!.id, baseQuality, variance, events,
     });
     if (started.halted) result.halted++;
     if (started.jobId !== null) result.jobsStarted++;
@@ -116,11 +122,15 @@ async function startJob(
   tick: EngineTick,
   p: ProducerRow,
   inputs: readonly RecipeInputRow[],
-  ctx: { sinkId: string; baseQuality: number; variance: number },
+  ctx: { sinkId: string; baseQuality: number; variance: number; events: ActiveEvent[] },
 ): Promise<{ jobId: bigint | null; halted: boolean; overhead: bigint }> {
   const cityBonus = cityBonusFor(p.category, {
     agricultureBonus: p.agriculture_bonus,
     industrialBonus: p.industrial_bonus,
+  });
+  // Tesis kategorisi sektör olaylarının hedefi; çıktı ürünü ürün olaylarının.
+  const effects = eventMultipliersFor(ctx.events, {
+    category: p.category, productId: p.output_product_id, cityId: p.city_id,
   });
   const capacity = productionCapacity({
     baseCapacity: p.base_capacity,
@@ -129,6 +139,7 @@ async function startJob(
     cityBonus,
     technologyBonus: p.technology_bonus,
     utilization: p.utilization,
+    eventMultiplier: effects.supply,
   });
   const planned = qtyFromNumber(capacity) as bigint;
 
@@ -206,7 +217,10 @@ async function startJob(
 
     // İşçilik ve enerji reçete başınadır; üretilen orana göre ölçeklenir.
     const scale = output * 1000n / p.output_quantity;
-    const overhead = ((p.labor_cost + p.energy_cost) * scale) / 1000n;
+    // Maliyet çarpanı işçilik ve enerjiye uygulanır: enerji krizinde üretim
+    // durmaz, PAHALILAŞIR (madde 45).
+    const overhead = (((p.labor_cost + p.energy_cost) * scale) / 1000n
+      * BigInt(Math.round(effects.cost * 1000))) / 1000n;
 
     if (overhead > 0n) {
       try {

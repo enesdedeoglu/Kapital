@@ -336,6 +336,37 @@ tek başına durumu KÖTÜLEŞTİRDİĞİNİ gösterdi:
 
 Üretim kapasitesi sabitken talebi büyütmek yalnız kıtlığı derinleştiriyor.
 
+### Dünya olayları (madde 30/45)
+
+Spec `world_events`'i docs/03'te tanımlamıştı: süresi ve çarpanları olan bir
+ETKİ tablosu. F7'de aynı isimle bir DUYURU akışı kurulmuştu — doğru isim
+altında yanlış şey. 0014'te ayrıldılar:
+
+| Tablo | Ne |
+|---|---|
+| `world_notices` | Oyuncuya görünen duyuru akışı (ED müdahaleleri dahil) |
+| `world_events` | Ekonomiye etki eden olay: `demand/supply/cost` çarpanı + süre |
+
+Bir ED müdahalesi duyurudur ama etki değildir (etkisi `npc_directives`te); bir
+kuraklık ise hem etkidir hem duyurulur.
+
+**Katalog:** kuraklık · maden kazası · enerji krizi · tedarik aksaması ·
+sağlık uyarısı · soğuk dalgası · bayram · bereketli hasat · verimlilik hamlesi ·
+şehre göç. Kapsamlar: `PRODUCT` · `SECTOR` · `CITY` · `GLOBAL`.
+
+★ Ağırlığın **yarısından fazlası olumlu** olaylara ayrıldı ve bu bir testle
+sabitlendi. Yalnız felaket üreten bir dünya oyuncuya "ne yaparsan yap başına
+bir şey gelir" der; oysa amaç fırsat da yaratmaktır.
+
+Etkiler: arz → `productionCapacity.eventMultiplier` · maliyet → işçilik+enerji
+gideri (enerji krizinde üretim DURMAZ, pahalılaşır) · talep →
+`cityDemand.eventMultiplier`, dünya ölçeğiyle **çarpılarak** (ikisi farklı şey:
+biri oyuncu tabanının büyüklüğü, diğeri o anki hava).
+
+Üretim P0'da koşar (docs/05 §P0.2) ve tohumludur: aynı tohum aynı dünyayı
+üretir. Zar HER ZAMAN atılır, eleme sonra yapılır — doluluk kontrolünü zardan
+önce yapmak RNG dizisini dünyanın durumuna bağlar ve tekrarlanabilirliği bozar.
+
 ### Kalibrasyon turları — nereye gelindi
 
 | Yapılandırma | Geçen metrik |

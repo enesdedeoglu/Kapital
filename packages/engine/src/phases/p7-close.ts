@@ -59,6 +59,18 @@ export async function runClosePhase(sql: Sql, tick: EngineTick): Promise<ClosePh
      WHERE kind <> 'SYSTEM' AND status = 'ACTIVE' AND company_value > 0`;
   const gini = giniCoefficient(wealth.map((w) => w.company_value));
 
+  /*
+   * En üst %1 / medyan — spec'te (docs/03) tanımlıydı ama eklenmemişti.
+   * Medyan tek başına dağılımı anlatmaz: F8 ölçümünde p50 30.000 ₺ iken
+   * p90 165.926 ₺ çıktı ve bu iki kutupluluk medyanda hiç görünmüyordu.
+   */
+  const [spread] = await sql<{ p99: bigint; median: bigint }[]>`
+    SELECT COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY company_value), 0)::bigint AS p99,
+           COALESCE(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY company_value), 0)::bigint AS median
+      FROM companies WHERE kind <> 'SYSTEM' AND status = 'ACTIVE' AND company_value > 0`;
+  const p99ToMedian = spread && spread.median > 0n
+    ? Number(spread.p99) / Number(spread.median) : null;
+
   // CPI P5'te hesaplanır ve `fx_rates`e yazılır; anlık görüntüye de kopyalanır
   // ki admin paneli tek tabloya baksın.
   const [fx] = await sql<{ game_cpi: number | null }[]>`
@@ -68,11 +80,12 @@ export async function runClosePhase(sql: Sql, tick: EngineTick): Promise<ClosePh
     INSERT INTO economy_snapshots (tick_id, total_money_supply, player_money, npc_money,
                                    faucet_in, sink_out, median_company_value, active_companies,
                                    credit_outstanding, credit_share, active_loans,
-                                   defaults_24h, bankruptcies_24h, gini, game_cpi)
+                                   defaults_24h, bankruptcies_24h, gini, game_cpi, p99_to_median_ratio)
     VALUES (${tick.seq}, ${supply!.total}, ${supply!.player}, ${supply!.npc},
             ${supply!.faucet}, ${supply!.sink}, ${median!.value}, ${supply!.active},
             ${credit!.outstanding}, ${creditShare}, ${credit!.loans},
-            ${credit!.defaults}, ${bankruptcies!.count}, ${gini}, ${fx?.game_cpi ?? null})
+            ${credit!.defaults}, ${bankruptcies!.count}, ${gini}, ${fx?.game_cpi ?? null},
+            ${p99ToMedian})
     ON CONFLICT (tick_id) DO NOTHING`;
 
   // Satış yapan her şirkete tur özeti. dedupe_key idempotency sağlar.

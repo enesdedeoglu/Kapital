@@ -19,7 +19,7 @@ beforeEach(async () => {
     TRUNCATE market_orders, market_trades, retail_offers, retail_sales, city_demand,
              price_history, company_financials, facility_financials, economy_snapshots,
              production_jobs, production_records, market_health, npc_directives,
-             world_events, fx_rates RESTART IDENTITY CASCADE;
+             world_events, world_notices, fx_rates RESTART IDENTITY CASCADE;
     DELETE FROM tick_phase_runs;
     DELETE FROM economic_ticks WHERE seq > 0;
   `);
@@ -95,7 +95,7 @@ describe('müdahale bantları ve direktifler (madde 30)', () => {
   it('★ ithal edilemeyen üründe kapı açıldığı söylenmez, durum olduğu gibi duyurulur', async () => {
     await runTicks(2);
     const [event] = await sql<{ kind: string; severity: string; title: string }[]>`
-      SELECT kind, severity, title FROM world_events WHERE product_id = ${TOMATO}`;
+      SELECT kind, severity, title FROM world_notices WHERE product_id = ${TOMATO}`;
     // Domates nihai tüketim ürünüdür: world_market.importable = false.
     expect(event!.kind).toBe('IMPORT_UNAVAILABLE');
     expect(event!.severity).toBe('WARNING');
@@ -104,14 +104,14 @@ describe('müdahale bantları ve direktifler (madde 30)', () => {
   it('ithal EDİLEBİLEN üründe ithalat kapısı duyurulur', async () => {
     await runTicks(2);
     const [event] = await sql<{ kind: string }[]>`
-      SELECT kind FROM world_events WHERE product_id = ${FURNITURE}`;
+      SELECT kind FROM world_notices WHERE product_id = ${FURNITURE}`;
     expect(event?.kind).toBe('IMPORT_GATE_OPENED');
   });
 
   it('aynı olay her tur tekrar duyurulmaz — gün başına tek bildirim', async () => {
     await runTicks(6);
     const [{ count }] = await sql<{ count: bigint }[]>`
-      SELECT COUNT(*) AS count FROM world_events
+      SELECT COUNT(*) AS count FROM world_notices
        WHERE product_id = ${TOMATO} AND kind = 'IMPORT_UNAVAILABLE'`;
     expect(count).toBe(1n);
   });
@@ -159,7 +159,7 @@ describe('müdahale bantları ve direktifler (madde 30)', () => {
       quantity: qty(500), unitCost: money(5), quality: 70, producedAtTick: 0n,
     }));
     await runTicks(3);
-    const events = await sql`SELECT id FROM world_events WHERE product_id = ${WHEAT}`;
+    const events = await sql`SELECT id FROM world_notices WHERE product_id = ${WHEAT}`;
     expect(events).toHaveLength(0);
   });
 });
@@ -184,7 +184,7 @@ describe('★ ÇIKIŞ KRİTERİ: acil rezerv son çaredir (madde 32)', () => {
   it('rezerv müdahalesi CRITICAL olarak duyurulur', async () => {
     await runTicks(13);
     const [event] = await sql<{ kind: string; severity: string }[]>`
-      SELECT kind, severity FROM world_events WHERE kind = 'RESERVE_INTERVENTION'`;
+      SELECT kind, severity FROM world_notices WHERE kind = 'RESERVE_INTERVENTION'`;
     expect(event!.severity).toBe('CRITICAL');
   });
 

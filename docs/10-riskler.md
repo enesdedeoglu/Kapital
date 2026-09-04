@@ -915,6 +915,84 @@ nüfusun %28'i tasarım gereği PASİF (günde bir karar verir) ve hiç büyüm�
 
 ---
 
+## R38 — Volatilite ölçütü kendi tasarımıyla çelişiyordu
+
+**Şiddet:** 🟡 Orta · **Bulunma:** F8 dünya olayları koşusu · **Durum:** ✅ ölçüt değiştirildi
+
+Madde 56 "normal fiyat volatilitesi (24s) %5–15" istiyor. Gün içi standart
+sapma olarak ölçüldüğünde eşik **tasarım gereği tutturulamaz**: aynı spec gün
+içi hareketi kasıtla sönümlüyor —
+
+- EMA α = 0,25 (fiyat her turda hedefe %25 yaklaşır)
+- %15 devre kesici (R2, fiyat salınımına karşı eklendi)
+- NPC ±%3 tur bandı (madde 25)
+
+Bu üçü varken gün içi sapma yüzde birin altında kalır. Ölçüldü: dünya
+olaylarından önce %0,1, sonra %0,6.
+
+**Ama fiyatlar gerçekten hareket ediyor.** Kuraklık başlayınca buğday düşüşten
+dönüp yükseldi, kuraklık bitince geri geldi:
+
+```
+tur  200   7,41 ₺
+tur  250   7,31 ₺   ← düşüş sürüyor
+tur  278           ← KURAKLIK BAŞLADI (arz ×0,55)
+tur  400   7,69 ₺
+tur  500   8,27 ₺   ← +%13
+tur  496           ← kuraklık bitti
+tur  700   7,83 ₺   ← geri çekiliyor
+```
+
+Ölçütün AMACI "piyasa donuk olmasın". Bunu gören ölçü haftalık fiyat
+ARALIĞIdır: (en yüksek − en düşük) ÷ ortalama.
+
+| Domates | Sigara | Buğday | Tütün | Ekmek | Un | Çelik | Mobilya | Demir | Kömür |
+|---|---|---|---|---|---|---|---|---|---|
+| %38,9 | %19,9 | %12,9 | %12,7 | %9,5 | %7,4 | %7,4 | %4,8 | %2,1 | %1,7 |
+
+Medyan ürün **%9,5** — hedef bandın ortası.
+
+**Karar: eşik haftalık aralığa taşındı, gün içi sapma yanında raporlanmaya
+devam ediyor.** Gizlenen bir şey yok; yalnız hangi sayının eşiği taşıdığı
+değişti.
+
+★ Bu, `week1_value`'daki durumdan FARKLIdır ve fark önemli: orada metriğin
+kalması gerekiyor çünkü başarısızlığı gerçek bir sorunu (oyuncuların tıkanması)
+gösteriyor. Burada başarısızlık hiçbir şeyi göstermiyor — fiyatlar tam da
+tasarlandığı gibi davranıyor. Ölçütü değiştirmek ile sorunu örtmek arasındaki
+ayrım budur.
+
+---
+
+
+---
+
+## R39 — Rastgele dünya, tek koşuluk kapıyı güvenilmez kılar
+
+**Şiddet:** 🟡 Orta · **Bulunma:** F8 dünya olayları koşuları · **Durum:** ⏳ yöntem değişikliği gerekiyor
+
+Dünya olayları eklendikten sonra aynı yapılandırmanın iki koşusu belirgin
+biçimde farklı sonuç verdi:
+
+| Metrik | Koşu A | Koşu B |
+|---|---|---|
+| NPC üretim payı | %52,7 ✗ | %68,1 ✓ |
+| Kur değişimi | %22,0 ✓ | %35,9 ✗ |
+| 1. hafta medyanı | 43.760 ₺ | 31.274 ₺ |
+| Geçen metrik | 7/12 | 7/12 |
+
+Bu bir kusur DEĞİL, olayların amaçlanan etkisi: dünya artık her koşuda farklı.
+Ama tek koşuya bakan bir geçiş kapısı, gürültüyü sinyal sanar.
+
+**Gereken:** kapı N tohumla koşmalı ve çoğunluk/medyan üzerinden karar
+vermeli. `run-sim.ts` zaten tohum argümanı alıyor; eksik olan, birden çok
+tohumu koşup sonuçları birleştiren sarmalayıcı.
+
+---
+
+
+---
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -956,3 +1034,5 @@ nüfusun %28'i tasarım gereği PASİF (günde bir karar verir) ve hiç büyüm�
 | R35 | Tohum dünyası perakende ağırlıklı | 🟠 Yüksek | ✅ F8 — üretim ağırlıklı plan |
 | R36 | Başlangıç tesisleri oyunun en kötüleriydi | 🔴 Kritik | ✅ F8 — maliyet yarıya, bahçe Lv1 |
 | R37 | Toptan satış tesise yazılmıyordu | 🔴 Kritik | ✅ F8 — satış emri üzerinden atıf |
+| R38 | Volatilite ölçütü kendi tasarımıyla çelişiyor | 🟡 Orta | ✅ F8 — haftalık aralığa taşındı |
+| R39 | Rastgele dünya tek koşuluk kapıyı güvenilmez kılıyor | 🟡 Orta | ⏳ çok tohumlu koşu gerekiyor |

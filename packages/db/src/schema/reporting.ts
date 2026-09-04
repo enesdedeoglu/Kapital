@@ -123,6 +123,7 @@ export const economySnapshots = pgTable('economy_snapshots', {
   defaults24h: integer('defaults_24h').notNull().default(0),
   /** Servet dağılımı — 0 eşit, 1 tekelleşmiş. Para arzı ve CPI bunu göstermez. */
   gini: doublePrecision('gini'),
+  p99ToMedianRatio: doublePrecision('p99_to_median_ratio'),
 });
 
 /**
@@ -157,9 +158,9 @@ export const marketHealth = pgTable(
   ],
 );
 
-/** Dünya olayları — ED'nin ve adminin görünür müdahale kaydı (madde 32). */
-export const worldEvents = pgTable(
-  'world_events',
+/** Oyuncuya görünen duyuru akışı — ED müdahaleleri ve dünya olayları. */
+export const worldNotices = pgTable(
+  'world_notices',
   {
     id: bigserial('id', { mode: 'bigint' }).primaryKey(),
     tickId: bigint('tick_id', { mode: 'bigint' }).notNull(),
@@ -175,8 +176,8 @@ export const worldEvents = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('world_events_dedupe').on(t.dedupeKey),
-    index('world_events_recent').on(t.tickId),
+    uniqueIndex('world_notices_dedupe').on(t.dedupeKey),
+    index('world_notices_recent').on(t.tickId),
   ],
 );
 
@@ -203,4 +204,33 @@ export const npcDirectives = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('npc_directives_active').on(t.productId, t.expiresTick)],
+);
+
+/**
+ * Dünya olayları — ekonomiye ETKİ EDEN olay (docs/03, madde 30/45).
+ *
+ * `world_notices` duyuru akışıdır; bu tablo etkidir. Bir ED müdahalesi
+ * duyurudur ama etkisi `npc_directives`tedir; bir kuraklık ise hem etkidir
+ * hem duyurulur. `created_by` NULL ise olay sistem tarafından üretilmiştir.
+ */
+export const worldEvents = pgTable(
+  'world_events',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    scope: text('scope').notNull(),
+    productId: smallint('product_id').references(() => products.id),
+    cityId: smallint('city_id').references(() => cities.id),
+    category: text('category'),
+    demandMultiplier: doublePrecision('demand_multiplier').notNull().default(1),
+    supplyMultiplier: doublePrecision('supply_multiplier').notNull().default(1),
+    costMultiplier: doublePrecision('cost_multiplier').notNull().default(1),
+    startTick: bigint('start_tick', { mode: 'bigint' }).notNull(),
+    endTick: bigint('end_tick', { mode: 'bigint' }).notNull(),
+    createdBy: uuid('created_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('world_events_window').on(t.startTick, t.endTick)],
 );

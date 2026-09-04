@@ -1,11 +1,13 @@
 import type { Sql } from '@kapital/db';
 import { mulMoney, qtyFromNumber } from '@kapital/shared';
+import { runWorldEvents } from './world-events.js';
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices } from '../reference-prices.js';
 import { computeForeignCapacity } from './foreign-capacity.js';
 
 export interface OpenPhaseResult {
   expiredOrders: number;
+  worldEvents: { active: number; started: number; ended: number };
   completedConstructions: number;
   npcOffersRefreshed: number;
   foreignProducts: number;
@@ -21,6 +23,13 @@ interface SimpleSeller {
  * rng tohumu, mevsim) ve süresi dolmuş kayıtlar temizlenir.
  */
 export async function runOpenPhase(sql: Sql, tick: EngineTick): Promise<OpenPhaseResult> {
+  /*
+   * ★ Dünya olayları EN BAŞTA koşar (docs/05 §P0.2): "Aktif world_events
+   * çarpanlarını hesapla ve tick context'ine yaz". Olay bu turun üretimini ve
+   * talebini etkiler, dolayısıyla P1'den önce yerini almalıdır.
+   */
+  const worldEvents = await runWorldEvents(sql, tick);
+
   const expired = await sql`
     UPDATE market_orders SET status = 'EXPIRED'
     WHERE status IN ('OPEN','PARTIAL') AND expires_at_tick <= ${tick.seq}
@@ -40,6 +49,7 @@ export async function runOpenPhase(sql: Sql, tick: EngineTick): Promise<OpenPhas
 
   return {
     expiredOrders: expired.length,
+    worldEvents,
     completedConstructions: completed.length,
     npcOffersRefreshed,
     foreignProducts: foreign.products,

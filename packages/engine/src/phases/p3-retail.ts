@@ -3,9 +3,11 @@ import {
   allocateRetail, cityDemand, demandNoise, economicCycle, scoreOffer, seasonMultiplier,
   type CategoryWeights, type CityDemandParams, type ProductDemandParams, type RetailOffer,
   worldDemandScale, DEFAULT_DEMAND_SCALE, type DemandScaleConfig,
+  eventMultipliersFor,
 } from '@kapital/economy';
 import { asMoney, asQty, deterministicUuid, priceTimesQty, type Money } from '@kapital/shared';
 import { configValue, rngFor, type EngineTick } from '../context.js';
+import { loadActiveEvents } from './world-events.js';
 import { PHASE } from '../phases.js';
 import { loadReferencePrices } from '../reference-prices.js';
 
@@ -89,6 +91,11 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
     SELECT COUNT(*) AS count FROM companies
      WHERE kind <> 'SYSTEM' AND status = 'ACTIVE'`;
   const demandScale = worldDemandScale(Number(activeCount?.count ?? 0n), scaleCfg);
+
+  // Dünya olayları talebi çarpar (madde 45). Dünya ölçeğiyle ÇARPILIR, üstüne
+  // yazılmaz: ikisi farklı şeylerdir — biri oyuncu tabanının büyüklüğü, diğeri
+  // o anki hava.
+  const events = await loadActiveEvents(sql, tick);
   const [consumer] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = 'SYS_CONSUMER'`;
 
   const byMarket = new Map<string, OfferRow[]>();
@@ -124,7 +131,9 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
       const demand = cityDemand(productParams, cityParams, {
         economicCycle: cycle,
         seasonMultiplier: seasonMultiplier(tick.season, seasonTable, product.code),
-        eventMultiplier: demandScale,
+        eventMultiplier: demandScale * eventMultipliersFor(events, {
+          productId: product.id, cityId: city.id,
+        }).demand,
         noise: demandNoise(rng, retailCfg.noiseMin, retailCfg.noiseMax),
         budgetSlack,
       });

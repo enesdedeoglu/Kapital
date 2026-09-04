@@ -397,7 +397,7 @@ interface Announcement {
 /** Her müdahale görünür olmalıdır: gizli müdahale "sistem hile yapıyor"dur. */
 async function announce(sql: Sql, tick: EngineTick, event: Announcement): Promise<boolean> {
   const rows = await sql`
-    INSERT INTO world_events (tick_id, kind, product_id, city_id, severity, title, body,
+    INSERT INTO world_notices (tick_id, kind, product_id, city_id, severity, title, body,
                               payload, dedupe_key)
     VALUES (${tick.seq}, ${event.kind}, ${event.productId ?? null}, ${event.cityId ?? null},
             ${event.severity}, ${event.title}, ${event.body},

@@ -49,7 +49,7 @@ export async function truncateGameState(sql: Sql): Promise<void> {
              fx_trades, foreign_trades, retail_offers, retail_sales,
              production_jobs, production_records,
              npc_profiles, npc_decisions, npc_directives,
-             market_health, world_events RESTART IDENTITY CASCADE;
+             market_health, world_events, world_notices RESTART IDENTITY CASCADE;
     DELETE FROM companies WHERE kind = 'PLAYER'
         OR (kind = 'NPC' AND name LIKE '${TEST_NPC_PREFIX}%');
     UPDATE companies SET cash = 0, usd_balance = 0, company_value = 0
