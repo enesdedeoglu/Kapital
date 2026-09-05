@@ -56,10 +56,25 @@ export const productCategories = [
 export const products = [
   { id: 1,  code: 'WHEAT',     name: 'Buğday',  categoryId: 4, unit: 'kg',    price: 8,   demand: 0,    priceSens: 1.4, qualSens: 0.9, brandSens: 0.2, shelfLife: 2880, decay: 0.0004, weight: 1.0,  unlock: 5,  raw: true,  inter: false, retail: false },
   { id: 2,  code: 'FLOUR',     name: 'Un',      categoryId: 5, unit: 'kg',    price: 22,   demand: 0,    priceSens: 1.3, qualSens: 1.0, brandSens: 0.3, shelfLife: 5760, decay: 0.0002, weight: 1.0,  unlock: 6,  raw: false, inter: true,  retail: false },
-  { id: 3,  code: 'BREAD',     name: 'Ekmek',   categoryId: 1, unit: 'adet',  price: 15,   demand: 40,   priceSens: 1.7, qualSens: 0.8, brandSens: 0.35, shelfLife: 96,  decay: 0.0150, weight: 0.5,  unlock: 6,  raw: false, inter: false, retail: true },
+  /*
+   * ★ TİCARET kilitleri ilk hafta oyuncusunun eriştiği pazarı belirler (R50).
+   *
+   * Ekmek 6, sigara 8'di. 400. turda oyuncular seviye 1 (39 kişi), 2 (17) ve
+   * 3 (4) dağılımındaydı — yani ilk haftanın TAMAMI tek ürün: domates.
+   * 86 oyuncu dükkânı aynı domates için yarışırken NPC marketleri dördünü
+   * birden satıyordu: dükkân başına 2,8 kg/tur vs 37,6. Süresi dolan 2.141
+   * oyuncu emrinin hepsi domatesti.
+   *
+   * Ekmek en büyük pazardır (1.014 kg/tur, domates 634) ve Lv2'de açılması
+   * ilk haftayı tek üründen çıkarır. Sigara Lv4 hedef olarak kalır.
+   *
+   * ÜRETİM kilitleri (buğday 5, un 6) bilerek yukarıda: oyuncu önce satmayı,
+   * sonra üretmeyi öğrenir.
+   */
+  { id: 3,  code: 'BREAD',     name: 'Ekmek',   categoryId: 1, unit: 'adet',  price: 15,   demand: 40,   priceSens: 1.7, qualSens: 0.8, brandSens: 0.35, shelfLife: 96,  decay: 0.0150, weight: 0.5,  unlock: 2,  raw: false, inter: false, retail: true },
   { id: 4,  code: 'TOMATO',    name: 'Domates', categoryId: 2, unit: 'kg',    price: 15,   demand: 25,   priceSens: 1.5, qualSens: 1.1, brandSens: 0.30, shelfLife: 480, decay: 0.0040, weight: 1.0,  unlock: 1,  raw: true,  inter: false, retail: true },
   { id: 5,  code: 'TOBACCO',   name: 'Tütün',   categoryId: 4, unit: 'kg',    price: 30,   demand: 0,    priceSens: 1.2, qualSens: 1.2, brandSens: 0.2, shelfLife: 8640, decay: 0.0001, weight: 1.0,  unlock: 7,  raw: true,  inter: false, retail: false },
-  { id: 6,  code: 'CIGARETTE', name: 'Sigara',  categoryId: 3, unit: 'paket', price: 80,   demand: 8,    priceSens: 0.9, qualSens: 0.9, brandSens: 1.20, shelfLife: null, decay: 0,     weight: 0.2,  unlock: 8,  raw: false, inter: false, retail: true },
+  { id: 6,  code: 'CIGARETTE', name: 'Sigara',  categoryId: 3, unit: 'paket', price: 80,   demand: 8,    priceSens: 0.9, qualSens: 0.9, brandSens: 1.20, shelfLife: null, decay: 0,     weight: 0.2,  unlock: 4,  raw: false, inter: false, retail: true },
   { id: 7,  code: 'IRON',      name: 'Demir',   categoryId: 4, unit: 'kg',    price: 24,   demand: 0,    priceSens: 1.5, qualSens: 1.0, brandSens: 0.2, shelfLife: null, decay: 0,     weight: 1.0,  unlock: 13, raw: true,  inter: false, retail: false },
   { id: 8,  code: 'COAL',      name: 'Kömür',   categoryId: 4, unit: 'kg',    price: 14,   demand: 0,    priceSens: 1.5, qualSens: 0.9, brandSens: 0.2, shelfLife: null, decay: 0,     weight: 1.0,  unlock: 13, raw: true,  inter: false, retail: false },
   { id: 9,  code: 'STEEL',     name: 'Çelik',   categoryId: 5, unit: 'kg',    price: 72,   demand: 0,    priceSens: 1.3, qualSens: 1.1, brandSens: 0.25, shelfLife: null, decay: 0,    weight: 1.0,  unlock: 15, raw: false, inter: true,  retail: false },

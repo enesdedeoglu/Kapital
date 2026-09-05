@@ -1340,3 +1340,5 @@ para muslugunu ele geçirir ve iç üretim anlamsızlaşır.
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |
 | R48 | Sermaye zincirin son halkasına yığılıyor | 🔴 Kritik | ✅ F8 — `strategicNeed` zincirden |
+| R49 | Yatırım eşiği ulaşılabilir skorun üstünde | 🟠 Yüksek | ✅ F8 — eşik 0,55 → 0,38 |
+| R50 | İlk haftanın tamamı tek ürün (ticaret kilitleri) | 🔴 Kritik | ⏳ kilitler indi, XP kapısı açık |
