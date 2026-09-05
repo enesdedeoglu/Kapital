@@ -98,3 +98,34 @@ export const standingOrders = pgTable(
   },
   (t) => [uniqueIndex('standing_orders_unique').on(t.facilityId, t.productId, t.kind)],
 );
+
+/**
+ * NPC karakteri — hepsi aynı davranmaz: 8 arketip, parametreler ±%15 dağıtılır
+ * (madde 24, docs/07 §9).
+ *
+ * Şirketin 1:1 uzantısıdır. NPC gerçek bir şirkettir: aynı tablolar, aynı
+ * kurallar, aynı defter. Ayrıcalığı yoktur — yalnız kararlarını insan yerine
+ * kod verir. Bu tablo o kararın parametreleridir.
+ */
+export const npcProfiles = pgTable(
+  'npc_profiles',
+  {
+    companyId: uuid('company_id').primaryKey().references(() => companies.id, { onDelete: 'cascade' }),
+    archetype: text('archetype').notNull(),
+    riskTolerance: doublePrecision('risk_tolerance').notNull(),
+    targetMargin: doublePrecision('target_margin').notNull(),
+    qualityTarget: doublePrecision('quality_target').notNull(),
+    /** Kaç turluk stok hedefleniyor (madde 26). */
+    inventoryTargetTicks: smallint('inventory_target_ticks').notNull(),
+    /** 0 = maliyet+marj fiyatlar · 1 = tamamen piyasayı takip eder. */
+    priceAggressiveness: doublePrecision('price_aggressiveness').notNull(),
+    investmentAggressiveness: doublePrecision('investment_aggressiveness').notNull(),
+    preferredSectors: smallint('preferred_sectors').array().notNull().default([]),
+    maxDebtRatio: doublePrecision('max_debt_ratio').notNull().default(0.5),
+    cashReserveRatio: doublePrecision('cash_reserve_ratio').notNull().default(0.15),
+    /** Stratejik kararlar her turda değil, bu aralıkla verilir (maliyet). */
+    strategyIntervalTicks: smallint('strategy_interval_ticks').notNull().default(96),
+    lastStrategyTick: bigint('last_strategy_tick', { mode: 'bigint' }).notNull().default(0n),
+  },
+  (t) => [index('npc_profiles_strategy').on(t.lastStrategyTick)],
+);
