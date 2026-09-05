@@ -79,7 +79,7 @@ jobs:
           set +e
           pnpm --filter @kapital/sim exec tsx src/cli/gate.ts \
             1 ${{ inputs.players || '60' }} ${{ inputs.ticks || '700' }} "$seed" \
-            --raw "ham-${{ matrix.index }}.json"
+            --raw "$GITHUB_WORKSPACE/ham-${{ matrix.index }}.json"
           code=$?
           set -e
           # 0 = kapı geçti, 1 = geçmedi. İkisi de GEÇERLİ sonuçtur; kararı
@@ -93,8 +93,8 @@ jobs:
         run: |
           sudo apt-get install -y --no-install-recommends postgresql-client >/dev/null
           psql "$DATABASE_URL" -X -f apps/sim/sql/teshis.sql \
-            > "teshis-${{ matrix.index }}.txt" 2>&1 || true
-          cat "teshis-${{ matrix.index }}.txt"
+            > "$GITHUB_WORKSPACE/teshis-${{ matrix.index }}.txt" 2>&1 || true
+          cat "$GITHUB_WORKSPACE/teshis-${{ matrix.index }}.txt"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -128,8 +128,13 @@ jobs:
 
       - name: Birleşik kapı raporu
         run: |
+          # ★ Yollar MUTLAK: `pnpm --filter … exec` komutu paket dizininde
+          # (apps/sim) çalışır, depo kökünde değil. Göreli yazıldığında ham
+          # dosyalar apps/sim altına düştü, yükleme adımı kökte aradı ve
+          # sessizce yalnız teşhis dosyalarını yükledi.
           pnpm --filter @kapital/sim exec tsx src/cli/aggregate.ts \
-            ham/*.json --json kapi.json | tee rapor.txt
+            "$GITHUB_WORKSPACE"/ham/*.json --json "$GITHUB_WORKSPACE/kapi.json" \
+            | tee "$GITHUB_WORKSPACE/rapor.txt"
           # Adım özetine de yaz: Actions sayfasında tıklamadan görünsün.
           { echo '```'; cat rapor.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
