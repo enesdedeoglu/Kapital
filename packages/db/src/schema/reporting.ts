@@ -204,3 +204,58 @@ export const npcDirectives = pgTable(
   },
   (t) => [index('npc_directives_active').on(t.productId, t.expiresTick)],
 );
+
+/**
+ * Tur başına tesis üretim özeti — raporlama ve "neden durdu" teşhisi (docs/05 P1).
+ *
+ * `capacity` ile `produced` ayrı tutulur: aradaki fark teşhisin kendisidir,
+ * `halted_reason` de onu adlandırır.
+ *
+ * `tick_id`'ye göre RANGE partition; Drizzle yalnız ana tabloyu tanır.
+ */
+export const productionRecords = pgTable(
+  'production_records',
+  {
+    tickId: bigint('tick_id', { mode: 'bigint' }).notNull(),
+    facilityId: uuid('facility_id').notNull(),
+    companyId: uuid('company_id').notNull(),
+    recipeId: integer('recipe_id').notNull(),
+    productId: smallint('product_id').notNull(),
+    capacity: qtyCol('capacity').notNull(),
+    produced: qtyCol('produced').notNull(),
+    outputQuality: numeric('output_quality', { precision: 6, scale: 3 }).notNull(),
+    inputCost: moneyCol('input_cost').notNull().default(0n),
+    /** İşçilik ve enerji — üretim olmasa da ödenir, bu yüzden ayrı kolondur. */
+    overheadCost: moneyCol('overhead_cost').notNull().default(0n),
+    haltedReason: text('halted_reason'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tickId, t.facilityId] }),
+    index('production_records_company').on(t.companyId, t.tickId),
+  ],
+);
+
+/**
+ * Tur başına NPC karar günlüğü — "NPC neden böyle davrandı" sorusunun cevabı.
+ *
+ * `kind`: PRICE · BUY · SELL · INVEST. Değerler her türde para ölçeğindedir
+ * (fiyat ya da maliyet); karar bir değer değiştirmiyorsa NULL kalır.
+ *
+ * `tick_id`'ye göre RANGE partition; Drizzle yalnız ana tabloyu tanır.
+ */
+export const npcDecisions = pgTable(
+  'npc_decisions',
+  {
+    tickId: bigint('tick_id', { mode: 'bigint' }).notNull(),
+    companyId: uuid('company_id').notNull(),
+    productId: smallint('product_id').notNull(),
+    kind: text('kind').notNull(),
+    oldValue: moneyCol('old_value'),
+    newValue: moneyCol('new_value'),
+    reason: text('reason').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tickId, t.companyId, t.productId, t.kind] }),
+    index('npc_decisions_company').on(t.companyId, t.tickId),
+  ],
+);

@@ -64,20 +64,13 @@ it('veritabanında Drizzle şemasında olmayan tablo yok', async () => {
        AND i.inhrelid IS NULL`;
 
   /*
-   * Bilinen borç — F0–F5'ten kalma, Drizzle'a hiç eklenmemiş tablolar.
+   * Bilinen borç KALMADI: F0–F5'ten kalma tabloların hepsi Drizzle'a yazıldı.
+   * Liste bilerek boş bırakıldı, silinmedi.
    *
-   * Bu liste bir MUAFİYET değil, GÖRÜNÜRLÜK aracıdır: yeni bir tablo eklenip
-   * şemaya yazılmazsa test düşer. Listedekiler ise sayılıdır ve ayrı bir işte
-   * kapatılacaktır. Kodda hepsi ham SQL ile kullanılıyor; Drizzle bu projede
-   * tipleme yüzeyidir (ADR-0006), sorgu katmanı değil.
+   * Buraya bir isim eklemek geçici bir borç kaydıdır, muafiyet değil: yeni bir
+   * tablo migration'a girip şemaya girmezse bu test düşer ve düşmelidir.
    */
-  const bilinenBorc = new Set<string>([
-    'city_distances', 'foreign_trade_capacity', 'foreign_trades', 'fx_rates',
-    'fx_trades', 'idempotency_keys', 'loan_payments', 'npc_decisions',
-    'npc_profiles', 'outbox', 'production_jobs', 'recipe_inputs',
-    'production_records', 'refresh_tokens', 'shipments', 'tick_phase_runs',
-    'trade_flags',
-  ]);
+  const bilinenBorc = new Set<string>([]);
 
   const known = new Set<string>(['_migrations', ...bilinenBorc]);
   for (const value of Object.values(schema)) {

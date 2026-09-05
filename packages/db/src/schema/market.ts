@@ -1,6 +1,6 @@
 import {
-  bigint, boolean, doublePrecision, index, numeric, pgEnum, pgTable, primaryKey,
-  smallint, timestamp, uuid,
+  bigint, bigserial, boolean, doublePrecision, index, numeric, pgEnum, pgTable, primaryKey,
+  smallint, text, timestamp, uuid,
 } from 'drizzle-orm/pg-core';
 import { moneyCol, qtyCol } from './_types.js';
 import { companies } from './organization.js';
@@ -65,4 +65,36 @@ export const retailOffers = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.facilityId, t.productId] })],
+);
+
+/**
+ * ANTİ-MANİPÜLASYON — wash trade tespiti (madde 48, risk R8).
+ *
+ * İşlem İPTAL EDİLMEZ: oyuncular ticaretini yapar, yalnız referans fiyat
+ * endeksini kirletemez. `market_trades.is_excluded_from_index` buradaki
+ * tespite göre set edilir.
+ *
+ * Şirket alanları yumuşak referanstır — 0008'de FK'ları düşürüldü.
+ */
+export const tradeFlags = pgTable(
+  'trade_flags',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    tickId: bigint('tick_id', { mode: 'bigint' }).notNull(),
+    /** İkili yön bağımsızdır: (A,B) ile (B,A) aynı ikilidir, UUID metnine göre sıralanır. */
+    companyA: uuid('company_a').notNull(),
+    companyB: uuid('company_b').notNull(),
+    productId: smallint('product_id').notNull().references(() => products.id),
+    windowStartTick: bigint('window_start_tick', { mode: 'bigint' }).notNull(),
+    /** Hacimler `market_trades.quantity` toplamıdır — miktar ölçeğinde. */
+    bilateralVolume: qtyCol('bilateral_volume').notNull(),
+    marketVolume: qtyCol('market_volume').notNull(),
+    bilateralShare: doublePrecision('bilateral_share').notNull(),
+    priceDeviationPct: doublePrecision('price_deviation_pct').notNull(),
+    /** Şüphe iki koşulun BİRLİKTE sağlanmasıyla oluşur: pay × sapma. */
+    suspicionScore: doublePrecision('suspicion_score').notNull(),
+    actionTaken: text('action_taken').notNull().default('INDEX_EXCLUDED'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('trade_flags_pair').on(t.companyA, t.companyB, t.tickId)],
 );
