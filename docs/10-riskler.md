@@ -1467,6 +1467,60 @@ Doğru çözüm ölçütü zorlamak değil, ayrı bir senaryo testi: Lv7 + liman
 İkincisi asıl risktir: kapasite sınırı yanlış ayarlanırsa dış ticaret ekonominin
 para muslugunu ele geçirir ve iç üretim anlamsızlaşır.
 
+**Çözüldü (F8).** `foreign.e2e.test.ts` Lv7 + limanlı bir tüccar kurup uçtan
+uca sınıyor. Yazarken üç şey öğrenildi:
+
+- **İthalat DÖVİZLE ödenir** — oyuncu önce ₺ bozdurmak zorunda. Dış ticaret
+  böylece kur riskine bağlı: ithalatçı yalnız mal fiyatını değil kuru da
+  üstlenir.
+- **Kapasite paylaşılan bir havuzdur** — `talep × %15`, ve Ekonomik Direktör'ün
+  acil rezerv alımları da aynı havuzdan yer. Boş dünyada ED havuzu tüketiyordu.
+- **Arbitraj kapalı.** İthalat dünya fiyatının 1,35 katı, ihracat 0,75 katı:
+  %60'lık makas, turu kapatanı zararda bırakır. Test bunu doğruluyor —
+  ithal edip hemen ihraç eden oyuncunun döviz bakiyesi DÜŞÜYOR. İkinci savunma
+  tur başına kapasite tavanı. Para arzı zaten haftada ~%56 büyüdüğü için
+  (R47 sonrası ölçüm) sınırsız bir arbitraj bunun üstüne binerdi; binmiyor.
+
+Geriye kalan tek şey mekaniğin kapı ufkunda hiç ÇALIŞMAMASI: liman Lv7 ve
+200.000 ₺, kapı 7 gün koşuyor. Bu bir kusur değil, geç oyun tasarımıdır —
+ölçüt de zaten bir tavandır (< %30) ve %0 onu geçer.
+
+---
+
+## R51 — Raf fiyatı satılmayan stoğa tepki vermiyordu: fazla mal, buna rağmen pahalı
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F8 karşılanan/istenen talep ölçümü · **Durum:** ✅ çözüldü
+
+Domates paradoksu: arz/talep oranı 1,28–1,67 ile FAZLA üretilirken talebin
+**%38,6'sı tüketicinin bütçesi yetmediği için alınamıyordu** ve %18'i hiç
+karşılanmıyordu. Fazla mal, buna rağmen pahalı.
+
+`city_demand` bu ayrımı zaten kaydediyordu ama kimse bakmıyordu:
+
+| ürün | istenen | karşılanan | bütçe yetmedi |
+|---|---|---|---|
+| BREAD | 99.815 | %53,9 | %2,5 |
+| TOMATO | 62.319 | %82,0 | **%38,6** |
+| CIGARETTE | 19.932 | %85,1 | %26,2 |
+
+Ekmek gerçekten kıttı (bütçe engeli %2,5 — mal yok). Domates ise pahalıydı.
+
+Sebep: raf fiyatı dükkânın KENDİ satılmayan stoğuna hiç bakmıyordu. Hem NPC hem
+oyuncu referansın sabit `retailMarkup` katıyla fiyatlıyor, çıpa da rakiplerin
+ortalama raf fiyatı olduğu için herkes pahalıysa herkes pahalı kalıyordu —
+kapalı döngü, fiyatı aşağı çeken hiçbir kuvvet yok.
+
+Üretimde bu geri besleme vardı (`outputThrottle`: satılmayan stok birikince
+kapasiteyi kıs), fiyatta yoktu. `clearanceFactor` eklendi: dükkânın kendi satış
+hızına göre 8 turdan fazla stok birikince fiyat kademeli düşer, en çok %25.
+Maliyet tabanı korunur — amaç zararına satmak değil, rafı döndürmektir. NPC ve
+oyuncu aynı kuralı kullanır ve ikisi de GERÇEK satış hızını okur; NPC tarafında
+kullanılan `base_demand × 0,35` tahmini tam da ölçmek istediğimiz farkı siliyordu.
+
+★ Ders: bir piyasada fiyatı yukarı çeken kuvvet varsa (maliyet, marj hedefi),
+aşağı çeken kuvvet de olmalı. Yoksa çıpa rakiplere bağlandığı anda fiyat
+kendi kendini yukarıda tutar.
+
 ---
 
 
@@ -1517,7 +1571,8 @@ para muslugunu ele geçirir ve iç üretim anlamsızlaşır.
 | R41 | Çevrimdışı oyuncu geriliyor | 🔴 Kritik | ✅ F8 — kalıcı emirler |
 | R42 | Başlangıç tesisi kurulmuyor · deneyim iki yerde | 🟠 Yüksek | ✅ F8 |
 | R43 | Ara mal talebi kapasiteden ölçülüyordu | 🟠 Yüksek | ✅ F8 — `chainRequirements` |
-| R44 | Dış ticaret hiç sınanmıyor (kapı ufku < Lv7 limanı) | 🟡 Orta | ⏳ ayrı senaryo |
+| R44 | Dış ticaret hiç sınanmıyor (kapı ufku < Lv7 limanı) | 🟡 Orta | ✅ senaryo testi · arbitraj kapalı |
+| R51 | Raf fiyatı satılmayan stoğa tepki vermiyor | 🟠 Yüksek | ✅ F8 — `clearanceFactor` |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |
