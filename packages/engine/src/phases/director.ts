@@ -1,7 +1,8 @@
 import type { Sql } from '@kapital/db';
 import {
   advanceHysteresis, classifyBand, directivesForBand, marketHealthScore,
-  npcShareTarget, DEFAULT_HEALTH_WEIGHTS, type HealthBand, type HealthWeights,
+  npcShareTarget, chainRequirements, DEFAULT_HEALTH_WEIGHTS,
+  type ChainRecipe, type HealthBand, type HealthWeights,
 } from '@kapital/economy';
 import { asMoney, qtyFromNumber, TICKS_PER_DAY } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
@@ -23,7 +24,6 @@ export interface DirectorResult {
 interface MeasureRow {
   product_id: number;
   supply: number;
-  demand: number;
   seller_count: number;
   buyer_count: number;
   trade_count: number;
@@ -32,6 +32,9 @@ interface MeasureRow {
   player_supply: number;
   target_player_share: number;
   importable: boolean;
+  /** Ham tüketici talebi — zincir yayılımının başlangıç noktası. */
+  retail_demand: number;
+  code: string;
 }
 
 interface PreviousRow {
@@ -91,17 +94,61 @@ export async function runDirector(sql: Sql, tick: EngineTick): Promise<DirectorR
     SELECT COUNT(*) AS count FROM companies WHERE kind = 'PLAYER' AND status = 'ACTIVE'`;
   const coldStart = (players?.count ?? 0n) === 0n;
 
+  /*
+   * ★ Ara mal talebi TÜKETİCİ talebinden türetilir (docs/10 R43).
+   *
+   * Ölçülen tüketim penceredeki toplamdır; zincir yayılımı da aynı pencerede
+   * kalır. Böylece "826 ekmek 207 un ister" ilişkisi ölçüme birebir girer ve
+   * fazla kapasite talebi şişirmez.
+   */
+  const recipeRows = await sql<{
+    output_code: string; output_quantity: bigint; input_code: string; input_quantity: bigint;
+  }[]>`
+    SELECT op.code AS output_code, r.output_quantity,
+           ip.code AS input_code, ri.quantity AS input_quantity
+      FROM production_recipes r
+      JOIN products op ON op.id = r.output_product_id
+      LEFT JOIN recipe_inputs ri ON ri.recipe_id = r.id
+      LEFT JOIN products ip ON ip.id = ri.product_id
+     WHERE r.is_active`;
+
+  const recipeMap = new Map<string, ChainRecipe>();
+  for (const row of recipeRows) {
+    const existing = recipeMap.get(row.output_code) ?? {
+      outputCode: row.output_code,
+      outputQuantity: Number(row.output_quantity) / 1000,
+      inputs: [] as { code: string; quantity: number }[],
+    };
+    if (row.input_code) {
+      (existing.inputs as { code: string; quantity: number }[]).push({
+        code: row.input_code, quantity: Number(row.input_quantity) / 1000,
+      });
+    }
+    recipeMap.set(row.output_code, existing);
+  }
+
+  const finalDemand = new Map(
+    measures.filter((m) => m.retail_demand > 0).map((m) => [m.code, m.retail_demand]),
+  );
+  const chained = new Map(
+    chainRequirements(finalDemand, [...recipeMap.values()])
+      .map((r) => [r.productCode, r.units]),
+  );
+
   const previous = await loadPrevious(sql, tick);
   const prevByProduct = new Map(previous.map((p) => [p.product_id, p]));
 
   for (const m of measures) {
+    // Zincirden gelen talep; perakende ürünlerinde tüketici talebinin kendisi.
+    const demand = chained.get(m.code) ?? m.retail_demand;
+
     const { score, components } = marketHealthScore({
       supply: m.supply,
-      demand: m.demand,
+      demand,
       sellerCount: m.seller_count,
       buyerCount: m.buyer_count,
       // Derinlik: mevcut stok, günlük tüketimin kaç turuna yeter.
-      inventoryDepthTicks: m.demand > 0 ? (m.stock * WINDOW_TICKS) / m.demand : 12,
+      inventoryDepthTicks: demand > 0 ? (m.stock * WINDOW_TICKS) / demand : 12,
       priceVolatility: m.volatility,
       tradeCount: m.trade_count,
       playerShare: m.supply > 0 ? m.player_supply / m.supply : 0,
@@ -125,14 +172,14 @@ export async function runDirector(sql: Sql, tick: EngineTick): Promise<DirectorR
                                  f_supply, f_sellers, f_buyers, f_depth, f_stability,
                                  f_player_share, streak_band, streak_count)
       VALUES (${tick.seq}, ${m.product_id}, 0, ${score.toFixed(2)}, ${state.band},
-              ${Math.round(m.supply * 1000)}, ${Math.round(m.demand * 1000)},
+              ${Math.round(m.supply * 1000)}, ${Math.round(demand * 1000)},
               ${components.supply}, ${components.sellers}, ${components.buyers},
               ${components.depth}, ${components.stability}, ${components.playerShare},
               ${state.streakBand}, ${state.streakCount})
       ON CONFLICT (tick_id, product_id, city_id) DO NOTHING`;
     out.productsScored++;
 
-    const supplyRatio = m.demand > 0 ? m.supply / m.demand : (m.supply > 0 ? 2 : 0);
+    const supplyRatio = demand > 0 ? m.supply / demand : (m.supply > 0 ? 2 : 0);
     const plan = directivesForBand(state.band, supplyRatio, m.importable);
 
     /*
@@ -234,33 +281,25 @@ async function measure(sql: Sql, tick: EngineTick, from: bigint): Promise<Measur
        GROUP BY 1
     ),
     /*
-     * Ara mal talebi — onu girdi olarak kullanan tesislerin KAPASİTESİnden.
+     * Ara mal talebi burada hesaplanmaz — TÜKETİCİ talebinden zincirde geriye
+     * yayılarak türetilir (chainRequirements, aşağıda).
      *
-     * ★ Gerçekleşen üretimden ölçmek arz şokunu GÖRÜNMEZ kılar: çelik bitince
-     * mobilya fabrikası da durur, dolayısıyla ölçülen çelik talebi de düşer ve
-     * arz/talep oranı 1,00'da kalır. Ölçüldü (F7 çelik senaryosu): tüm çelik
-     * üretimi durdurulduğu halde skor 75 → 70'te kaldı, hiçbir müdahale
-     * tetiklenmedi.
+     * ★ Üç yaklaşım denendi:
      *
-     * Kapasiteden ölçmek doğrusudur: girdisizlikten duran tesis o girdiyi
-     * İSTEMEYE devam eder. Kullanım oranı çarpanı korunur, çünkü kasıtlı
-     * kısılmış tesis gerçekten daha az girdi ister — girdisizlik ise kullanım
-     * oranına dokunmaz.
+     * 1. Gerçekleşen üretimden: arz şokunu GÖRÜNMEZ kılıyordu. Çelik bitince
+     *    mobilya fabrikası da durur, ölçülen çelik talebi de düşer ve oran
+     *    1,00'da kalır. Tüm çelik üretimi durdurulduğu halde skor 75 → 70'te
+     *    kaldı, hiçbir müdahale tetiklenmedi (F7).
+     *
+     * 2. Aşağı halkanın KAPASİTESİnden: şok görünür oldu ama bu sefer fazla
+     *    kapasite talebi şişirdi. Değirmen kapasitesi ekmek talebinin
+     *    gerektirdiğinden fazlaydı, buğday yapay olarak kıt göründü ve
+     *    supply_demand eşiği hiç geçemedi (F8, oran 0,76).
+     *
+     * 3. ZİNCİRDEN: tüketici talebi geriye yayılır — 826 ekmek 207 un ister,
+     *    207 un 276 buğday ister. Şok yine görünür (talep tüketiciden gelir,
+     *    arzla birlikte çökmez) ama fazla kapasite talebi şişirmez.
      */
-    ara_talep AS (
-      SELECT ri.product_id,
-             (SUM(ft2.base_capacity * COALESCE(lc.capacity_multiplier, 1) * f2.utilization
-                  * ri.quantity / NULLIF(r.output_quantity, 0))
-              * ${WINDOW_TICKS} * 1000)::bigint AS units
-        FROM facilities f2
-        JOIN facility_types ft2 ON ft2.id = f2.facility_type_id
-        JOIN production_recipes r ON r.id = f2.active_recipe_id
-        JOIN recipe_inputs ri ON ri.recipe_id = r.id
-        LEFT JOIN facility_level_curve lc ON lc.level = f2.level
-       WHERE f2.closed_at IS NULL AND f2.production_enabled
-         AND f2.construction_complete_at_tick <= ${tick.seq}
-       GROUP BY 1
-    ),
     perakende_talep AS (
       SELECT cd.product_id, SUM(cd.demand_units)::bigint AS units
         FROM city_demand cd
@@ -292,7 +331,8 @@ async function measure(sql: Sql, tick: EngineTick, from: bigint): Promise<Measur
     )
     SELECT p.id AS product_id,
            (COALESCE(u.produced, 0) / 1000.0)::float8 AS supply,
-           ((COALESCE(at.units, 0) + COALESCE(pt.units, 0)) / 1000.0)::float8 AS demand,
+           (COALESCE(pt.units, 0) / 1000.0)::float8 AS retail_demand,
+           p.code,
            COALESCE(i.sellers, 0)::int AS seller_count,
            COALESCE(i.buyers, 0)::int AS buyer_count,
            COALESCE(i.trades, 0)::int AS trade_count,
@@ -303,7 +343,6 @@ async function measure(sql: Sql, tick: EngineTick, from: bigint): Promise<Measur
            COALESCE(wm.importable, false) AS importable
       FROM products p
       LEFT JOIN uretim u ON u.product_id = p.id
-      LEFT JOIN ara_talep at ON at.product_id = p.id
       LEFT JOIN perakende_talep pt ON pt.product_id = p.id
       LEFT JOIN islem i ON i.product_id = p.id
       LEFT JOIN stok s ON s.product_id = p.id

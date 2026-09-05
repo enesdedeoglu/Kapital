@@ -276,7 +276,24 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'npc.population',   value: { perProductPerCity: 1.2, priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35 } },
   { key: 'npc.inventory',    value: { minTicks: 4, targetTicks: 12, maxTicks: 24 } },
   { key: 'npc.throttle',     value: { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 } },
-  { key: 'npc.investment',   value: { threshold: 0.55, cashBufferRatio: 1.5, maxFacilities: 4 } },
+  /*
+   * ★ Eşik ÖLÇÜLEN skor dağılımına göre kalibre edildi (R49).
+   *
+   * 0,55 idi; ulaşılabilir en yüksek skor 0,45 çıktı — yani hiçbir fırsat
+   * kendi değeriyle eşiği geçemiyordu. Yatırım yalnız atak NPC'lerin
+   * `(0,5 + iştah)` çarpanıyla sızıyordu: 700 turda 4 tesis, NPC payı %56,7
+   * (hedef %60–80).
+   *
+   * Ölçülen dağılım (700. tur): tütün 0,45 · buğday 0,41 · kömür 0,39 ·
+   * demir 0,35 · değirmen 0,34 · fırın 0,32 · çelik 0,30 · mobilya 0,27 ·
+   * sebze 0,15. Eşik 0,38 tam kıt hammaddeleri geçirir, beslenemeyen
+   * fabrikaları girdileri düzelene kadar dışarıda tutar.
+   *
+   * Eşiğin NEYİ kurulacağına etkisi yoktur: `maybeInvest` en yüksek skorlu
+   * TEK fırsatı seçer, sıralamayı `strategicNeed` ve açık/boru hattı koruması
+   * belirler. Eşik yalnız yatırımın HIZINI ayarlar.
+   */
+  { key: 'npc.investment',   value: { threshold: 0.38, cashBufferRatio: 1.5, maxFacilities: 4 } },
   // Seviye ilerleyişi — madde 11. Onboarding zinciri 7 adımda 700 XP verir
   // (Lv2 şartı); sürekli oyun da benzer büyüklükte olmalı.
   { key: 'progression.experience', value: { retailPerXp: 100, tradePerXp: 200,

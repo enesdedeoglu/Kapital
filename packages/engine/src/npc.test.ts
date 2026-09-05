@@ -201,3 +201,75 @@ describe('üretim kısma — satılmayan stok (madde 31)', () => {
     expect(halfOut * 2n).toBe(fullOut);
   });
 });
+
+describe('★ eşzamanlı yatırım — sürü hücumu (R45)', () => {
+  /**
+   * NPC'ler stratejilerini aynı turda kurabilir: aralıklar 48/96/128 ve
+   * `last_strategy_tick` hepsinde 0 olunca tur 384'te 58 NPC birlikte karar
+   * verdi. Fırsat listesi tur başında BİR KEZ hesaplanıp herkese aynı kopyası
+   * verildiği için hiçbiri diğerinin yatırımını göremedi ve 51 buğday tarlası
+   * birden açıldı — ihtiyacın 8,7 katı.
+   *
+   * Ölçtüğümüz kural: bir TUR içinde aynı ürüne kaç tesis birden bağlanır.
+   */
+  it('aynı turda karar veren NPC\'ler birbirinin yatırımını görür', async () => {
+    // Sekiz NPC, hepsi her tur strateji kurar — en kötü hâl. Dünyada üretici
+    // yok, dolayısıyla her tüketim ürününde gerçek ve büyük bir açık var.
+    for (let i = 0; i < 8; i++) {
+      await makeNpc(sql, {
+        typeCode: 'GREENGROCER', cityId: KONYA,
+        strategyIntervalTicks: 1, cash: money(50_000_000),
+      });
+    }
+    for (let i = 0; i < 12; i++) await runTick(sql);
+
+    // Tesis hangi turda BAŞLADI: bitiş turu eksi inşaat süresi.
+    const gruplar = await sql<{ baslangic: bigint; urun: number; adet: bigint }[]>`
+      SELECT (f.construction_complete_at_tick - ft.construction_ticks) AS baslangic,
+             r.output_product_id AS urun, COUNT(*) AS adet
+        FROM facilities f
+        JOIN facility_types ft ON ft.id = f.facility_type_id
+        JOIN production_recipes r ON r.id = f.active_recipe_id
+       WHERE f.closed_at IS NULL AND f.construction_complete_at_tick > 0
+       GROUP BY 1, 2 ORDER BY 3 DESC`;
+
+    // Senaryo canlı olmalı: yatırım hiç olmazsa test bir şey ölçmüyordur.
+    expect(gruplar.length).toBeGreaterThan(0);
+    // ★ Sekiz NPC aynı açığı aynı turda gördü; sürü hâlinde girmemeliler.
+    expect(Number(gruplar[0]!.adet)).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('★ zincir kökten dolar — beslenemeyen tesise yatırım yapılmaz (R48)', () => {
+  /**
+   * Ölçülen (700 tur): fırın 0,37 · buğday tarlası 0,36 · değirmen 0,36. Fark
+   * 0,01 ve seçim kazanan-hepsini-alır olduğu için 28 yatırımın HEPSİ fırına
+   * gitti, buğdaya SIFIR. Un 0,30'da kalırken fırın eklemek açlığı büyütür.
+   *
+   * Buradaki iddia sayı değil YAYILIMdır: sermaye tek bir halkaya yığılmaz.
+   * Kuralın kendisi `investmentScore` testlerinde ölçülür.
+   */
+  it('sermaye tek halkaya yığılmaz', async () => {
+    for (let i = 0; i < 6; i++) {
+      await makeNpc(sql, {
+        typeCode: 'GREENGROCER', cityId: KONYA,
+        strategyIntervalTicks: 1, cash: money(50_000_000),
+      });
+    }
+    for (let i = 0; i < 12; i++) await runTick(sql);
+
+    const kurulan = await sql<{ code: string; adet: bigint }[]>`
+      SELECT ft.code, COUNT(*) AS adet
+        FROM facilities f
+        JOIN facility_types ft ON ft.id = f.facility_type_id
+        JOIN companies c ON c.id = f.company_id
+       WHERE f.closed_at IS NULL AND c.kind = 'NPC'
+         AND f.construction_complete_at_tick > 0 AND ft.base_capacity > 0
+       GROUP BY 1`;
+    const toplam = kurulan.reduce((n, r) => n + Number(r.adet), 0);
+    const enBuyuk = Math.max(...kurulan.map((r) => Number(r.adet)));
+    expect(toplam).toBeGreaterThan(0);
+    // Hiçbir tesis türü yatırımların yarısından fazlasını almaz.
+    expect(enBuyuk).toBeLessThanOrEqual(Math.ceil(toplam / 2));
+  });
+});

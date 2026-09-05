@@ -13,3 +13,4 @@ export * from './director/index.js';
 export * from './progression.js';
 export * from './events/index.js';
 export * from './standing.js';
+export * from './chain.js';

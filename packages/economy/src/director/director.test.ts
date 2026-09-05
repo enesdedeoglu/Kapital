@@ -8,6 +8,7 @@ import {
   type HealthBand,
 } from './bands.js';
 import { giniCoefficient } from './inequality.js';
+import { marginScore, PRICE_MARKUP_BAND } from '../npc/decisions.js';
 
 const healthy: HealthInput = {
   supply: 1000, demand: 1000, sellerCount: 8, buyerCount: 12,
@@ -221,5 +222,58 @@ describe('Gini katsayısı', () => {
     const g = giniCoefficient([money(1), money(999_999)]);
     expect(g).toBeGreaterThanOrEqual(0);
     expect(g).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('★ kıtlık tavanı — mal yoksa piyasa "ayarlanmıyor"dur (R47)', () => {
+  /**
+   * Ölçülen: ekmek arzı talebin %21'i, stok derinliği 0,02. Satıcı, alıcı ve
+   * istikrar bileşenleri tamken skor 40,3 çıkıyor ve bant ADJUST oluyordu.
+   * ADJUST yatırım teşviki yayınlamaz — ED kıtlığı görüp hiçbir şey yapmadı.
+   */
+  const kitlik: HealthInput = {
+    supply: 210, demand: 1000, sellerCount: 8, buyerCount: 12,
+    inventoryDepthTicks: 0.2, priceVolatility: 0.05, tradeCount: 40,
+    playerShare: 0.8, targetPlayerShare: 0.8,
+    targetSellers: 6, targetBuyers: 10,
+  };
+
+  it('satıcı ve alıcı tam olsa da kıt piyasa ADJUST üstünde kalamaz', () => {
+    const { score } = marketHealthScore(kitlik);
+    expect(classifyBand(score)).toBe('STIMULATE');
+  });
+
+  it('STIMULATE yatırım teşviki yayınlar — kıtlık kendini düzeltebilir', () => {
+    const { score } = marketHealthScore(kitlik);
+    const plan = directivesForBand(classifyBand(score), 0.21, false);
+    expect(plan.some((d) => d.lever === 'INVESTMENT_BIAS' && d.magnitude > 0)).toBe(true);
+  });
+
+  it('derin stoğu olan piyasa cezalandırılmaz — malı VARDIR', () => {
+    // Aynı arz oranı, ama depoda 12 turluk mal duruyor.
+    const { score } = marketHealthScore({ ...kitlik, inventoryDepthTicks: 12 });
+    expect(score).toBeGreaterThan(marketHealthScore(kitlik).score);
+    expect(classifyBand(score)).not.toBe('STIMULATE');
+  });
+
+  it('sağlıklı piyasaya tavan dokunmaz', () => {
+    expect(marketHealthScore(healthy).score).toBeGreaterThan(95);
+  });
+});
+
+describe('★ marj ölçeği ekonominin tasarım bandına oturur (R47)', () => {
+  it('bandın altı sıfır, üstü bir', () => {
+    expect(marginScore(PRICE_MARKUP_BAND.min)).toBe(0);
+    expect(marginScore(PRICE_MARKUP_BAND.max)).toBe(1);
+    expect(marginScore(1.0)).toBe(0);
+    expect(marginScore(3.0)).toBe(1);
+  });
+
+  it('★ tohum ekonomisinin gerçek marjları terimi ayırt eder', () => {
+    // Ölçülen tohum marjları: buğday 1,33 · ekmek 1,36 · kömür 1,40.
+    // Eski ölçekte (2,5 katta doyum) üçü de 0,22–0,27'de sıkışıyordu.
+    const bugday = marginScore(1.333), ekmek = marginScore(1.364), komur = marginScore(1.40);
+    expect(komur - bugday).toBeGreaterThan(0.10);
+    expect(ekmek).toBeGreaterThan(bugday);
   });
 });

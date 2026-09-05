@@ -285,3 +285,35 @@ describe('productionCapacity kullanım oranını uygular', () => {
     expect(cap(-1)).toBe(0);
   });
 });
+
+describe('★ stratejik ihtiyaç beraberliği bozar (R48)', () => {
+  /**
+   * Ölçülen (700 turluk kapı koşusu): fırın 0,37 · buğday tarlası 0,36 ·
+   * değirmen 0,36. Fark 0,01 ve NPC en yüksek skorlu TEK fırsatı seçtiği için
+   * 28 yatırımın hepsi fırına gitti, buğdaya sıfır. Un 0,30'da kalırken fırın
+   * eklemek zinciri düzeltmez — kurulur, girdi bulamaz, işçilik öder, durur.
+   *
+   * `strategicNeed` girdilerin en kıt olanının arz sağlığıdır; hammaddede 1.
+   */
+  const base = {
+    profitMargin: 0.36, demandGap: 1.0, priceTrend: 0, competition: 1.0,
+  };
+
+  it('girdisi kıt fabrika, marjı daha iyi olsa bile hammaddenin gerisinde kalır', () => {
+    const firin = investmentScore({ ...base, profitMargin: 0.36, strategicNeed: 0 });
+    const tarla = investmentScore({ ...base, profitMargin: 0.31, strategicNeed: 1 });
+    expect(tarla).toBeGreaterThan(firin);
+  });
+
+  it('girdi bollaşınca fabrika öne geçer — sıra nedenselliğin sırasıdır', () => {
+    const firin = investmentScore({ ...base, profitMargin: 0.36, strategicNeed: 1 });
+    const tarla = investmentScore({ ...base, profitMargin: 0.31, strategicNeed: 1 });
+    expect(firin).toBeGreaterThan(tarla);
+  });
+
+  it('sabit 0,5 hiçbir beraberliği bozmazdı', () => {
+    const firin = investmentScore({ ...base, profitMargin: 0.36, strategicNeed: 0.5 });
+    const tarla = investmentScore({ ...base, profitMargin: 0.31, strategicNeed: 0.5 });
+    expect(Math.abs(firin - tarla)).toBeLessThan(0.02);
+  });
+});

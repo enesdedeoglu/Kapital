@@ -145,6 +145,25 @@ export interface InvestmentScoreInput {
  * tamamlanmaz: inşaat süresi vardır (madde 27), dolayısıyla NPC'ler bir arz
  * açığına anında değil gecikmeli tepki verir — gerçekçi ve oyuncuya fırsat bırakır.
  */
+/**
+ * Tohum ekonomisinin TASARLANMIŞ marj bandı: referans fiyat, birim üretim
+ * maliyetinin bu kat aralığında olur.
+ *
+ * ★ Tek kaynaktır: tohum testi fiyatları buna karşı doğrular, yatırım skoru
+ * marj terimini bunun üzerine ölçekler. Ayrı yaşadıklarında sessizce
+ * ayrışıyorlardı — skor 2,5 kata kadar ölçekleniyordu, yani ekonominin hiç
+ * ulaşamayacağı bir aralığa. Sonuç: marj terimi her üründe 0,22–0,27'de
+ * sıkıştı, hiçbir ürünü diğerinden ayırmadı ve skorun %35'i ölü ağırlık oldu
+ * (R47).
+ */
+export const PRICE_MARKUP_BAND = { min: 1.15, max: 1.75 } as const;
+
+/** Marj oranını (fiyat ÷ birim maliyet) 0..1 fırsat puanına çevirir. */
+export function marginScore(markup: number): number {
+  const { min, max } = PRICE_MARKUP_BAND;
+  return Math.max(0, Math.min(1, (markup - min) / (max - min)));
+}
+
 export function investmentScore(input: InvestmentScoreInput): number {
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
   return (

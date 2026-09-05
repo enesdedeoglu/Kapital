@@ -23,6 +23,8 @@ beforeEach(async () => {
     DELETE FROM tick_phase_runs;
     DELETE FROM economic_ticks WHERE seq > 0;
   `);
+  // Talep tohum değerine döner: bir testin kapattığı talep diğerine sızmasın.
+  await sql`UPDATE products SET base_demand = 40 WHERE code = 'BREAD'`;
 });
 
 const healthOf = async (productId: number) => {
@@ -36,6 +38,22 @@ const healthOf = async (productId: number) => {
 const directivesOf = (productId: number) => sql<{ lever: string; magnitude: number }[]>`
   SELECT lever, magnitude FROM npc_directives WHERE product_id = ${productId}
    ORDER BY id`;
+
+
+/**
+ * Buğdayı gerçek anlamda FAZLA ARZ durumuna sokar.
+ *
+ * ★ Ara mal talebi artık tüketici talebinden zincirle türetiliyor (R43):
+ * dünya ekmek istediği sürece buğday da ister, değirmen olmasa bile. Bu yüzden
+ * "talebi olmayan ürün" senaryosu için zincirin ucundaki TÜKETİCİ talebi
+ * kapatılmalı.
+ */
+const ekmekTalebiniKapat = async () => {
+  await sql`UPDATE products SET base_demand = 0 WHERE code = 'BREAD'`;
+  // Ölçüm penceresi 96 turdur: yalnız yeni talebi durdurmak yetmez, pencerede
+  // duran eski satırlar da zincire buğday talebi yaymaya devam eder.
+  await sql`DELETE FROM city_demand WHERE product_id = 3`;
+};
 
 const runTicks = async (n: number) => {
   for (let i = 0; i < n; i++) await runTick(sql);
@@ -135,8 +153,9 @@ describe('müdahale bantları ve direktifler (madde 30)', () => {
   });
 
   it('★ FAZLA ARZDA yön tersine döner — ED üretimi kısar, artırmaz', async () => {
-    // Buğdayın perakende talebi yoktur; onu tüketen değirmen de yoksa üretim
-    // saf fazla arzdır. ED bu durumda teşvik verirse sorunu kendisi büyütür.
+    // Ekmek talebi kapatılınca buğdayın zincir talebi de sıfırlanır; kalan
+    // üretim saf fazla arzdır. ED bu durumda teşvik verirse sorunu büyütür.
+    await ekmekTalebiniKapat();
     const farm = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
     await runInTransaction(sql, (tx) => addBatch(tx, {
       inventoryId: farm.inventoryId, productId: WHEAT,
@@ -153,6 +172,7 @@ describe('müdahale bantları ve direktifler (madde 30)', () => {
   });
 
   it('fazla arzda ithalat duyurusu da yapılmaz', async () => {
+    await ekmekTalebiniKapat();
     const farm = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
     await runInTransaction(sql, (tx) => addBatch(tx, {
       inventoryId: farm.inventoryId, productId: WHEAT,
@@ -231,6 +251,9 @@ describe('NPC direktifleri tüketir', () => {
   });
 
   it('PRODUCTION_BIAS kapasite kullanımını etkiler', async () => {
+    // ED kıtlık görürse kendi direktifini yazar ve testinkini iptal eder;
+    // kısma yönünü ölçmek için buğday fazla arzda olmalı.
+    await ekmekTalebiniKapat();
     const farm = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
     await runInTransaction(sql, (tx) => addBatch(tx, {
       inventoryId: farm.inventoryId, productId: WHEAT,
@@ -296,7 +319,8 @@ describe('★ ED duruşu tutarlıdır: eski yön anında iptal edilir', () => {
     const before = await directivesOf(WHEAT);
     expect(before.some((d) => d.lever === 'IMPORT_QUOTA')).toBe(true);
 
-    // Sonra bolluk: buğday üretimi başlar, talebi olmadığı için arz fazlaya döner.
+    // Sonra bolluk: ekmek talebi kapatılır, buğdayın zincir talebi sıfırlanır.
+    await ekmekTalebiniKapat();
     const farm = await makeNpc(sql, { typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT', cityId: KONYA });
     await runInTransaction(sql, (tx) => addBatch(tx, {
       inventoryId: farm.inventoryId, productId: WHEAT,
@@ -311,7 +335,9 @@ describe('★ ED duruşu tutarlıdır: eski yön anında iptal edilir', () => {
     // ★ Teşvik kaldıraçları hâlâ yürürlükte olsaydı ED bir eliyle kısıp
     //   diğeriyle teşvik ediyor olurdu.
     expect(active.some((d) => d.lever === 'IMPORT_QUOTA')).toBe(false);
-    expect(active.some((d) => d.lever === 'INVESTMENT_BIAS')).toBe(false);
+    // Yatırım kaldıracı iki yönlü çalışır: burada beklenen onun YOKLUĞU değil,
+    // işaretinin dönmesidir (−1 = bu ürüne yatırım yapma).
+    expect(active.some((d) => d.lever === 'INVESTMENT_BIAS' && d.magnitude > 0)).toBe(false);
     expect(active.every((d) => d.lever === 'CAPACITY_CAP' || d.magnitude < 0)).toBe(true);
   });
 });

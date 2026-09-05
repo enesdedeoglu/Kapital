@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { validateProductGraph, type GraphProduct, type GraphRecipe } from '@kapital/economy';
-import { companyLevels, facilityTypes, products, recipes } from './data.js';
+import {
+  capacityGaps, chainRequirements, PRICE_MARKUP_BAND, validateProductGraph,
+  type ChainRecipe, type GraphProduct, type GraphRecipe,
+} from '@kapital/economy';
+import { cities, companyLevels, facilityTypes, gameConfigs, products, recipes } from './data.js';
+import { npcFacilityCounts } from './npc-world.js';
 
 /**
  * Tohum verisi doğrulaması.
@@ -82,7 +86,7 @@ describe('tohum verisi ürün grafı (I8)', () => {
       );
       const unitCost = (inputCost + recipe.labor + recipe.energy) / recipe.outputQty;
       const markup = price.get(recipe.outputCode)! / unitCost;
-      if (markup < 1.15 || markup > 1.75) {
+      if (markup < PRICE_MARKUP_BAND.min || markup > PRICE_MARKUP_BAND.max) {
         report.push(`${recipe.outputCode}: marj ${markup.toFixed(2)} (maliyet ${unitCost.toFixed(2)})`);
       }
     }
@@ -138,6 +142,82 @@ describe('seviye merdiveni tırmanabilir (madde 11)', () => {
       expect(cur.value, `Lv${cur.level} değer`).toBeGreaterThan(prev.value);
       expect(cur.products, `Lv${cur.level} ürün`).toBeGreaterThanOrEqual(prev.products);
       expect(cur.units, `Lv${cur.level} üretim`).toBeGreaterThanOrEqual(prev.units);
+    }
+  });
+});
+
+/**
+ * ★ Dünyanın ÜRETİM KAPASİTESİ, kendi ürettiği TALEBİ karşılayabilmeli.
+ *
+ * `products.base_demand` ile `facility_types.base_capacity` birbirine bakmadan
+ * yazılmıştı — seviye merdiveni ve referans fiyatlarla aynı sınıf hata.
+ * Ölçüldü (F8): ekmek talebi 826 birim/tur, fırın kapasitesi 120 (6,9 kat
+ * eksik); değirmen 8,0 kat, buğday tarlası 6,4 kat eksik. Perakende
+ * ürünlerinin arz/talep oranı 0,10–0,43'te sıkışıyor ve denge kapısının
+ * `supply_demand` eşiği hiç geçmiyordu.
+ *
+ * Bu test iki sayıyı birbirine bağlar: talep artarsa kapasite de artmalı.
+ */
+describe('dünya kapasitesi kendi talebini karşılar', () => {
+  /** Tüm şehirlerin tüketim ölçeği — `cityDemand` formülündeki çarpanlar. */
+  const cityScale = cities.reduce(
+    (sum, c) => sum + c.populationIndex * c.incomeIndex * c.consumerDemandIndex, 0,
+  );
+
+  const demandScale = (() => {
+    const cfg = gameConfigs.find((c) => c.key === 'economy.demandScale');
+    return (cfg?.value as { baseMultiplier?: number } | undefined)?.baseMultiplier ?? 1;
+  })();
+
+  /** Tur başına nihai tüketim talebi (birim). */
+  const finalDemand = new Map(
+    products
+      .filter((p) => p.retail && p.demand > 0)
+      .map((p) => [p.code, p.demand * cityScale * demandScale] as const),
+  );
+
+  const chainRecipes: ChainRecipe[] = recipes.map((r) => ({
+    outputCode: r.outputCode,
+    outputQuantity: r.outputQty,
+    inputs: r.inputs.map((i) => ({ code: i.code, quantity: i.qty })),
+  }));
+
+  /** NPC dünyasının kurduğu tur başına kapasite, ürün kodu bazında. */
+  const seededCapacity = (() => {
+    const capacityByFacility = new Map(facilityTypes.map((f) => [f.code, f.capacity]));
+    const counts = npcFacilityCounts();
+    const perProduct = new Map<string, number>();
+    for (const recipe of recipes) {
+      const count = counts.get(recipe.facilityCode) ?? 0;
+      if (count === 0) continue;
+      const capacity = capacityByFacility.get(recipe.facilityCode) ?? 0;
+      perProduct.set(
+        recipe.outputCode,
+        (perProduct.get(recipe.outputCode) ?? 0) + count * capacity,
+      );
+    }
+    return perProduct;
+  })();
+
+  it('★ hiçbir aşamada NPC kapasitesi hedefin belirgin altında kalmaz', () => {
+    const requirements = chainRequirements(finalDemand, chainRecipes);
+    // NPC payı %70: kalanı oyuncular kurar (madde 31). Tohum dünyası bunun
+    // en az yarısını karşılamalı — gerisi NPC yatırımıyla kapanır.
+    const gaps = capacityGaps(requirements, seededCapacity, 0.7);
+
+    // Eşik 1,5: bir miktar boşluk NPC yatırımıyla kapanabilir, ama kat kat
+    // eksik bir aşama zinciri tıkar ve oyuncu mal bulamaz.
+    const short = gaps
+      .filter((g) => g.shortfall > 1.5)
+      .map((g) => `${g.productCode}: gereken ${g.requiredPerTick.toFixed(0)}/tur, ` +
+        `tohumda ${g.availablePerTick.toFixed(0)} (${g.shortfall.toFixed(1)}× eksik)`);
+    expect(short).toEqual([]);
+  });
+
+  it('nihai tüketim ürünlerinin hepsi üretilebilir', () => {
+    const producible = new Set(recipes.map((r) => r.outputCode));
+    for (const code of finalDemand.keys()) {
+      expect(producible.has(code), `${code} üretilemiyor`).toBe(true);
     }
   });
 });

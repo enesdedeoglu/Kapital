@@ -1,6 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
   decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
+  PRICE_MARKUP_BAND,
   planInventory, representativeDistance, shippingPerUnit, softFloor,
   type DirectiveLever, type PriceDecision,
 } from '@kapital/economy';
@@ -108,6 +109,9 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const directives = await loadDirectives(sql, tick);
   const support = await loadSupportGuard(sql, tick);
   const opportunities = await loadOpportunities(sql, tick);
+  // Fırsat listesi tur başında bir kez hesaplanır; bu defter onu tur içinde
+  // güncel tutar — bkz. `maybeInvest` içindeki taahhüt kuralı.
+  const committed = new Map<number, number>();
 
   const out = { npcs: npcs.length, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
                 strategicDecisions: 0, throttled: 0, built: 0, director, standing };
@@ -176,16 +180,25 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
         // Kapasiteye üreten tesis, malı satılmasa bile her tur işçilik öder ve
         // o para ekonomiden çıkar. Kapsam = kaç turluk üretim satılmadan duruyor.
         const coverage = perTick > 0 ? Number(output.available) / 1000 / perTick : 0;
-        // ED direktifi: kıtlıkta üretim teşviki, bolluk yönünde kısma. Kaldıraç
-        // HEDEFİ kaydırır, sonucu değil — kademelilik (≤%5/tur) korunur.
+        /*
+         * ED direktifi: kıtlıkta üretim teşviki, bolluk yönünde kısma.
+         *
+         * ★ Kaldıraç yalnız HEDEFİ kaydırır, SONUCU değil — kademelilik
+         * (≤%5/tur) böyle korunur. Önce ikisine birden uygulanıyordu ve
+         * kıtlıkta teşvik stok geri beslemesini tamamen eziyordu: deposu
+         * dolu bir tesis tam kapasiteyle üretmeye devam ediyordu. Oysa
+         * deposu dolu üreticinin sorunu üretim değil DAĞITIMdır; tam gaz
+         * devam etmek yalnız işçilik yakar (R21). Teşvik tesisin daha çok
+         * stok TOLERE etmesini sağlar, dolu depoya üretmesini değil.
+         */
         const bias = lever(directives, facility.output_product_id, 'PRODUCTION_BIAS');
-        const nextUtilization = Math.min(1, outputThrottle({
+        const nextUtilization = outputThrottle({
           coverageTicks: coverage,
           targetTicks: throttleCfg.targetTicks * bias,
           previous: facility.utilization,
           maxStep: throttleCfg.maxStepPerTick,
           floor: throttleCfg.floor,
-        }) * bias);
+        });
         // CAPACITY_CAP bir ÇARPAN değil, doğrudan TAVANdır (docs/07 §3: 0..1).
         const cap = rawLever(directives, facility.output_product_id, 'CAPACITY_CAP') ?? 1;
         const capped = Math.min(nextUtilization, cap);
@@ -271,7 +284,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
       await sql`UPDATE npc_profiles SET last_strategy_tick = ${tick.seq}
                  WHERE company_id = ${npc.company_id}::uuid`;
       out.strategicDecisions++;
-      if (await maybeInvest(sql, tick, npc, directives, opportunities, invCfg)) out.built++;
+      if (await maybeInvest(sql, tick, npc, directives, opportunities, invCfg, committed)) out.built++;
     }
   }
 
@@ -586,6 +599,8 @@ interface Opportunity {
   facility_code: string;
   recipe_id: number;
   base_cost: bigint;
+  /** Tesisin tur başına çıktısı — aynı tur içindeki taahhütleri saymak için. */
+  base_capacity: number;
   build_ticks: number;
   unlock_level: number;
   /** Sağlık bileşenleri: skor ne kadar düşükse fırsat o kadar büyük. */
@@ -595,6 +610,8 @@ interface Opportunity {
   margin: number;
   /** Tur başına açık (birim): talep − arz. Negatifse fazla arz var. */
   gap_per_tick: number;
+  /** Girdilerin en kıt olanının arz sağlığı; hammaddede 1. */
+  strategic_need: number;
   /** Şu anda İNŞA HALİNDE olan, henüz üretmeyen kapasite (birim/tur). */
   pipeline_per_tick: number;
 }
@@ -636,21 +653,33 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
     )
     SELECT r.output_product_id AS product_id, ft.id AS facility_type_id,
            ft.code AS facility_code, r.id AS recipe_id,
-           ft.base_cost, ft.construction_ticks AS build_ticks, ft.unlock_level,
+           ft.base_cost, ft.base_capacity, ft.construction_ticks AS build_ticks, ft.unlock_level,
            -- Arz açığı: f_supply düştükçe fırsat büyür
            GREATEST(0, 1 - COALESCE(s.f_supply, 1)) AS demand_gap,
            GREATEST(0, LEAST(1, COALESCE(f.trend, 0))) AS price_trend,
            COALESCE(s.f_sellers, 1) AS competition,
            COALESCE(s.gap_per_tick, 0)::float8 AS gap_per_tick,
            COALESCE(bh.units, 0)::float8 AS pipeline_per_tick,
-           -- Marj: referans ÷ TAM birim maliyet (girdiler dahil), 1,5 katta doyar.
-           -- Girdi maliyeti atlanırsa marj her üründe ~1 çıkar ve NPC sağlıklı
-           -- piyasada bile yatırım yapar (F7 ilk koşusu: 120 turda 43 tesis).
+           COALESCE(sn.need, 1)::float8 AS strategic_need,
+           /*
+            * Marj: referans fiyat ÷ TAM birim maliyet (girdiler dahil).
+            *
+            * Girdi maliyeti atlanırsa marj her üründe ~1 çıkar ve NPC
+            * sağlıklı piyasada bile yatırım yapar (F7 ilk koşusu: 120 turda
+            * 43 tesis).
+            *
+            * ★ Ölçek ekonominin TASARLANMIŞ marj bandına oturur
+            * (PRICE_MARKUP_BAND, tohum testiyle ortak kaynak). Önce 2,5 katta
+            * doyuyordu; tohum fiyatları tasarım gereği maliyetin 1,15–1,75
+            * katı olduğu için terim her üründe 0,22–0,27'de sıkışıyor,
+            * hiçbirini ayırmıyor ve skorun %35'i ölü ağırlık oluyordu (R47).
+            */
            LEAST(1, GREATEST(0,
              (p.base_reference_price::float / NULLIF(
                ((r.labor_cost + r.energy_cost)::float + COALESCE(gm.girdi, 0))
                / NULLIF(r.output_quantity / 1000.0, 0), 0)
-              - 1) / 1.5)) AS margin
+              - ${PRICE_MARKUP_BAND.min})
+             / ${PRICE_MARKUP_BAND.max - PRICE_MARKUP_BAND.min})) AS margin
       FROM production_recipes r
       JOIN facility_types ft ON ft.id = r.facility_type_id
       JOIN products p ON p.id = r.output_product_id
@@ -662,6 +691,25 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
           FROM recipe_inputs ri JOIN products ip ON ip.id = ri.product_id
          WHERE ri.recipe_id = r.id
       ) gm ON TRUE
+      /*
+       * ★ Stratejik ihtiyaç: BESLENEBİLİR miyim?
+       *
+       * Girdisi kıt olan tesise yatırım para yakmaktır — kurulur, girdi
+       * bulamaz, işçilik öder, durur. Ölçülen: fırın 0,37 · buğday tarlası
+       * 0,36 · değirmen 0,36 — aradaki fark 0,01 ve seçim kazanan-hepsini-alır
+       * olduğu için 28 yatırımın HEPSİ fırına gitti, buğdaya sıfır. Un 0,30'da
+       * kalırken 28 fırın daha kurmak zinciri düzeltmez, açlığı büyütür.
+       *
+       * Hammaddenin girdisi yoktur → 1: zincir kökten yukarı dolar. Buğday
+       * arzı düzeldikçe değirmen, un düzeldikçe fırın cazip olur. Sıra
+       * nedenselliğin sırasıdır.
+       */
+      LEFT JOIN LATERAL (
+        SELECT MIN(COALESCE(s2.f_supply, 0))::float8 AS need
+          FROM recipe_inputs ri2
+          LEFT JOIN saglik s2 ON s2.product_id = ri2.product_id
+         WHERE ri2.recipe_id = r.id
+      ) sn ON TRUE
      WHERE r.is_active`;
 }
 
@@ -678,6 +726,8 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
 async function maybeInvest(
   sql: Sql, tick: EngineTick, npc: NpcRow, directives: DirectiveMap,
   opportunities: Opportunity[], cfg: { minTicks: number },
+  /** Bu TURDA söz verilmiş kapasite (ürün → tur başına birim). */
+  committed: Map<number, number>,
 ): Promise<boolean> {
   const invest = configValue<{ threshold: number; cashBufferRatio: number; maxFacilities: number }>(
     tick, 'npc.investment', { threshold: 0.55, cashBufferRatio: 1.5, maxFacilities: 4 },
@@ -690,16 +740,26 @@ async function maybeInvest(
 
   let best: { opportunity: Opportunity; score: number } | null = null;
   for (const o of opportunities) {
-    // Açığı kapatacak kapasite zaten inşa halindeyse yatırım yapma. Bu kural
-    // olmadan bilgi mükemmel + kararlar eşzamanlı olduğu için her NPC aynı
-    // açığa cevap verir ve piyasa aşırı yatırımla dolar.
-    if (o.pipeline_per_tick >= Math.max(0, o.gap_per_tick)) continue;
+    /*
+     * Açığı kapatacak kapasite zaten yoldaysa yatırım yapma. Bilgi mükemmel
+     * ve kararlar eşzamanlı olduğu için bu kural olmadan her NPC aynı açığa
+     * cevap verir ve piyasa aşırı yatırımla dolar.
+     *
+     * ★ "Yolda" iki şeydir: önceki turlarda başlamış inşaat (`pipeline`) VE
+     *   bu turda az önce karar verilmiş yatırım (`committed`). İkincisi
+     *   eksikti: fırsat listesi tur başında BİR KEZ hesaplanıp bütün NPC'lere
+     *   aynı kopyası veriliyordu, dolayısıyla aynı turda karar verenler
+     *   birbirini göremiyordu. Ölçülen sonucu — tur 384'te 58 NPC birlikte
+     *   karar verdi ve 8 tur sonra 51 buğday tarlası birden açıldı; buğday
+     *   kapasitesi ihtiyacın 8,7 katına çıkarken fırın 0,35 katında kaldı.
+     */
+    const inFlight = o.pipeline_per_tick + (committed.get(o.product_id) ?? 0);
+    if (inFlight >= Math.max(0, o.gap_per_tick)) continue;
     const score = investmentScore({
       profitMargin: o.margin,
       demandGap: o.demand_gap,
       priceTrend: o.price_trend,
-      // Stratejik ihtiyaç: kendi zincirinde eksik halka — MVP-1'de sabit.
-      strategicNeed: 0.5,
+      strategicNeed: o.strategic_need,
       competition: o.competition,
       // Arketip iştahı 1 etrafında ölçekler: 0,5 iştah → ×1,0, 0,9 → ×1,4.
     }) * (0.5 + npc.investment_aggressiveness);
@@ -734,6 +794,9 @@ async function maybeInvest(
             ${`${npc.name} — ${best.opportunity.facility_code}`}, ${type!.storage_capacity},
             ${tick.seq + BigInt(best.opportunity.build_ticks)}, ${best.opportunity.recipe_id})
     RETURNING id`;
+
+  committed.set(best.opportunity.product_id,
+    (committed.get(best.opportunity.product_id) ?? 0) + best.opportunity.base_capacity);
 
   await sql.begin((tx) => transfer(tx as unknown as Sql, {
     tickId: tick.seq,

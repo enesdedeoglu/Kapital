@@ -1195,6 +1195,99 @@ ilerliyor, oyuncu XP'sini hep 0 görüyordu. Kolonu ekleyen ben olduğum için
 
 ---
 
+## R43 — Ara mal talebi aşağı halkanın KAPASİTESİnden ölçülüyordu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F8 `supply_demand` takibi · **Durum:** ✅ çözüldü
+
+`supply_demand` ölçütü beş tohumun hiçbirinde geçmedi. Kovalarken ED'nin ara
+malları nasıl ölçtüğü çıktı: F7'de ara mal talebini aşağı halkanın KURULU
+KAPASİTESİnden hesaplıyordum. Bu, kapasitenin talepten fazla olduğu her yerde
+talebi şişirir — değirmen kapasitesi ekmek talebinin gerektirdiğinden büyükse
+buğday yapay olarak kıt görünür.
+
+Üç yaklaşım denendi, ikisi de yanlış tarafa düştü:
+
+1. **Gerçekleşen üretimden.** Arz şokunu GÖRÜNMEZ kılıyordu: çelik bitince
+   mobilya fabrikası da durur, ölçülen çelik talebi de düşer, oran 1,00'da
+   kalır. Tüm çelik üretimi durdurulduğu hâlde skor 75 → 70'te kaldı ve hiçbir
+   müdahale tetiklenmedi.
+2. **Aşağı halkanın kapasitesinden.** Şok görünür oldu ama fazla kapasite
+   talebi şişirdi; oran 0,76'da sıkıştı.
+3. **Zincirden (seçilen).** Tüketici talebi geriye yayılır: 826 ekmek 207 un,
+   207 un 276 buğday ister. Şok yine görünür — talep tüketiciden gelir, arzla
+   birlikte çökmez — ama fazla kapasite talebi şişirmez.
+
+`chainRequirements` saf orandır, hiçbir yerde tura bölmez: hangi zaman tabanını
+verirsen onu döndürür. ED ona 96 turluk pencere toplamını verir, arzı da aynı
+pencereden ölçer.
+
+---
+
+
+## R45 — Sürü hücumu geri geldi: 58 NPC aynı turda düşünüyor
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 `supply_demand` kök neden analizi · **Durum:** ✅ çözüldü
+
+R28'de eşzamanlı yatırıma karşı boru hattı farkındalığı eklemiştim. Yetmemiş.
+Ölçüm: 55 buğday tarlasının 4'ü tohumdan, **51'i tek bir turda** — tur 392'de —
+kurulmuştu. Hem de her arketip tarafından: sanayici 20, tarımcı 17, perakendeci
+8, hatta spekülatör 2. Buğday kapasitesi ihtiyacın **8,69 katına** çıkarken
+fırın **0,35 katında** kaldı; 52.829 kg buğday satılmadan tarlalarda bekledi,
+ekmek arz/talep oranı 0,23'te kaldı. `supply_demand`'in geçememesinin kökü buydu.
+
+İki bağımsız kusur üst üste bindi:
+
+**(a) Herkes aynı turda düşünüyor.** `last_strategy_tick` bütün NPC'lerde 0'dan
+başlıyor, aralıklar 48/96/128. Tur 384'te hem 96'lık grup (34 NPC) hem 128'lik
+grup (24 NPC) ateşledi. 58 NPC aynı anda karar verdi, inşaat 8 tur sürdü, 392'de
+hepsi birden açıldı. Çözüm: tohumda faz dağıtılır (`-rng() × aralık`), faz
+sonsuza dek korunur.
+
+**(b) Aynı turda karar verenler birbirini göremiyor.** Fırsat listesi tur
+başında BİR KEZ hesaplanıp bütün NPC'lere aynı kopyası veriliyordu. Boru hattı
+koruması yalnız ÖNCEKİ turlarda başlamış inşaatı görür; aynı turdaki 58 kararın
+her biri boş bir boru hattı gördü. Çözüm: tur içi taahhüt defteri — bir NPC
+yatırım yapınca bağladığı kapasite deftere yazılır ve sonraki NPC açığı o kadar
+küçülmüş görür.
+
+★ Genel ders: **"eşzamanlı" iki ölçekte olur** — aynı turda ve ardışık turlarda.
+R28 ikincisini kapatmıştı, birincisi açık kalmıştı. Bilgi mükemmel ve aktörler
+özdeş olduğunda her açık eşzamanlılık sürüye dönüşür.
+
+---
+
+
+## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
+
+**Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
+
+`foreign_faucet` her koşuda **%0,0** çıktı. İlk okumada bu bir hata gibi görünür;
+değil. Ölçüt bir TAVANdır (< %30) — ekonominin kendi üretimiyle değil dışarıdan
+akan parayla dönmesini yakalamak için var. %0 onu geçer.
+
+Asıl bulgu şu: liman, kur, dünya fiyatı ve ithalat/ihracat kapasitesi kurulu ve
+`foreign-capacity` fazı her tur çalışıyor, ama **hiçbir aktör bu yolu
+kullanmıyor**. Alım–satım yalnız `ForeignService` üzerinden, yani oyuncuya açık
+uçtan yapılabiliyor; NPC'lerin böyle bir davranışı yok, simülasyon oyuncuları da
+o ucu çağırmıyor.
+
+Sebep tasarımın kendisi: Liman 200.000 ₺, **Lv7** ve 20 tur inşaat. Kapı 700 tur
+(7,3 gün) koşuyor ve `week1_value` 40.261 ₺ ölçüldü. Yani kapının ufkunda hiçbir
+oyuncu limana ne parayla ne seviyeyle ulaşabilir. Dış ticaret **geç oyun**
+mekaniği; 7 günlük kapıya zorla sokmak oyunu yanlış temsil eder.
+
+Doğru çözüm ölçütü zorlamak değil, ayrı bir senaryo testi: Lv7 + limanlı bir
+şirket tohumlanır ve iki şey doğrulanır —
+- ithalat/ihracat uçtan uca çalışıyor mu,
+- **R18 arbitrajı**: dünya fiyatından alıp iç piyasada satmak sınırsız para
+  basmaya dönüşüyor mu (`import_capacity` ve kota bunu tutuyor mu).
+
+İkincisi asıl risktir: kapasite sınırı yanlış ayarlanırsa dış ticaret ekonominin
+para muslugunu ele geçirir ve iç üretim anlamsızlaşır.
+
+---
+
+
 ## Risk özeti
 
 | Kod | Risk | Şiddet | Ne zaman ele alınır |
@@ -1241,3 +1334,9 @@ ilerliyor, oyuncu XP'sini hep 0 görüyordu. Kolonu ekleyen ben olduğum için
 | R40 | Kıtlıkta kazanan hepsini alıyor | 🔴 Kritik | ✅ F8 — `scarcityRation` |
 | R41 | Çevrimdışı oyuncu geriliyor | 🔴 Kritik | ✅ F8 — kalıcı emirler |
 | R42 | Başlangıç tesisi kurulmuyor · deneyim iki yerde | 🟠 Yüksek | ✅ F8 |
+| R43 | Ara mal talebi kapasiteden ölçülüyordu | 🟠 Yüksek | ✅ F8 — `chainRequirements` |
+| R44 | Dış ticaret hiç sınanmıyor (kapı ufku < Lv7 limanı) | 🟡 Orta | ⏳ ayrı senaryo |
+| R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
+| R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
+| R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |
+| R48 | Sermaye zincirin son halkasına yığılıyor | 🔴 Kritik | ✅ F8 — `strategicNeed` zincirden |

@@ -106,6 +106,27 @@ export function marketHealthScore(
 
   // Ağırlıklar admin panelden değiştirilebildiği için toplamları 1 olmayabilir;
   // normalize edilmezse skor 100'ü aşar ve bant sınırları anlamsızlaşır.
-  const score = sum > 0 ? (100 * total) / sum : 0;
+  const weighted = sum > 0 ? (100 * total) / sum : 0;
+
+  /*
+   * ★ KITLIK TAVANI — arz ve derinlik ortalamada eritilemez.
+   *
+   * Ölçülen: ekmek arzı talebin %21'i, stok derinliği 0,02 — ortada mal yok.
+   * Ama satıcı 1,00, alıcı 1,00, istikrar 1,00 skoru 40,3'e çekiyordu ve bant
+   * ADJUST çıkıyordu. ADJUST yatırım teşviki YAYINLAMAZ (yalnız STIMULATE ve
+   * altı yayınlar), dolayısıyla ED kıtlığı görüp hiçbir şey yapmıyordu:
+   * 700 turda 2 NPC yatırımı, on üründe arz/talep 0,13–0,78.
+   *
+   * Mal bulunmayan piyasa "ayarlanıyor" değildir. Kaç satıcı emir verdiği
+   * önemli değil — verecek malı yoksa piyasa çöküyordur. Bu, R26'daki
+   * `tradeCount` kapısının aynı örüntüsüdür: bazı bileşenler ortalamaya
+   * girmez, TAVAN koyar.
+   *
+   * Derinlik VEYA arzdan hangisi iyiyse o sayılır: derin stoğu olan ama akışı
+   * yavaş bir piyasada mal VARDIR, cezalandırılmaz.
+   */
+  const scarcity = Math.max(supply, depth);
+  const ceiling = 100 * (0.20 + 0.80 * scarcity);
+  const score = Math.min(weighted, ceiling);
   return { score: Math.max(0, Math.min(100, score)), components };
 }
