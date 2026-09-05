@@ -227,7 +227,21 @@ export const companyLevels = [
    * Şartlar ilk günün gerçek getirisine indirildi. Sonraki basamaklar aynı
    * kaldı: asıl mesele merdivenin İLK basamağıydı.
    */
-  { level: 2,  xp: 700,     value: 34_000,    volume: 6_000,    units: 0,     products: 0, title: 'Dükkân Sahibi' },
+  /*
+   * ★ İlk basamağın XP eşiği ÖLÇÜLEN kazanım hızına göre (R50).
+   *
+   * 700 idi. XP satış cirosundan gelir (100 ₺ = 1 XP) ve ölçüm şuydu: Lv1
+   * oyuncusu 120 turda 113 XP topluyor (~0,94 XP/tur), yani 700'e ~745 turda
+   * varıyor — ilk hafta (672 tur) tam biterken. Ekmeği Lv2'ye çekmek ancak
+   * oyuncu oraya ERKEN varabilirse işe yarar; aksi halde kilit döngüsel kalır:
+   * ekmek için Lv2, Lv2 için ekmek cirosu.
+   *
+   * 200, ölçülen hızda ~2 güne denk gelir: oyuncu ikinci ürününü ilk günlerde
+   * alır ve haftanın kalanını iki pazarda geçirir. Ekmek açılınca ciro —
+   * dolayısıyla XP — hızlandığı için sonraki basamaklara DOKUNULMADI; merdiven
+   * kendi kendini toparlar.
+   */
+  { level: 2,  xp: 200,     value: 34_000,    volume: 6_000,    units: 0,     products: 0, title: 'Dükkân Sahibi' },
   { level: 3,  xp: 2_000,   value: 80_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
   // Sebze Bahçesi artık Lv2'de açılıyor (R33); başlık Lv2'ye taşındı.
   { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },
