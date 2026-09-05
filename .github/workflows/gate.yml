@@ -10,6 +10,11 @@
 name: Kapı
 
 on:
+  # Elle: Actions sekmesi → "Kapı" → Run workflow.
+  # Terminalden: `git tag kapi-<ad> && git push origin kapi-<ad>` — etiketle
+  # tetiklemek, gh CLI kurulu olmadan da koşturmayı mümkün kılar.
+  push:
+    tags: ['kapi-*']
   workflow_dispatch:
     inputs:
       players:
@@ -69,11 +74,11 @@ jobs:
       # Tohum numarası gate.ts'in kendi adımıyla aynı: taban + sıra × 1013.
       - name: Kapı — tek tohum
         run: |
-          seed=$(( ${{ inputs.base_seed }} + ${{ matrix.index }} * 1013 ))
+          seed=$(( ${{ inputs.base_seed || '20260904' }} + ${{ matrix.index }} * 1013 ))
           echo "tohum $seed"
           set +e
           pnpm --filter @kapital/sim exec tsx src/cli/gate.ts \
-            1 ${{ inputs.players }} ${{ inputs.ticks }} "$seed" \
+            1 ${{ inputs.players || '60' }} ${{ inputs.ticks || '700' }} "$seed" \
             --raw "ham-${{ matrix.index }}.json"
           code=$?
           set -e
