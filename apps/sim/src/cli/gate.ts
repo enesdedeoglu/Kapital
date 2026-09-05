@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { createSql, loadRootEnv } from '@kapital/db';
 import { aggregateGate, type SeedRun } from '../gate.js';
+import { printGateReport } from '../report.js';
 import { collectMetrics } from '../metrics.js';
 import { runSimulation } from '../runner.js';
 import { buildSimWorld } from '../world.js';
@@ -28,7 +29,16 @@ loadRootEnv();
 const args = process.argv.slice(2);
 const jsonAt = args.indexOf('--json');
 const jsonPath = jsonAt === -1 ? null : args[jsonAt + 1] ?? null;
-const positional = jsonAt === -1 ? args : args.slice(0, jsonAt);
+/*
+ * --raw: tohumların HAM metriklerini yazar (birleştirilmiş rapor değil).
+ * CI'da beş tohum beş ayrı koşucuda paralel koşar; her iş kendi ham
+ * dosyasını üretir, `aggregate.ts` onları birleştirip aynı raporu basar.
+ * Duvar saati 3,2 saatten tek tohuma iner.
+ */
+const rawAt = args.indexOf('--raw');
+const rawPath = rawAt === -1 ? null : args[rawAt + 1] ?? null;
+const firstFlag = Math.min(...[jsonAt, rawAt].filter((i) => i !== -1), args.length);
+const positional = args.slice(0, firstFlag);
 
 const seedCount = Number(positional[0] ?? 5);
 const playerCount = Number(positional[1] ?? 60);
@@ -78,43 +88,15 @@ for (let i = 0; i < seedCount; i++) {
 
 const report = aggregateGate(runs);
 
-console.log(`\n${line('═')}`);
-console.log(`BİRLEŞİK SONUÇ — ${runs.length} tohum · ${((Date.now() - started) / 60_000).toFixed(1)} dk\n`);
-console.log(`  ${'Metrik'.padEnd(44)}${'Medyan'.padEnd(22)}${'Yayılma'.padEnd(18)}` +
-  `${'Tutan'.padEnd(8)}Hedef`);
-console.log(`  ${line()}`);
+printGateReport(report, {
+  seedCount: runs.length, playerCount, ticks,
+  minutes: (Date.now() - started) / 60_000,
+});
 
-for (const m of report.metrics) {
-  const mark = m.pass === null ? '—' : m.pass ? '✓' : '✗';
-  // Aralık ORANLA gösterilir: metriklerin birimi farklı (yüzde, ₺, ms) ve
-  // medyanın kendi biçimlendirmesi zaten birimi taşıyor.
-  const range = m.min === null || m.median === null || m.median === 0
-    ? '—'
-    : `${(m.min / m.median).toFixed(2)}× – ${(m.max! / m.median).toFixed(2)}×`;
-  const unstable = report.unstableKeys.includes(m.key) ? ' ⚠' : '';
-  console.log(
-    `${mark} ${m.label.padEnd(44)}${m.medianFormatted.padEnd(22)}${range.padEnd(18)}` +
-    `${`${m.passCount}/${m.measuredCount}`.padEnd(8)}${m.target}${unstable}`,
-  );
+if (rawPath) {
+  writeFileSync(rawPath, JSON.stringify(runs, null, 2));
+  console.log(`\nHam metrikler: ${rawPath}`);
 }
-
-if (report.unstableKeys.length > 0) {
-  console.log(`\n  ⚠ KARARSIZ — tohumlar kararda anlaşmıyor: ${report.unstableKeys.join(', ')}`);
-  console.log('    Bu metrikler bir dünyada tutup diğerinde kalıyor. Çoğunluk eşiği');
-  console.log('    geçmelerine izin verse bile, kapıyı bunlara dayandırmak risklidir.');
-}
-
-console.log(`\n${line('═')}`);
-if (report.passed) {
-  console.log('★ KAPI GEÇİLDİ — tüm eşikler tohumların çoğunluğunda ve medyanda tutuyor');
-} else {
-  console.log('✗ KAPI GEÇİLMEDİ');
-  if (report.failedKeys.length > 0) console.log(`  tutmayan: ${report.failedKeys.join(', ')}`);
-  if (report.unmeasuredKeys.length > 0) {
-    console.log(`  ölçülemeyen: ${report.unmeasuredKeys.join(', ')}`);
-  }
-}
-console.log(line('═'));
 
 if (jsonPath) {
   writeFileSync(jsonPath, JSON.stringify({

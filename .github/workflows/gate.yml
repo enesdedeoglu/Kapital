@@ -1,0 +1,124 @@
+# ★ GEÇİŞ KAPISI 2 — beş tohum PARALEL koşar (madde 56, R39).
+#
+# Kapının tohumları birbirinden tamamen bağımsızdır: her biri veritabanını
+# sıfırlar, tohumlar ve kendi dünyasını kurar. Yerelde sırayla koştuğunda
+# ~3,2 saat sürüyor; burada beş koşucuya dağılınca duvar saati tek tohuma
+# iner ve geliştiricinin makinesi serbest kalır.
+#
+# Elle tetiklenir: Actions sekmesi → "Kapı" → Run workflow. Zamanlanmış
+# koşu BİLEREK yok — her koşu ~5 × tohum süresi kadar dakika harcar.
+name: Kapı
+
+on:
+  workflow_dispatch:
+    inputs:
+      players:
+        description: 'Oyuncu sayısı'
+        default: '60'
+      ticks:
+        description: 'Tur sayısı (700 ≈ 7,3 gün)'
+        default: '700'
+      base_seed:
+        description: 'İlk tohum'
+        default: '20260904'
+
+jobs:
+  tohum:
+    name: tohum ${{ matrix.index }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      # Bir tohumun çökmesi diğerlerini iptal etmesin: kapı kararı
+      # çoğunluğa bakar, eksik tohumla da anlamlı bir rapor çıkar.
+      fail-fast: false
+      matrix:
+        index: [0, 1, 2, 3, 4]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kapital
+          POSTGRES_PASSWORD: kapital
+          POSTGRES_DB: kapital_dev
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kapital -d kapital_dev"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://kapital:kapital@localhost:5432/kapital_dev
+      TEST_DATABASE_URL: postgres://kapital:kapital@localhost:5432/kapital_dev
+      JWT_SECRET: ci-only-secret
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - name: Derleme
+        run: pnpm build
+
+      # gate.ts sıfırlama/migration/tohumlamayı kendisi yapar.
+      # Tohum numarası gate.ts'in kendi adımıyla aynı: taban + sıra × 1013.
+      - name: Kapı — tek tohum
+        run: |
+          seed=$(( ${{ inputs.base_seed }} + ${{ matrix.index }} * 1013 ))
+          echo "tohum $seed"
+          set +e
+          pnpm --filter @kapital/sim exec tsx src/cli/gate.ts \
+            1 ${{ inputs.players }} ${{ inputs.ticks }} "$seed" \
+            --raw "ham-${{ matrix.index }}.json"
+          code=$?
+          set -e
+          # 0 = kapı geçti, 1 = geçmedi. İkisi de GEÇERLİ sonuçtur; kararı
+          # birleştirme işi verir. Yalnız gerçek çökmeler işi düşürür.
+          if [ $code -gt 1 ]; then exit $code; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ham-${{ matrix.index }}
+          path: ham-${{ matrix.index }}.json
+          if-no-files-found: error
+
+  birlestir:
+    name: birleşik rapor
+    needs: tohum
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ham-*
+          merge-multiple: true
+          path: ham
+
+      - name: Birleşik kapı raporu
+        run: |
+          pnpm --filter @kapital/sim exec tsx src/cli/aggregate.ts \
+            ham/*.json --json kapi.json | tee rapor.txt
+          # Adım özetine de yaz: Actions sayfasında tıklamadan görünsün.
+          { echo '```'; cat rapor.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kapi-raporu
+          path: |
+            kapi.json
+            rapor.txt
