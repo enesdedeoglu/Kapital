@@ -1476,6 +1476,32 @@ puanlamayı kolaylaştırmak için değil, DOĞRU soruyu sormak için yapıldı.
 
 ---
 
+## R53 — İndirim fazlayı değil küçük dükkânı cezalandırıyordu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** R51 sonrası kapı koşusu · **Durum:** ✅ çözüldü
+
+R51'in stok indirimi hedefine vurdu: domates fazlası **1,67 → 1,13** ile banda
+girdi, dükkân başına satış **2,8 → 4,2 kg/tur** yükseldi ve `money_supply`
+3/5'ten 5/5'e döndü.
+
+Ama aynı koşuda `week1_value` **58.081 → 39.679 ₺** geriledi. İki koşu arasındaki
+tek değişiklik R51 olduğu için sebep belliydi — ve kusur benim uygulamamdaydı.
+
+Kapsam dükkânın KENDİ satış hızına bölünüyordu. Yavaş satan küçük bir dükkânda
+az stok bile "20 turluk kapsam" çıkarıp %25 indirim tetikliyordu. Oysa oyuncu
+rafları **%8,8 dolulukta**: ortada eritilecek fazla yoktu, dükkân sadece küçüktü.
+İndirim fazlayı eritmek yerine küçük oyuncuyu cezalandırıyordu.
+
+`clearanceFactor` artık ürünün PİYASA arz/talep oranını da alıyor ve oran
+1,05'in altındaysa indirim uygulamıyor: piyasa kıt ya da dengedeyse sorun fiyat
+değil, arzdır.
+
+★ Ders: bir geri besleme kuralının sinyalini aktörün KENDİ durumundan alırsan,
+küçük olmakla kötü olmayı ayırt edemezsin. Fazlalık bir piyasa olgusudur, tek
+bir dükkânın raf durumu değil.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1611,6 +1637,7 @@ kendi kendini yukarıda tutar.
 | R44 | Dış ticaret hiç sınanmıyor (kapı ufku < Lv7 limanı) | 🟡 Orta | ✅ senaryo testi · arbitraj kapalı |
 | R51 | Raf fiyatı satılmayan stoğa tepki vermiyor | 🟠 Yüksek | ✅ F8 — `clearanceFactor` |
 | R52 | Ölçüt tek turdan · "mal yok" ile "pahalı" ayrılmıyor | 🟠 Yüksek | ✅ F8 — gün ortalaması + `retail_fulfilment` |
+| R53 | İndirim fazlayı değil küçük dükkânı cezalandırıyor | 🟠 Yüksek | ✅ F8 — piyasa oranı kapısı |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

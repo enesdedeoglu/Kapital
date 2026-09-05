@@ -155,6 +155,8 @@ export function retailPrice(
   profile: PlayerProfile, unitCost: Money, reference: Money, marketPrice?: Money,
   /** Eldeki stok kaç turluk satışa yeter — bilinmiyorsa indirim uygulanmaz. */
   coverageTicks?: number,
+  /** Ürünün piyasa arz/talep oranı — indirim yalnız gerçek fazlada (R53). */
+  marketRatio?: number,
 ): Money {
   const floor = (unitCost * BigInt(Math.round((1 + profile.targetMargin * 0.35) * 1000))) / 1000n;
 
@@ -167,7 +169,7 @@ export function retailPrice(
   // ★ Stok baskısı: rafta biriken mal fiyatı aşağı çeker (R51). Taban
   // korunur — indirim zararına satışa dönüşmez.
   const clearance = coverageTicks === undefined ? 1 : clearanceFactor({
-    coverageTicks, targetTicks: 8, maxDiscount: 0.25,
+    coverageTicks, targetTicks: 8, maxDiscount: 0.25, marketRatio,
   });
   const discounted = (positioned * BigInt(Math.round(clearance * 1000))) / 1000n;
 

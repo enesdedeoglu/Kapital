@@ -343,3 +343,20 @@ describe('★ raf fiyatına stok baskısı (R51)', () => {
     expect(clearanceFactor({ coverageTicks: 50, targetTicks: 8, maxDiscount: 0 })).toBe(1);
   });
 });
+
+describe('★ indirim yalnız GERÇEK fazlada uygulanır (R53)', () => {
+  const cfg = { coverageTicks: 20, targetTicks: 8, maxDiscount: 0.25 };
+
+  it('piyasa kıtken yavaş dükkân cezalandırılmaz', () => {
+    expect(clearanceFactor({ ...cfg, marketRatio: 0.6 })).toBe(1);
+    expect(clearanceFactor({ ...cfg, marketRatio: 1.0 })).toBe(1);
+  });
+
+  it('piyasa fazlayken indirim çalışır', () => {
+    expect(clearanceFactor({ ...cfg, marketRatio: 1.3 })).toBeLessThan(1);
+  });
+
+  it('piyasa bilgisi yoksa eski davranış korunur', () => {
+    expect(clearanceFactor(cfg)).toBeLessThan(1);
+  });
+});

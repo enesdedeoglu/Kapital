@@ -82,6 +82,8 @@ export interface DecisionContext {
   readonly retailMarkup: number;
   /** `tesisId:urunId` → tur başına satılan kg. */
   readonly salesRate: ReadonlyMap<string, number>;
+  /** Ürün → piyasa arz/talep oranı. */
+  readonly marketRatio: ReadonlyMap<number, number>;
 }
 
 /** Karar girdileri — tek turda tek sorgu seti. */
@@ -121,6 +123,16 @@ export async function loadDecisionContext(
 
   // Dükkânın KENDİ satış hızı — raf fiyatına stok baskısı bunun üzerinden
   // hesaplanır (R51). NPC tarafındaki (`p6-govern`) kuralla aynı.
+  // Piyasa arz/talep oranı — NPC tarafındaki kuralla aynı (R53).
+  const marketRatio = new Map<number, number>();
+  for (const row of await sql<{ product_id: number; ratio: number }[]>`
+    SELECT product_id, (supply_units::float8 / NULLIF(demand_units, 0)) AS ratio
+      FROM market_health
+     WHERE city_id = 0 AND demand_units > 0
+       AND tick_id = (SELECT MAX(tick_id) FROM market_health)`) {
+    marketRatio.set(row.product_id, row.ratio);
+  }
+
   const salesRate = new Map<string, number>();
   for (const row of await sql<{ facility_id: string; product_id: number; per_tick: number }[]>`
     SELECT facility_id, product_id, (SUM(quantity) / 1000.0 / 96)::float8 AS per_tick
@@ -135,7 +147,7 @@ export async function loadDecisionContext(
   const retailMarkup = retailCfg?.value?.retailMarkup ?? 1.35;
   return {
     references, retailProducts, recipeInputs, buildable, recipeByFacilityType,
-    freight, marketPrices, retailMarkup, salesRate,
+    freight, marketPrices, retailMarkup, salesRate, marketRatio,
   } satisfies DecisionContext;
 }
 
@@ -269,6 +281,7 @@ export async function actPlayer(
               const perTick = ctx.salesRate.get(`${facility.facility_id}:${s.product_id}`) ?? 0;
               return perTick > 0 ? Number(s.available) / 1000 / perTick : undefined;
             })(),
+            ctx.marketRatio.get(s.product_id),
           )),
           enabled: true,
         }));

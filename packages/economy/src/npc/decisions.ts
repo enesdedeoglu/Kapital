@@ -314,12 +314,27 @@ export interface ClearanceInput {
   readonly targetTicks: number;
   /** En fazla indirim oranı (0,25 = %25). */
   readonly maxDiscount: number;
+  /**
+   * Ürünün PİYASA genelindeki arz/talep oranı. 1'in üstü fazla arz demektir.
+   *
+   * ★ Bu olmadan indirim yanlış şeyi cezalandırıyordu: kapsam dükkânın KENDİ
+   * satış hızına bölünür, dolayısıyla yavaş satan küçük bir dükkânda az stok
+   * bile "20 turluk kapsam" çıkarıp %25 indirim tetikliyordu. Ölçülen sonucu
+   * (F8): domates fazlası eridi (1,67 → 1,13) ve satış %50 arttı ama oyuncu
+   * serveti 58.081 → 39.679 ₺ geriledi — raflar %8,8 doluyken, yani ortada
+   * eritilecek fazla yokken indirim uygulanıyordu.
+   *
+   * İndirim FAZLAYI eritmek içindir, küçük dükkânı cezalandırmak için değil.
+   */
+  readonly marketRatio?: number;
 }
 
 export function clearanceFactor(input: ClearanceInput): number {
-  const { coverageTicks, targetTicks, maxDiscount } = input;
+  const { coverageTicks, targetTicks, maxDiscount, marketRatio } = input;
   if (!(targetTicks > 0) || !(maxDiscount > 0)) return 1;
   if (!(coverageTicks > targetTicks)) return 1;
+  // Piyasa kıt ya da dengedeyse indirim yok: sorun fiyat değil, arz.
+  if (marketRatio !== undefined && marketRatio <= 1.05) return 1;
   // Fazla kapsam hedefin KATI olarak ölçülür: hedefin iki katında doyar.
   const excess = Math.min(1, (coverageTicks - targetTicks) / targetTicks);
   return 1 - maxDiscount * excess;

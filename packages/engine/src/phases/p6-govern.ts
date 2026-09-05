@@ -110,6 +110,17 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
    * hesaplanır. Tahmin (`base_demand × 0,35`) kullanılamaz: dükkânlar arası
    * fark tam da ölçmek istediğimiz şey.
    */
+  // Ürünün piyasa genelindeki arz/talep oranı — indirim yalnız GERÇEK fazlada
+  // uygulanır (R53). Sağlık kaydı yoksa oran bilinmiyor sayılır.
+  const marketRatio = new Map<number, number>();
+  for (const row of await sql<{ product_id: number; ratio: number }[]>`
+    SELECT product_id, (supply_units::float8 / NULLIF(demand_units, 0)) AS ratio
+      FROM market_health
+     WHERE city_id = 0 AND demand_units > 0
+       AND tick_id = (SELECT MAX(tick_id) FROM market_health WHERE tick_id <= ${tick.seq})`) {
+    marketRatio.set(row.product_id, row.ratio);
+  }
+
   const salesRate = new Map<string, number>();
   for (const row of await sql<{ facility_id: string; product_id: number; per_tick: number }[]>`
     SELECT facility_id, product_id, (SUM(quantity) / 1000.0 / 96)::float8 AS per_tick
@@ -263,6 +274,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
                   coverageTicks: Number(held.available) / 1000 / perTick,
                   targetTicks: clearCfg.targetTicks,
                   maxDiscount: clearCfg.maxDiscount,
+                  marketRatio: marketRatio.get(product.id),
                 })
               : 1;
             const retailAnchor = new Map(references);
