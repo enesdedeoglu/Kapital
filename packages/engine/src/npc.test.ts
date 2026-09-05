@@ -273,3 +273,70 @@ describe('★ zincir kökten dolar — beslenemeyen tesise yatırım yapılmaz (
     expect(enBuyuk).toBeLessThanOrEqual(Math.ceil(toplam / 2));
   });
 });
+
+describe('★ üretim kısma oyuncuya da uygulanır (R55)', () => {
+  /** PLAYER şirketi kullanıcı ister (`player_has_user`). */
+  const oyuncuSirketi = async (ad: string) => {
+    const [u] = await sql<{ id: string }[]>`
+      INSERT INTO users (email, password_hash, display_name)
+      VALUES (${`${ad}@kapital.test`}, 'x', ${ad}) RETURNING id`;
+    const [co] = await sql<{ id: string }[]>`
+      INSERT INTO companies (kind, user_id, name, home_city_id, cash, level, reputation)
+      VALUES ('PLAYER', ${u!.id}::uuid, ${ad}, ${KONYA}, 0, 20, 60) RETURNING id`;
+    await sql`INSERT INTO company_stats (company_id) VALUES (${co!.id}::uuid)`;
+    return co!.id;
+  };
+  /**
+   * Kısma NPC döngüsünün içindeydi; oyuncu tesisleri her zaman %100
+   * kullanımdaydı (ölçüldü: oyuncu 1,000 · NPC 0,694). Sonucu domates
+   * fazlasıydı — indirim fiyatı düşürüyor ama ÜRETİMİ durdurmuyor.
+   */
+  it('deposu dolu oyuncu tesisi kapasitesini düşürür', async () => {
+    const coId = await oyuncuSirketi(`kisma-${Date.now()}`);
+    const [f] = await sql<{ id: string }[]>`
+      INSERT INTO facilities (company_id, facility_type_id, city_id, name,
+                              storage_capacity, construction_complete_at_tick,
+                              active_recipe_id)
+      SELECT ${coId}::uuid, ft.id, ${KONYA}, 'Dolu Bahçe', ft.storage_capacity, 0, r.id
+        FROM facility_types ft JOIN production_recipes r ON r.facility_type_id = ft.id
+       WHERE ft.code = 'WHEAT_FIELD' RETURNING id`;
+    // Envanter tetikleyiciyle oluşur: aynı ifade içinde henüz görünmez.
+    const [inv] = await sql<{ id: string }[]>`
+      SELECT id FROM inventories WHERE facility_id = ${f!.id}::uuid`;
+
+    await runInTransaction(sql, (tx) => addBatch(tx, {
+      inventoryId: inv!.id, productId: WHEAT, quantity: qty(4000),
+      unitCost: money(6), quality: 70, producedAtTick: 0n,
+    }));
+
+    await runTick(sql);
+    await runTick(sql);
+
+    const [row] = await sql<{ utilization: number }[]>`
+      SELECT utilization FROM facilities WHERE id = ${f!.id}::uuid`;
+    expect(row!.utilization).toBeLessThan(1);
+  });
+
+  it('oyuncu üretimi kapattıysa motor karışmaz', async () => {
+    const coId = await oyuncuSirketi(`kapali-${Date.now()}`);
+    const [f] = await sql<{ id: string }[]>`
+      INSERT INTO facilities (company_id, facility_type_id, city_id, name,
+                              storage_capacity, construction_complete_at_tick,
+                              active_recipe_id, production_enabled)
+      SELECT ${coId}::uuid, ft.id, ${KONYA}, 'Kapalı Bahçe', ft.storage_capacity, 0, r.id, FALSE
+        FROM facility_types ft JOIN production_recipes r ON r.facility_type_id = ft.id
+       WHERE ft.code = 'WHEAT_FIELD' RETURNING id`;
+    // Envanter tetikleyiciyle oluşur: aynı ifade içinde henüz görünmez.
+    const [inv] = await sql<{ id: string }[]>`
+      SELECT id FROM inventories WHERE facility_id = ${f!.id}::uuid`;
+    await runInTransaction(sql, (tx) => addBatch(tx, {
+      inventoryId: inv!.id, productId: WHEAT, quantity: qty(4000),
+      unitCost: money(6), quality: 70, producedAtTick: 0n,
+    }));
+
+    await runTick(sql);
+    const [row] = await sql<{ utilization: number }[]>`
+      SELECT utilization FROM facilities WHERE id = ${f!.id}::uuid`;
+    expect(row!.utilization).toBe(1);
+  });
+});

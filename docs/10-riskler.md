@@ -1538,6 +1538,35 @@ model ile gerçek ayrı kodda yaşarsa sessizce ayrışır.
 
 ---
 
+## R55 — Üretim kısma oyuncuyu korumuyordu: domates fazlası erimiyordu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F8 kapı teşhisi (10/13) · **Durum:** ✅ çözüldü
+
+Domates her tohumda fazlada takılı kaldı: **1,57–1,62**. R51'in indirimi fiyatı
+düşürüyordu ama üretimi durdurmuyordu.
+
+Ölçüm sebebi tek satırda verdi: **oyuncu tesisleri kullanım 1,000, NPC'ler
+0,694.** Üretim kısma (`outputThrottle`) NPC döngüsünün İÇİNDEYDİ; oyuncu
+tesisleri hiç kısılmıyordu. Sebze bahçesi Lv1'de kurulabilen tek üretim tesisi
+olduğu için bütün oyuncular onu kuruyor ve deposu dolsa da tam gaz üretiyordu.
+
+Bu R21 ("kapasiteye üretim para sızdırıyor") ile R41 ("çevrimdışı oyuncu
+geriliyor") kesişimidir: dolu depoya üretmek yalnız işçilik yakar ve çevrimdışı
+oyuncu bunu göremez. Motor NPC'yi bundan koruyordu, oyuncuyu korumuyordu.
+
+Kısma artık oyuncu tesislerine de uygulanıyor. İki sınır konuldu:
+
+- **Oyuncunun tercihi korunur:** `production_enabled` kapalıysa motor karışmaz.
+  Kısma bir tavan değil, geri beslemedir; stok erirse kullanım geri çıkar.
+- **NPC varlığından bağımsızdır.** İlk hâlinde fonksiyon erken çıkışın
+  gerisinde kalıyordu: NPC'siz bir dünyada hiç çalışmıyordu ve testi bu yüzden
+  düştü. Faz `npcs.length === 0` olduğunda hemen dönüyor.
+
+★ Bu bir tasarım kararıdır: motor oyuncunun tesisini onun adına kısıyor.
+Alternatifi çevrimdışı oyuncunun dolu depoya üretip işçilik yakmasıydı.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1675,6 +1704,7 @@ kendi kendini yukarıda tutar.
 | R52 | Ölçüt tek turdan · "mal yok" ile "pahalı" ayrılmıyor | 🟠 Yüksek | ✅ F8 — gün ortalaması + `retail_fulfilment` |
 | R53 | İndirim fazlayı değil küçük dükkânı cezalandırıyor | 🟠 Yüksek | ✅ F8 — piyasa oranı kapısı |
 | R54 | Zincir kökten doldu, değirmen halkası büyümedi | 🔴 Kritik | ✅ F8 — `strategicNeed` = değer katkısı |
+| R55 | Üretim kısma oyuncuyu korumuyor (domates fazlası) | 🟠 Yüksek | ✅ F8 — kısma oyuncuya da |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

@@ -96,9 +96,13 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
            p.strategy_interval_ticks, p.last_strategy_tick, p.investment_aggressiveness
     FROM npc_profiles p
     JOIN companies c ON c.id = p.company_id AND c.kind = 'NPC' AND c.status = 'ACTIVE'`;
+  // Oyuncu kısması NPC'lerin varlığına bağlı değildir: erken çıkıştan önce.
+  const directives = await loadDirectives(sql, tick);
+  const playerThrottled = await throttlePlayerFacilities(sql, directives, throttleCfg);
+
   if (npcs.length === 0) {
     return { npcs: 0, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-             strategicDecisions: 0, throttled: 0, built: 0, director, standing };
+             strategicDecisions: 0, throttled: playerThrottled, built: 0, director, standing };
   }
 
   const references = await loadReferencePrices(sql, tick.seq);
@@ -135,7 +139,6 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const retailDemand = await loadRetailProducts(sql);
   const freight = await buildFreightTable(sql, tick);
 
-  const directives = await loadDirectives(sql, tick);
   const support = await loadSupportGuard(sql, tick);
   const opportunities = await loadOpportunities(sql, tick);
   // Fırsat listesi tur başında bir kez hesaplanır; bu defter onu tur içinde
@@ -144,6 +147,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
 
   const out = { npcs: npcs.length, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
                 strategicDecisions: 0, throttled: 0, built: 0, director, standing };
+  out.throttled += playerThrottled;
   const byCompany = new Map<string, NpcFacilityRow[]>();
   for (const f of facilities) {
     (byCompany.get(f.company_id) ?? byCompany.set(f.company_id, []).get(f.company_id)!).push(f);
@@ -865,4 +869,69 @@ async function maybeInvest(
   await logDecision(sql, tick, npc.company_id, best.opportunity.product_id, 'INVEST',
     cost, asMoney(cost), `skor ${best.score.toFixed(2)} ≥ eşik ${threshold.toFixed(2)}`);
   return true;
+}
+
+
+/**
+ * Üretim kısma OYUNCU tesislerine de uygulanır (R55).
+ *
+ * Kısma NPC döngüsünün içindeydi; oyuncu tesisleri her zaman %100 kullanımda
+ * kalıyordu (ölçüldü: oyuncu 1,000 · NPC 0,694). Sonucu domates fazlasıydı:
+ * sebze bahçesi Lv1'de kurulabilen tek üretim tesisi olduğu için bütün
+ * oyuncular onu kuruyor, deposu dolsa da tam gaz üretmeye devam ediyordu.
+ * Arz/talep oranı 1,57-1,62'de takıldı — indirim (R51) fiyatı düşürüyor ama
+ * ÜRETİMİ durdurmuyor.
+ *
+ * R21 ("kapasiteye üretim para sızdırıyor") ile R41 ("çevrimdışı oyuncu
+ * geriliyor") kesişimidir: dolu depoya üretmek yalnız işçilik yakar ve
+ * çevrimdışı oyuncu bunu göremez. Kısma geri döndürülebilir.
+ *
+ * ★ NPC varlığından BAĞIMSIZ çalışır: erken çıkışın gerisinde kalsaydı
+ * NPC'siz bir dünyada hiç uygulanmazdı.
+ *
+ * Oyuncunun kendi tercihi korunur: production_enabled kapalıysa motor karışmaz.
+ */
+async function throttlePlayerFacilities(
+  sql: Sql, directives: DirectiveMap,
+  cfg: { targetTicks: number; maxStepPerTick: number; floor: number },
+): Promise<number> {
+  let throttled = 0;
+  const oyuncuTesisleri = await sql<{
+    id: string; utilization: number; base_capacity: number; level_multiplier: number;
+    output_product_id: number; output_quantity: bigint; cycle_ticks: number;
+    stock: bigint;
+  }[]>`
+    SELECT f.id, f.utilization, ft.base_capacity,
+           COALESCE(lc.capacity_multiplier, 1) AS level_multiplier,
+           r.output_product_id, r.output_quantity, COALESCE(r.cycle_ticks, 1) AS cycle_ticks,
+           COALESCE((SELECT SUM(b.quantity) FROM inventory_batches b
+                      JOIN inventories i ON i.id = b.inventory_id
+                     WHERE i.facility_id = f.id AND b.product_id = r.output_product_id), 0) AS stock
+      FROM facilities f
+      JOIN companies c ON c.id = f.company_id
+      JOIN facility_types ft ON ft.id = f.facility_type_id
+      JOIN production_recipes r ON r.id = f.active_recipe_id
+      LEFT JOIN facility_level_curve lc ON lc.level = f.level
+     WHERE c.kind = 'PLAYER' AND f.closed_at IS NULL AND f.production_enabled
+       AND ft.base_capacity > 0`;
+
+  for (const t of oyuncuTesisleri) {
+    const perTick = t.base_capacity * t.level_multiplier
+      * Number(t.output_quantity) / 1000 / Math.max(1, t.cycle_ticks);
+    if (!(perTick > 0)) continue;
+    const coverage = Number(t.stock) / 1000 / perTick;
+    const bias = lever(directives, t.output_product_id, 'PRODUCTION_BIAS');
+    const next = outputThrottle({
+      coverageTicks: coverage,
+      targetTicks: cfg.targetTicks * bias,
+      previous: t.utilization,
+      maxStep: cfg.maxStepPerTick,
+      floor: cfg.floor,
+    });
+    if (Math.abs(next - t.utilization) > 1e-9) {
+      await sql`UPDATE facilities SET utilization = ${next} WHERE id = ${t.id}::uuid`;
+      throttled++;
+    }
+  }
+  return throttled;
 }
