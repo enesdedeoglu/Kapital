@@ -1502,6 +1502,42 @@ bir dükkânın raf durumu değil.
 
 ---
 
+## R54 — Zincir kökten doldu ve orada kaldı: değirmen hiç kurulmadı
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 kapı teşhisi (10/12) · **Durum:** ✅ çözüldü
+
+R48 sermayenin fırına yığılmasını durdurdu ve zinciri kökten doldurmaya başladı.
+Ama orada bıraktı. İki tohumun yatırım tablosu:
+
+| tesis | tohum 0 | tohum 2 |
+|---|---|---|
+| BAKERY | +12 | +10 |
+| WHEAT_FIELD | +5 | +15 |
+| **MILL** | **+4** | **+5** |
+
+8–9 değirmen turda ~176 kg un üretiyor; 21–23 fırın ise 210–230 kg istiyor.
+Un yapısal darboğaz oldu ve ekmek 0,60'ta kaldı.
+
+Sebep R48'in ölçüsüydü: `strategicNeed` girdinin MUTLAK arz sağlığıydı. Buğday
+zincirin en sağlıklı halkasıydı (oran 0,69, HEALTHY) ama f_supply'ı 0,38
+olduğundan değirmen 0,38 alıyordu; buğday tarlası ise girdisi olmadığı için
+1,0. Sermaye köke akmaya devam etti, buğday birikti, un halkası büyümedi.
+
+Doğru soru "girdim ne kadar bol" değil, **nerede değer katarım**:
+
+    strategicNeed = clamp01(0,5 + girdi_arzı − çıktı_arzı)
+
+Ölçülen değerlerle: buğday tarlası 1,00 · **değirmen 0,68** · fırın 0,50. Sıra
+korunuyor ama değirmen artık fırının önünde ve anlamlı bir puan alıyor. Kendi
+kendini de düzeltir: buğday arzı iyileştikçe tarlanın puanı 0,5'e iner,
+değirminki yükselir.
+
+★ Formül SQL'de bırakılmadı — `strategicNeed` saf fonksiyona taşındı ve sorgu
+yalnız bileşenleri (`input_supply`, `output_supply`) taşıyor. R46'nın dersi:
+model ile gerçek ayrı kodda yaşarsa sessizce ayrışır.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1638,6 +1674,7 @@ kendi kendini yukarıda tutar.
 | R51 | Raf fiyatı satılmayan stoğa tepki vermiyor | 🟠 Yüksek | ✅ F8 — `clearanceFactor` |
 | R52 | Ölçüt tek turdan · "mal yok" ile "pahalı" ayrılmıyor | 🟠 Yüksek | ✅ F8 — gün ortalaması + `retail_fulfilment` |
 | R53 | İndirim fazlayı değil küçük dükkânı cezalandırıyor | 🟠 Yüksek | ✅ F8 — piyasa oranı kapısı |
+| R54 | Zincir kökten doldu, değirmen halkası büyümedi | 🔴 Kritik | ✅ F8 — `strategicNeed` = değer katkısı |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

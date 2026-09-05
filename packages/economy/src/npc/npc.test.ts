@@ -3,7 +3,7 @@ import { money, mulberry32, mulMoney, qty, type Money } from '@kapital/shared';
 import { productionCapacity } from '../production/capacity.js';
 import {
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
-  planInventory, representativeDistance, clearanceFactor,
+  planInventory, representativeDistance, clearanceFactor, strategicNeed,
 } from './decisions.js';
 import { ARCHETYPES, varyTemplate } from './profile.js';
 
@@ -358,5 +358,31 @@ describe('★ indirim yalnız GERÇEK fazlada uygulanır (R53)', () => {
 
   it('piyasa bilgisi yoksa eski davranış korunur', () => {
     expect(clearanceFactor(cfg)).toBeLessThan(1);
+  });
+});
+
+describe('★ stratejik ihtiyaç: nerede değer katılır (R54)', () => {
+  // Ölçülen zincir (F8, tohum 0): buğday f_supply 0,38 · un 0,20 · ekmek 0,20.
+  const bugday = 0.38, un = 0.20, ekmek = 0.20;
+
+  it('hammadde kendi çıktısı kıtken öne çıkar', () => {
+    expect(strategicNeed(1, bugday)).toBe(1);
+  });
+
+  it('★ değirmen artık fırının önünde — un buğdaydan kıt', () => {
+    const degirmen = strategicNeed(bugday, un);
+    const firin = strategicNeed(un, ekmek);
+    expect(degirmen).toBeGreaterThan(firin);
+    expect(degirmen).toBeCloseTo(0.68, 2);
+  });
+
+  it('girdi ve çıktı eşitse nötr — özel bir sebep yok', () => {
+    expect(strategicNeed(0.5, 0.5)).toBeCloseTo(0.5, 5);
+  });
+
+  it('★ çıktı düzeldikçe ilgi kendiliğinden geri çekilir', () => {
+    const kit = strategicNeed(1, 0.2);
+    const bol = strategicNeed(1, 0.9);
+    expect(kit).toBeGreaterThan(bol);
   });
 });

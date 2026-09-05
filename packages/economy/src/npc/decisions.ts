@@ -339,3 +339,20 @@ export function clearanceFactor(input: ClearanceInput): number {
   const excess = Math.min(1, (coverageTicks - targetTicks) / targetTicks);
   return 1 - maxDiscount * excess;
 }
+
+/**
+ * Stratejik ihtiyaç — NEREDE DEĞER KATARIM?
+ *
+ * ★ Önce girdinin MUTLAK arz sağlığıydı (R48). Bu zinciri kökten doldurdu ama
+ * orada bıraktı: buğday zincirin en sağlıklı halkasıyken (oran 0,69, HEALTHY)
+ * f_supply'ı 0,38 olduğu için değirmen 0,38 alıyor, buğday tarlası girdisi
+ * olmadığından 1,0 alıyordu. Sermaye köke akmaya devam etti, buğday birikti,
+ * un halkası büyümedi — iki tohumda da değirmen yalnız +4/+5 kuruldu (R54).
+ *
+ * Doğru ölçü fark: çıktım girdimden kıtsa orada değer katarım. 0,5 nötrdür.
+ * Hammaddede girdi arzı 1 sayılır, dolayısıyla kendi çıktısı kıtken yüksek
+ * çıkar ve çıktısı düzeldikçe kendiliğinden geri çekilir.
+ */
+export function strategicNeed(inputSupply: number, outputSupply: number): number {
+  return Math.max(0, Math.min(1, 0.5 + inputSupply - outputSupply));
+}

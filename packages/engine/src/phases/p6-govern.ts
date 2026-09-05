@@ -1,6 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
   clearanceFactor, decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
+  strategicNeed,
   PRICE_MARKUP_BAND,
   planInventory, representativeDistance, shippingPerUnit, softFloor,
   type DirectiveLever, type PriceDecision,
@@ -656,7 +657,10 @@ interface Opportunity {
   /** Tur başına açık (birim): talep − arz. Negatifse fazla arz var. */
   gap_per_tick: number;
   /** Girdilerin en kıt olanının arz sağlığı; hammaddede 1. */
-  strategic_need: number;
+  /** Girdilerin en kıt olanının arz sağlığı; hammaddede 1. */
+  input_supply: number;
+  /** Ürünün kendi arz sağlığı. */
+  output_supply: number;
   /** Şu anda İNŞA HALİNDE olan, henüz üretmeyen kapasite (birim/tur). */
   pipeline_per_tick: number;
 }
@@ -705,7 +709,9 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
            COALESCE(s.f_sellers, 1) AS competition,
            COALESCE(s.gap_per_tick, 0)::float8 AS gap_per_tick,
            COALESCE(bh.units, 0)::float8 AS pipeline_per_tick,
-           COALESCE(sn.need, 1)::float8 AS strategic_need,
+           -- Hesap strategicNeed fonksiyonunda; SQL yalnız bileşeni taşır.
+           COALESCE(sn.girdi_arzi, 1)::float8 AS input_supply,
+           COALESCE(s.f_supply, 0.5)::float8 AS output_supply,
            /*
             * Marj: referans fiyat ÷ TAM birim maliyet (girdiler dahil).
             *
@@ -737,20 +743,26 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
          WHERE ri.recipe_id = r.id
       ) gm ON TRUE
       /*
-       * ★ Stratejik ihtiyaç: BESLENEBİLİR miyim?
+       * ★ Stratejik ihtiyaç: NEREDE DEĞER KATARIM?
        *
        * Girdisi kıt olan tesise yatırım para yakmaktır — kurulur, girdi
        * bulamaz, işçilik öder, durur. Ölçülen: fırın 0,37 · buğday tarlası
        * 0,36 · değirmen 0,36 — aradaki fark 0,01 ve seçim kazanan-hepsini-alır
-       * olduğu için 28 yatırımın HEPSİ fırına gitti, buğdaya sıfır. Un 0,30'da
-       * kalırken 28 fırın daha kurmak zinciri düzeltmez, açlığı büyütür.
+       * olduğu için 28 yatırımın HEPSİ fırına gitti, buğdaya sıfır (R48).
        *
-       * Hammaddenin girdisi yoktur → 1: zincir kökten yukarı dolar. Buğday
-       * arzı düzeldikçe değirmen, un düzeldikçe fırın cazip olur. Sıra
-       * nedenselliğin sırasıdır.
+       * ★ Ama girdinin MUTLAK sağlığına bakmak da yanlıştı: buğday zincirin en
+       * sağlıklı halkasıyken (oran 0,69, HEALTHY) f_supply'ı 0,38 olduğu için
+       * değirmen 0,38 alıyor, buğday tarlası girdisi olmadığından 1,0 alıyordu.
+       * Sermaye köke akmaya devam etti, buğday birikti, un halkası büyümedi:
+       * iki tohumda da değirmen yalnız +4/+5 (R54).
+       *
+       * Doğru soru "girdim ne kadar bol" değil, NEREDE DEĞER KATARIM:
+       * çıktım girdimden kıtsa oraya yatırım yapılır. 0,5 nötrdür; hammaddede
+       * girdi arzı 1 sayıldığı için kendi çıktısı kıtken yüksek çıkar ve
+       * çıktısı düzeldikçe kendiliğinden geri çekilir.
        */
       LEFT JOIN LATERAL (
-        SELECT MIN(COALESCE(s2.f_supply, 0))::float8 AS need
+        SELECT MIN(COALESCE(s2.f_supply, 0))::float8 AS girdi_arzi
           FROM recipe_inputs ri2
           LEFT JOIN saglik s2 ON s2.product_id = ri2.product_id
          WHERE ri2.recipe_id = r.id
@@ -804,7 +816,7 @@ async function maybeInvest(
       profitMargin: o.margin,
       demandGap: o.demand_gap,
       priceTrend: o.price_trend,
-      strategicNeed: o.strategic_need,
+      strategicNeed: strategicNeed(o.input_supply, o.output_supply),
       competition: o.competition,
       // Arketip iştahı 1 etrafında ölçekler: 0,5 iştah → ×1,0, 0,9 → ×1,4.
     }) * (0.5 + npc.investment_aggressiveness);
