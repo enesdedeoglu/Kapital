@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { addBatch, reserveFefo, commitPicks, runInTransaction, type Sql } from '@kapital/db';
 import {
-  asMoney, asQty, DomainError, formatQty, NotFound, qtyFromNumber,
+  asQty, DomainError, formatQty, NotFound, qtyFromNumber,
 } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import type { TransferStockDto } from './inventory.dto.js';

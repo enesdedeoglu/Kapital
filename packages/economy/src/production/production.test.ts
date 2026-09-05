@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { money, mulberry32 } from '@kapital/shared';
 import { cityBonusFor, productionCapacity, upgradeCost } from './capacity.js';
-import { outputQuality, rawInputQuality } from './quality.js';
 import { validateProductGraph, type GraphProduct, type GraphRecipe } from './graph.js';
+import { outputQuality, rawInputQuality } from './quality.js';
 
 describe('kapasite', () => {
   const base = {

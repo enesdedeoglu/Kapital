@@ -2,11 +2,11 @@ import {
   Body, Controller, Get, Inject, Param, Post, Query, Req, UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ZodPipe } from '../../common/zod.pipe.js';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
+import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
-import { FacilityService } from './facility.service.js';
 import { buildFacilitySchema, type BuildFacilityDto } from './facility.dto.js';
+import { FacilityService } from './facility.service.js';
 import { setRecipeSchema, type SetRecipeDto } from './production.dto.js';
 
 @Controller('facilities')

@@ -2,8 +2,8 @@ import {
   boolean, doublePrecision, integer, jsonb, numeric, pgTable, primaryKey,
   serial, smallint, text, timestamp, uuid, bigint,
 } from 'drizzle-orm/pg-core';
-import { facilityCat } from './enums.js';
 import { moneyCol, qtyCol } from './_types.js';
+import { facilityCat } from './enums.js';
 import { users } from './identity.js';
 
 export const cities = pgTable('cities', {

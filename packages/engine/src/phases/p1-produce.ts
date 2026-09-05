@@ -5,12 +5,12 @@ import {
   eventMultipliersFor, type ActiveEvent,
 } from '@kapital/economy';
 import {
-  asMoney, asQty, deterministicUuid, divRoundHalfEven, formatQty, InsufficientFunds,
-  qtyFromNumber, type Money, type Qty,
+  asMoney, asQty, deterministicUuid, divRoundHalfEven, InsufficientFunds,
+  qtyFromNumber,
 } from '@kapital/shared';
 import { configValue, rngFor, type EngineTick } from '../context.js';
-import { loadActiveEvents } from './world-events.js';
 import { PHASE } from '../phases.js';
+import { loadActiveEvents } from './world-events.js';
 
 interface ProducerRow {
   facility_id: string; company_id: string; city_id: number; inventory_id: string;

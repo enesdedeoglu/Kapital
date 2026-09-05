@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { asMoney, type Money } from '@kapital/shared';
+import { runMigrations } from '../cli/migrate.js';
 import { createSql, type Sql } from '../client.js';
 import { loadRootEnv } from '../env.js';
-import { runMigrations } from '../cli/migrate.js';
 import { seed } from '../seed/index.js';
-import { asMoney, type Money } from '@kapital/shared';
 
 loadRootEnv();
 

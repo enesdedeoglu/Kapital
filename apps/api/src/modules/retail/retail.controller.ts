@@ -2,8 +2,8 @@ import { Body, Controller, Get, Inject, Param, Put, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
-import { RetailService } from './retail.service.js';
 import { setPricesSchema, type SetPricesDto } from './retail.dto.js';
+import { RetailService } from './retail.service.js';
 
 @Controller('retail')
 export class RetailController {

@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { InsufficientFunds, money } from '@kapital/shared';
 import type { Sql } from '../client.js';
 import { cashOf, makePlayer, prepareTestDb, systemCompanyId, truncateGameState } from '../testing/harness.js';
-import { runInTransaction, transfer, withDeadlockRetry } from './transfer.js';
 import { checkInvariants } from './invariants.js';
-import { InsufficientFunds, money } from '@kapital/shared';
+import { runInTransaction, transfer, withDeadlockRetry } from './transfer.js';
 
 let sql: Sql;
 let bank: string;

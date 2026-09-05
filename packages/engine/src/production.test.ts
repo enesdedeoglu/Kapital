@@ -5,7 +5,7 @@ import { money, qty } from '@kapital/shared';
 import { runTick } from './orchestrator.js';
 
 let sql: Sql;
-const WHEAT = 1, FLOUR = 2, BREAD = 3;
+const WHEAT = 1, FLOUR = 2;
 
 beforeAll(async () => { sql = await prepareTestDb(); });
 afterAll(async () => { await sql?.end({ timeout: 5 }); });
@@ -113,7 +113,7 @@ describe('zincir üretimi', () => {
       quality: 80, unitCost: money(10), producedInTick: 0n, expiresAtTick: null,
     }));
 
-    const tick = await runTick(sql);
+    await runTick(sql);
     const flour = await stockOf(facility.inventoryId, FLOUR);
     const wheat = await stockOf(facility.inventoryId, WHEAT);
 

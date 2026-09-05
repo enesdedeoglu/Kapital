@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { money, mulberry32, mulMoney, qty, type Money } from '@kapital/shared';
-import { ARCHETYPES, varyTemplate } from './profile.js';
+import { productionCapacity } from '../production/capacity.js';
 import {
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
   planInventory, representativeDistance, clearanceFactor,
 } from './decisions.js';
-import { productionCapacity } from '../production/capacity.js';
+import { ARCHETYPES, varyTemplate } from './profile.js';
 
 const priceBase = {
   targetMargin: 0.2, priceAggressiveness: 0.5, marketHealth: 100,

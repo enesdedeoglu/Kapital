@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { getConfig, loadConfigSnapshot } from '@kapital/config';
 import {
   currentTickSeq, runInTransaction, summarizeInventory, transfer, type Sql,
 } from '@kapital/db';
 import { cityBonusFor, productionCapacity, upgradeCost, type FacilityCategory } from '@kapital/economy';
-import { CONFIG_KEYS, getConfig, loadConfigSnapshot } from '@kapital/config';
 import {
   asMoney, asQty, DomainError, formatMoney, formatQty, InsufficientFunds,
   mulMoney, NotFound, type Money,
@@ -375,6 +375,10 @@ export class FacilityService {
     };
   }
 
+  // Alan (readonly field) YAPILAMAZ: `this.sql`...`` her erişimde YENİ bir
+  // postgres.js Query nesnesi kurar ve bu nesneler tek kullanımlıktır.
+  // Alan olarak bir kez kurulsa tüm istekler aynı Query'yi paylaşırdı.
+  // eslint-disable-next-line @typescript-eslint/class-literal-property-style
   private get selectFacility() {
     return this.sql`
       SELECT f.id, f.name, f.level, f.condition, f.storage_capacity, f.production_enabled,

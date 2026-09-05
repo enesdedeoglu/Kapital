@@ -216,8 +216,10 @@ describe('kur modeli', () => {
   });
 
   it('fiyatlar yükselince kur da yükselir (PPP çıpası)', async () => {
-    const s = await trader('S');
-    const b = await trader('B');
+    // Tacirler yalnız dünyayı doldurmak için kurulur; bu test onlara
+    // doğrudan dokunmaz, kur hareketini fırıncı üzerinden ölçer.
+    await trader('S');
+    await trader('B');
     // Ekmek fiyatını yukarı çekerek CPI'yi yükselt
     const bakerySeller = await trader('Fırıncı');
     await stockUp(bakerySeller.facility.inventoryId, qty(500));

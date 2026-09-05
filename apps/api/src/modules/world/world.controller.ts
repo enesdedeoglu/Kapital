@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Inject, Param } from '@nestjs/common';
 import type { Sql } from '@kapital/db';
 import { formatMoney, asMoney, NotFound } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';

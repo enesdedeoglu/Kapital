@@ -2,8 +2,8 @@ import { Body, Controller, Delete, Get, Inject, Param, Put, Req } from '@nestjs/
 import type { Request } from 'express';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
-import { StandingService } from './standing.service.js';
 import { setStandingOrderSchema, type SetStandingOrderDto } from './standing.dto.js';
+import { StandingService } from './standing.service.js';
 
 /**
  * Kalıcı emirler — "ben yokken şirketim şunu yapsın".

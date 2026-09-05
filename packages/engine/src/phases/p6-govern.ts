@@ -5,7 +5,7 @@ import {
   planInventory, representativeDistance, shippingPerUnit, softFloor,
   type DirectiveLever, type PriceDecision,
 } from '@kapital/economy';
-import { asMoney, asQty, qtyFromNumber, TICKS_PER_DAY, type Money } from '@kapital/shared';
+import { asMoney, asQty, TICKS_PER_DAY, type Money } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices, type ReferencePrices } from '../reference-prices.js';
 import { runDirector, type DirectorResult } from './director.js';
@@ -330,7 +330,7 @@ function priceFor(
   npc: NpcRow, unitCost: bigint, productId: number,
   references: ReferencePrices, health: Map<number, number>,
   cfg: { priceBandPerTick: number; emergencyBandPerTick: number; emergencyHealthBelow: number },
-  facilityId?: string,
+  _facilityId?: string,
 ): PriceDecision | null {
   const reference = references.get(productId);
   if (!reference) return null;
@@ -758,7 +758,7 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
  */
 async function maybeInvest(
   sql: Sql, tick: EngineTick, npc: NpcRow, directives: DirectiveMap,
-  opportunities: Opportunity[], cfg: { minTicks: number },
+  opportunities: Opportunity[], _cfg: { minTicks: number },
   /** Bu TURDA söz verilmiş kapasite (ürün → tur başına birim). */
   committed: Map<number, number>,
 ): Promise<boolean> {

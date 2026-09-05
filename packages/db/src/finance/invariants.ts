@@ -1,5 +1,5 @@
-import type { Sql } from '../client.js';
 import { InvariantViolation } from '@kapital/shared';
+import type { Sql } from '../client.js';
 
 export interface InvariantReport {
   ok: boolean;

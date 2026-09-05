@@ -1,9 +1,9 @@
 import type { Sql } from '@kapital/db';
 import { mulMoney, qtyFromNumber } from '@kapital/shared';
-import { runWorldEvents } from './world-events.js';
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices } from '../reference-prices.js';
 import { computeForeignCapacity } from './foreign-capacity.js';
+import { runWorldEvents } from './world-events.js';
 
 export interface OpenPhaseResult {
   expiredOrders: number;

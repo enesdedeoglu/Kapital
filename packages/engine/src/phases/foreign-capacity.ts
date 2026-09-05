@@ -1,7 +1,7 @@
 import type { Sql } from '@kapital/db';
 import { foreignPrices, worldPriceUsd } from '@kapital/economy';
 import { asMoney, qtyFromNumber } from '@kapital/shared';
-import { configValue, type EngineTick } from '../context.js';
+import type { EngineTick } from '../context.js';
 
 export interface ForeignCapacityResult {
   products: number;
@@ -25,8 +25,6 @@ export interface ForeignCapacityResult {
 export async function computeForeignCapacity(
   sql: Sql, tick: EngineTick,
 ): Promise<ForeignCapacityResult> {
-  const fx = configValue<{ rate0: number }>(tick, 'economy.fx', { rate0: 35 });
-
   const [cityScale] = await sql<{ scale: number }[]>`
     SELECT COALESCE(SUM(population_index * income_index * consumer_demand_index), 1) AS scale
     FROM cities WHERE is_active`;

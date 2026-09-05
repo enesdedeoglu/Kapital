@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   addBatch, checkInvariants, createSql, runInTransaction, transfer, type Sql,
 } from '@kapital/db';

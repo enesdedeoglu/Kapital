@@ -19,8 +19,8 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { createSql, loadRootEnv } from '@kapital/db';
 import { aggregateGate, type SeedRun } from '../gate.js';
-import { printGateReport } from '../report.js';
 import { collectMetrics } from '../metrics.js';
+import { printGateReport } from '../report.js';
 import { runSimulation } from '../runner.js';
 import { buildSimWorld } from '../world.js';
 
@@ -45,7 +45,6 @@ const playerCount = Number(positional[1] ?? 60);
 const ticks = Number(positional[2] ?? 700);
 const firstSeed = Number(positional[3] ?? 20260904);
 
-const line = (char = '─') => char.repeat(96);
 
 const shell = (cmd: string, cmdArgs: string[]) =>
   execFileSync(cmd, cmdArgs, { cwd: process.cwd(), stdio: 'pipe' });

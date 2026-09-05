@@ -5,7 +5,7 @@ import { money, qty } from '@kapital/shared';
 import { runTick } from './orchestrator.js';
 
 let sql: Sql;
-const WHEAT = 1, FLOUR = 2, BREAD = 3, TOMATO = 4;
+const WHEAT = 1, TOMATO = 4;
 const KONYA = 4, ANKARA = 2; // medyan mesafe: Konya 5,10 · Ankara 4,20
 
 beforeAll(async () => { sql = await prepareTestDb(); });

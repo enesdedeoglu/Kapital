@@ -4,7 +4,7 @@ import {
   type BookOrder, type Match, type MatchCandidate,
 } from '@kapital/economy';
 import {
-  InsufficientFunds, asMoney, asQty, deterministicUuid, priceTimesQty, qtyFromNumber, type Money,
+  asMoney, asQty, deterministicUuid, InsufficientFunds, priceTimesQty, qtyFromNumber,
 } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 

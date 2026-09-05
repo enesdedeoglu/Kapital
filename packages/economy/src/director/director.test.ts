@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { money } from '@kapital/shared';
-import {
-  DEFAULT_HEALTH_WEIGHTS, marketHealthScore, type HealthInput,
-} from './health.js';
+import { marginScore, PRICE_MARKUP_BAND } from '../npc/decisions.js';
 import {
   advanceHysteresis, classifyBand, directivesForBand, leverMultiplier, softFloor,
   type HealthBand,
 } from './bands.js';
+import {
+  DEFAULT_HEALTH_WEIGHTS, marketHealthScore, type HealthInput,
+} from './health.js';
 import { giniCoefficient } from './inequality.js';
-import { marginScore, PRICE_MARKUP_BAND } from '../npc/decisions.js';
 
 const healthy: HealthInput = {
   supply: 1000, demand: 1000, sellerCount: 8, buyerCount: 12,

@@ -13,9 +13,9 @@
  * ~%56 büyüyor (F8 ölçümü); sınırsız bir arbitraj bunun üstüne binerdi.
  */
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createSql, transfer, type Sql } from '@kapital/db';
 import { prepareTestDb, truncateGameState } from '@kapital/db/testing';
 import { runTick } from '@kapital/engine';
@@ -127,11 +127,6 @@ const usdOf = async (companyId: string) => {
   const [row] = await sql<{ usd_balance: bigint }[]>`
     SELECT usd_balance FROM companies WHERE id = ${companyId}::uuid`;
   return row!.usd_balance;
-};
-
-const cashOf = async (companyId: string) => {
-  const [row] = await sql<{ cash: bigint }[]>`SELECT cash FROM companies WHERE id = ${companyId}::uuid`;
-  return row!.cash;
 };
 
 describe('dış ticaret — liman uçları (R44)', () => {

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { asQty, DomainError, money, qty } from '@kapital/shared';
 import type { Sql } from '../client.js';
+import { runInTransaction } from '../finance/transfer.js';
 import {
   makeFacility, makePlayer, prepareTestDb, truncateGameState, type TestFacility,
 } from '../testing/harness.js';
-import { runInTransaction } from '../finance/transfer.js';
 import {
   addBatch, commitPicks, consumeFefo, releasePicks, reserveFefo, summarizeInventory,
 } from './batches.js';
-import { asQty, DomainError, money, qty } from '@kapital/shared';
 
 let sql: Sql;
 let facility: TestFacility;

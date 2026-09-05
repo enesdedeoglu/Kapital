@@ -1,11 +1,10 @@
 import { validateProductGraph } from '@kapital/economy';
-import { createSql, type Sql } from '../client.js';
 import {
   asMoney, divRoundHalfEven, InvariantViolation, money, qty,
   SYSTEM_COMPANIES, SYSTEM_COMPANY_CODES,
 } from '@kapital/shared';
+import { createSql, type Sql } from '../client.js';
 import * as d from './data.js';
-import { seedNpcWorld } from './npc-world.js';
 
 /** Tekrar çalıştırılabilir (idempotent): var olan satırları günceller, yenisini ekler. */
 export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<void> {

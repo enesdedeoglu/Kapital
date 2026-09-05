@@ -1,8 +1,8 @@
 import { checkInvariants, type Sql } from '@kapital/db';
 import { giniCoefficient } from '@kapital/economy';
-import { runProgression, type ProgressionResult } from './progression.js';
 import { asMoney, formatMoney, toJson } from '@kapital/shared';
 import type { EngineTick } from '../context.js';
+import { runProgression, type ProgressionResult } from './progression.js';
 
 export interface ClosePhaseResult {
   moneySupply: string;

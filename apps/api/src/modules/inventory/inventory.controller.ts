@@ -1,13 +1,13 @@
 import { Body, Controller, Get, Inject, Post, Req, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
 import { summarizeInventory, type Sql } from '@kapital/db';
-import { asMoney, asQty, formatMoney, formatQty, NotFound } from '@kapital/shared';
+import { asMoney, formatMoney, formatQty, NotFound } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
-import type { AuthUser } from '../auth/jwt.guard.js';
-import { ZodPipe } from '../../common/zod.pipe.js';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
-import { InventoryService } from './inventory.service.js';
+import { ZodPipe } from '../../common/zod.pipe.js';
+import type { AuthUser } from '../auth/jwt.guard.js';
 import { transferStockSchema, type TransferStockDto } from './inventory.dto.js';
+import { InventoryService } from './inventory.service.js';
 
 /** Şirketin tüm tesislerindeki stoğun birleşik görünümü. */
 @Controller('inventory')

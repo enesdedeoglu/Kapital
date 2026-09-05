@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { money, mulberry32, qty, type Money } from '@kapital/shared';
+import type { CategoryWeights, ProductDemandParams, RetailOffer } from '../types.js';
+import { affordableUnits, allocateRetail } from './allocation.js';
+import { reservationCeiling, scoreOffer } from './attractiveness.js';
+import { demandNoise, economicCycle, seasonMultiplier } from './cycle.js';
+import { decayBatch, expiryTick } from './decay.js';
 import { cityDemand, worldDemandScale,
 } from './demand.js';
-import { reservationCeiling, scoreOffer } from './attractiveness.js';
-import { affordableUnits, allocateRetail } from './allocation.js';
-import { decayBatch, expiryTick } from './decay.js';
-import { demandNoise, economicCycle, seasonMultiplier } from './cycle.js';
-import type { CategoryWeights, ProductDemandParams, RetailOffer } from '../types.js';
 
 const TOMATO: ProductDemandParams = {
   productId: 4,

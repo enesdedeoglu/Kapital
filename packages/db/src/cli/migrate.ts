@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
-import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSql } from '../client.js';

@@ -1,7 +1,6 @@
 import { transfer, type Sql } from '@kapital/db';
 import { asMoney, deterministicUuid, InsufficientFunds } from '@kapital/shared';
 import type { EngineTick } from '../context.js';
-
 import { collectLoanPayments, type LoanPhaseResult } from './loans.js';
 
 export interface UpkeepPhaseResult {

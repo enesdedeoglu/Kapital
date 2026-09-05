@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Inject, Post, Req, UseInterceptors } from '@nestjs/common';
 import type { Request } from 'express';
-import { ZodPipe } from '../../common/zod.pipe.js';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
+import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
-import { CompanyService } from './company.service.js';
 import { createCompanySchema, type CreateCompanyDto } from './company.dto.js';
+import { CompanyService } from './company.service.js';
 
 @Controller('company')
 export class CompanyController {

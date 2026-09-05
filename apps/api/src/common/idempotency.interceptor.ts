@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import {
   CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor,
 } from '@nestjs/common';
-import { Observable, catchError, concatMap, from, of, throwError } from 'rxjs';
 import type { Request } from 'express';
+import { Observable, catchError, concatMap, from, of, throwError } from 'rxjs';
 import type { Sql } from '@kapital/db';
 import { Conflict, DomainError } from '@kapital/shared';
 import { SQL } from './db.module.js';

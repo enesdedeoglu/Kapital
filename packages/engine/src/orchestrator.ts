@@ -1,6 +1,5 @@
 import type { Sql } from '@kapital/db';
 import { InvariantViolation, seasonOf, TICK_MINUTES, toJson } from '@kapital/shared';
-import { ACTIVE_PHASES, type PhaseDefinition } from './phases.js';
 import { buildTickContext, type EngineTick } from './context.js';
 import { runOpenPhase } from './phases/p0-open.js';
 import { runProducePhase } from './phases/p1-produce.js';
@@ -10,6 +9,7 @@ import { runUpkeepPhase } from './phases/p4-upkeep.js';
 import { runSettlePhase } from './phases/p5-settle.js';
 import { runGovernPhase } from './phases/p6-govern.js';
 import { runClosePhase } from './phases/p7-close.js';
+import { ACTIVE_PHASES, type PhaseDefinition } from './phases.js';
 
 /**
  * Aynı anda tek orchestrator koşsun — Redis yerine PostgreSQL danışma kilidi (ADR-0008).

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { money } from '@kapital/shared';
 import {
   actsThisTick, allocatePopulation, canInvest, PLAYER_PROFILES, profileShareSum,
-  retailPrice, tradeAsk, tradeBid, type PlayerProfile,
+  retailPrice, tradeAsk, tradeBid,
 } from './profiles.js';
 
 const byCode = (code: string) => PLAYER_PROFILES.find((p) => p.code === code)!;

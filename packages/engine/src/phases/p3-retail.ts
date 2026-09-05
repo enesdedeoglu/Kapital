@@ -7,9 +7,9 @@ import {
 } from '@kapital/economy';
 import { asMoney, asQty, deterministicUuid, priceTimesQty, type Money } from '@kapital/shared';
 import { configValue, rngFor, type EngineTick } from '../context.js';
-import { loadActiveEvents } from './world-events.js';
 import { PHASE } from '../phases.js';
 import { loadReferencePrices } from '../reference-prices.js';
+import { loadActiveEvents } from './world-events.js';
 
 interface OfferRow {
   facility_id: string; company_id: string; city_id: number; product_id: number;
