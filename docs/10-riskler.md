@@ -1439,6 +1439,43 @@ merdiven kendi kendini toparlar.
 
 ---
 
+## R52 — Ölçüt son ANIN fotoğrafını çekiyor ve "mal yok" ile "pahalı"yı ayıramıyor
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F8 kapı yayılma analizi · **Durum:** ✅ çözüldü
+
+`supply_demand` beş tohumda 4, 0, 7, 2, 4/10 çıktı. Aynı kod, aynı parametreler.
+Bu yayılmanın bir kısmı dünyanın gerçek farkı, ama önemli bir kısmı **ölçütün
+kendisiydi**.
+
+**(a) Tek turdan örnekleme.** Metrik `tick_id = lastTick` diyordu — koşunun
+tamamı yerine son anın fotoğrafı. Dünya olayları, üretim kısma ve tesis
+duruşları son pencereyi kolayca kaydırıyor. Artık ürün başına son GÜNÜN
+ortalaması alınıyor: tek kötü tur bir ürünü banttan çıkaramaz.
+
+**(b) İki farklı olguyu tek sayıya eziyordu.** Oran, üretimi ARZU EDİLEN talebe
+böler. Ama tüketicinin bütçesi vardır (`referans × miktar × bütçe payı`) ve
+fiyat yükselince daha az alır — `city_demand.budget_limited_units` bunu zaten
+sayıyordu, kimse bakmıyordu. Sonuç: oran, fiyatın referansın üstünde olduğu her
+durumda 1'e ulaşamaz; piyasa temizlenmiş olsa bile.
+
+Ölçülen fark:
+
+| ürün | karşılanan | bütçe engeli | gerçek durum |
+|---|---|---|---|
+| BREAD | %53,9 | %2,5 | **mal yok** — gerçek kıtlık |
+| TOMATO | %82,0 | %38,6 | mal var, **pahalı** |
+| CIGARETTE | %85,1 | %26,2 | mal var, pahalı |
+
+Yeni ölçüt `retail_fulfilment` bu ayrımı yapıyor: karşılanma %85'in altındaysa
+VE bunun sebebi bütçe değilse (%15 altı), ürün "mal bulunamıyor" sayılır.
+
+★ Bu bir gevşetme DEĞİLDİR: ekmek %53,9 ile yine düşer. Domates geçer — çünkü
+domates kıt değildi, pahalıydı; onu R51'deki indirim mekanizması ayrıca çözer.
+Ölçütü değiştirmek kendi ödevine not vermeye benzer; o yüzden ikisi de
+puanlamayı kolaylaştırmak için değil, DOĞRU soruyu sormak için yapıldı.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1573,6 +1610,7 @@ kendi kendini yukarıda tutar.
 | R43 | Ara mal talebi kapasiteden ölçülüyordu | 🟠 Yüksek | ✅ F8 — `chainRequirements` |
 | R44 | Dış ticaret hiç sınanmıyor (kapı ufku < Lv7 limanı) | 🟡 Orta | ✅ senaryo testi · arbitraj kapalı |
 | R51 | Raf fiyatı satılmayan stoğa tepki vermiyor | 🟠 Yüksek | ✅ F8 — `clearanceFactor` |
+| R52 | Ölçüt tek turdan · "mal yok" ile "pahalı" ayrılmıyor | 🟠 Yüksek | ✅ F8 — gün ortalaması + `retail_fulfilment` |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

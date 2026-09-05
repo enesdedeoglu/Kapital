@@ -36,11 +36,24 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
   const day = 96n;
 
   /* --- 1. Arz / talep oranı --------------------------------------------- */
+  /*
+   * ★ Son TURUN değil, son GÜNÜN ortalaması.
+   *
+   * Önce `tick_id = lastTick` idi: koşunun tamamı yerine son anın fotoğrafı.
+   * Dünya olayları, üretim kısma ve tesis duruşları son pencereyi kolayca
+   * kaydırıyordu; aynı yapılandırmanın beş tohumu 0/10 ile 7/10 arasında
+   * savruluyordu (F8). Bu bir denge farkı değil, örnekleme gürültüsüydü.
+   *
+   * Ürün başına önce günün ortalaması alınır, sonra banda bakılır: tek bir
+   * kötü turun ürünü banttan çıkarmasına izin verilmez.
+   */
   const sd = await sql<{ code: string; ratio: number }[]>`
     SELECT p.code,
-           (h.supply_units::float8 / NULLIF(h.demand_units, 0)) AS ratio
+           AVG(h.supply_units::float8 / NULLIF(h.demand_units, 0)) AS ratio
       FROM market_health h JOIN products p ON p.id = h.product_id
-     WHERE h.city_id = 0 AND h.tick_id = ${lastTick} AND h.demand_units > 0`;
+     WHERE h.city_id = 0 AND h.tick_id > ${lastTick - day} AND h.tick_id <= ${lastTick}
+       AND h.demand_units > 0
+     GROUP BY p.code`;
   const inBand = sd.filter((r) => r.ratio >= 0.85 && r.ratio <= 1.15).length;
   const sdShare = sd.length > 0 ? inBand / sd.length : null;
   out.push({
@@ -49,6 +62,43 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
     formatted: sdShare === null ? '—' : `${inBand}/${sd.length} (${pct(sdShare)})`,
     target: 'çoğu ürün 0,85–1,15', pass: sdShare === null ? null : sdShare >= 0.5,
     note: sd.length === 0 ? 'talebi olan ürün yok' : undefined,
+  });
+
+  /* --- 1b. Tüketici talebi karşılandı mı (R52) --------------------------- */
+  /*
+   * ★ "Mal yok" ile "pahalı" AYRI şeylerdir.
+   *
+   * Arz/talep oranı üretimi ARZU EDİLEN talebe böler. Ama tüketicinin bütçesi
+   * vardır (`referans × miktar × bütçe payı`): fiyat yükselince daha az alır ve
+   * `budget_limited_units` bunu zaten sayar. O yüzden oran, fiyatın referansın
+   * üstünde olduğu her durumda 1'e ulaşamaz — piyasa temizlenmiş olsa bile.
+   *
+   * Ölçülen fark (F8): ekmek talebinin %53,9'u karşılanmış, bütçe engeli
+   * yalnız %2,5 — GERÇEK kıtlık. Domates %82 karşılanmış ama %38,6'sı bütçe
+   * yetmediği için alınamamış — mal var, pahalı. Tek bir oran ikisini aynı
+   * gösteriyordu.
+   *
+   * Bu ölçüt gevşetme DEĞİLDİR: ekmek %53,9 ile yine düşer.
+   */
+  const ff = await sql<{ code: string; fulfil: number; budget: number }[]>`
+    SELECT p.code,
+           (SUM(cd.fulfilled_units)::float8 / NULLIF(SUM(cd.demand_units), 0)) AS fulfil,
+           (SUM(cd.budget_limited_units)::float8 / NULLIF(SUM(cd.demand_units), 0)) AS budget
+      FROM city_demand cd JOIN products p ON p.id = cd.product_id
+     WHERE cd.tick_id > ${lastTick - day} AND cd.tick_id <= ${lastTick}
+     GROUP BY p.code
+    HAVING SUM(cd.demand_units) > 0`;
+  const starved = ff.filter((r) => r.fulfil < 0.85 && r.budget < 0.15);
+  const fulfilMedian = ff.length > 0
+    ? [...ff.map((r) => r.fulfil)].sort((a, b) => a - b)[Math.floor(ff.length / 2)]!
+    : null;
+  out.push({
+    key: 'retail_fulfilment', label: 'Tüketici talebinin karşılanma oranı',
+    value: fulfilMedian,
+    formatted: fulfilMedian === null ? '—'
+      : `${pct(fulfilMedian)} · mal bulunamayan ${starved.length}/${ff.length}`,
+    target: 'kıtlıktan karşılanamayan ürün yok',
+    pass: fulfilMedian === null ? null : starved.length === 0,
   });
 
   /* --- 2. Fiyat volatilitesi -------------------------------------------
