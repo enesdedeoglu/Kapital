@@ -1257,6 +1257,188 @@ R28 ikincisini kapatmıştı, birincisi açık kalmıştı. Bilgi mükemmel ve a
 ---
 
 
+## R46 — Tohum dengesini doğrulayan test bir kurguyu doğruluyordu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** R45 sonrası denetim · **Durum:** ✅ çözüldü
+
+R45'i düzelttikten sonra "peki bu dünyayı zaten bir test doğrulamıyor muydu?"
+diye baktım. Doğruluyordu — ama gerçeği değil, kendi modelini.
+
+`seed-data.test` zincirin her aşamasını `chainRequirements` ile hesaplayıp tohum
+dünyasının onu karşıladığını doğruluyor. Beslendiği `npcFacilityCounts()`
+dağılımı ORANSAL varsayıyordu: `count × 1,35 / liste uzunluğu`. Tohum ise
+yuvaları `plan.facilities[(index + s) % uzunluk]` ile dağıtıyordu ve `index`
+planlar arası **küresel** bir sayaçtı. INDUSTRIAL planı 16'ncı NPC'de başlıyor,
+listesi 12 uzunluğunda: `16 % 12 = 4`. Liste fırından değil, dördüncü girdiden —
+sigara fabrikasından — açılıyordu.
+
+| tesis | sayaç diyor | tohum kuruyor |
+|---|---|---|
+| BAKERY | 9 | **5** |
+| CIG_FACTORY | 4,5 | **8** |
+| IRON_MINE | 2,3 | 4 |
+
+Fırın kritik halkaydı: ekmek zinciri tüketici talebinin %23'ünü karşılıyordu ve
+test yeşil kalıyordu. Çözüm dengeyi elle ayarlamak değil **tek kaynak**:
+`planSlots()` yuva listesini üretir, tohum onu sırayla tüketir, sayaç onu sayar.
+Düzeltmeden sonra: fırın 11, değirmen 4, sigara fabrikası 4.
+
+★ Ders: bir testin yeşil olması ölçtüğü şeyin doğru olduğunu göstermez —
+**ölçtüğü şeyin gerçek olduğunu** göstermesi gerekir. Model ile gerçek ayrı
+kodda yaşadığı sürece sessizce ayrışırlar.
+
+---
+
+## R47 — İki ölü ölçek: ED kıtlığı görüp susuyor, marj terimi hiçbir şeyi ayırmıyor
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 `supply_demand` kazısı · **Durum:** ✅ çözüldü
+
+R45 ve R46'dan sonra sermaye artık yanlış ürüne akmıyordu — ama hiçbir yere de
+akmıyordu. Ölçüm: **700 turda 2 NPC yatırımı.** Nakit boldu (ort. 362.800 ₺),
+tesis sınırı dolu değildi (1,20/4). On ürünün hepsi eksikti (0,13–0,78) ve dünya
+kendini düzeltmiyordu.
+
+**(a) Sağlık skoru kıtlığı ortalamada eritiyordu.** Ekmekte arz bileşeni 0,00,
+derinlik 0,02 — ortada mal yok. Ama satıcı 1,00, alıcı 1,00, istikrar 1,00 skoru
+**40,3**'e çekiyordu ve bant ADJUST oluyordu. ADJUST yatırım teşviki YAYINLAMAZ
+(`INVESTMENT_BIAS` yalnız STIMULATE ≤35 ve EMERGENCY'de çıkar). Aktif yatırım
+direktifi sayısı: **sıfır**. ED kıtlığı ölçüyor, sınıflandırması onu susturuyordu.
+
+Çözüm R26'daki `tradeCount` kapısının aynı örüntüsü — bazı bileşenler ortalamaya
+girmez, TAVAN koyar:
+
+    scarcity = max(f_supply, f_depth)
+    ceiling  = 100 × (0,20 + 0,80 × scarcity)
+    score    = min(ağırlıklı_ortalama, ceiling)
+
+Arz VEYA derinlikten hangisi iyiyse o sayılır: derin stoğu olan ama akışı yavaş
+piyasada mal VARDIR. Ekmek 40,3 → 21,6 (STIMULATE), un → 28,8, sigara → 24,0;
+domates (derinlik 0,66) ve kömür (arz 0,56) dokunulmadan kaldı.
+
+**(b) Marj terimi ölü ağırlıktı.** Skorun en ağır bileşeni (%35)
+`(fiyat/birim_maliyet − 1) / 1,5` idi, yani 2,5 katta doyuyordu. Oysa tohum
+fiyatları **tasarım gereği** maliyetin 1,15–1,75 katıdır; `seed-data.test` tam
+bunu şart koşar. Terim ekonominin hiç ulaşamayacağı bir aralığa ölçekleniyor ve
+her üründe 0,22–0,27'de sıkışıyordu: 10 üründe yayılma 0,05.
+
+Ölçek tasarım bandına oturtuldu ve R46'nın dersi uygulandı — `PRICE_MARKUP_BAND`
+**tek kaynaktır**: tohum testi fiyatları ona karşı doğrular, motorun SQL'i marjı
+onun üzerine ölçekler.
+
+**Ölçülen (1 tohum × 400 tur):** arz/talep bandındaki ürün **0/10 → 5/10**.
+
+★ Ders: bir ölçüt yalnız yanlış olduğunda değil, **hiçbir şeyi ayırt etmediğinde
+de** bozuktur. Sabit çıkan bir terim ağırlığını taşımaz, yalnız eşiği yükseltir.
+
+---
+
+## R48 — Kazanan hepsini alır: sermaye zincirin son halkasına yığıldı
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 ikinci kapı koşusu · **Durum:** ✅ çözüldü
+
+R47'den sonra yatırım yeniden akmaya başladı — ama tek bir yere:
+
+| tesis | tohumdan | sonradan |
+|---|---|---|
+| BAKERY | 11 | **28** |
+| MILL | 4 | 4 |
+| WHEAT_FIELD | 4 | **0** |
+
+Ekmek 0,29 · un 0,30 · buğday 0,29 — zincir kökünden aç, sermayenin tamamı
+yaprakta. Maden zinciri (kömür 0,94 · demir 0,87 · çelik 1,00) sağlıklıydı çünkü
+kısa: tek aşamalı zincirlerde bu kusur görünmez.
+
+Sebep skorların BERABERLİĞİ: fırın 0,37 · buğday tarlası 0,36 · değirmen 0,36.
+Fark 0,01. NPC en yüksek skorlu TEK fırsatı seçtiği için kılpayı öndeki her turda
+kazandı ve 28 yatırımın hepsini topladı.
+
+Beraberliği bozması gereken terim zaten skordaydı ama çakılıydı:
+`strategicNeed: 0.5` — kodun kendi yorumu "kendi zincirinde eksik halka —
+MVP-1'de sabit" diyordu. Sabit bir terim hiçbir şeyi ayırt etmez (R47'nin dersi),
+yalnız eşiği yükseltir. Zincirden türetildi: **girdilerin en kıt olanının arz
+sağlığı**, hammaddede 1.
+
+    strategic_need = MIN(f_supply) over recipe_inputs   -- girdisizse 1
+
+Girdisi olmayan fabrikaya yatırım para yakmaktır: kurulur, girdi bulamaz,
+işçilik öder, durur. Hammadde her zaman beslenebilir olduğu için zincir KÖKTEN
+yukarı dolar. **Ölçülen:** buğday tarlası 4 → 11, değirmen 4 → 8, fırın 11 → 33.
+
+★ Ders: yakın skorlarda "en iyiyi seç" kuralı, farkı 0,01 olan bir sıralamayı
+%100'e karşı %0'a çevirir. Beraberliği bozan terim ölüyse, seçim rastgele bir
+kılpayına teslim edilmiş demektir.
+
+---
+
+## R49 — Yatırım eşiği ulaşılabilir en yüksek skorun üstündeydi
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** F8 üçüncü kapı koşusu · **Durum:** ✅ çözüldü
+
+R48'den sonra sıralama doğruydu ama yatırım yine seyrekti: 700 turda 4 tesis,
+NPC payı %56,7 (hedef %60–80). Ölçülen skor dağılımı:
+
+    tütün 0,45 · buğday 0,41 · kömür 0,39 · demir 0,35 · değirmen 0,34
+    fırın 0,32 · çelik 0,30 · mobilya 0,27 · sebze 0,15
+
+Eşik **0,55**. Ulaşılabilir en yüksek skor 0,45. Hiçbir fırsat kendi değeriyle
+eşiği geçemiyordu; yatırım yalnız atak NPC'lerin `(0,5 + iştah)` çarpanıyla
+sızıyordu. R47'nin aynı ailesi: ölçek, ölçtüğü dağılımla uyuşmuyordu.
+
+Eşik 0,38'e kalibre edildi — tam kıt hammaddeleri geçirir, beslenemeyen
+fabrikaları girdileri düzelene kadar dışarıda tutar.
+
+★ Eşiğin NEYİN kurulacağına etkisi yoktur: `maybeInvest` en yüksek skorlu TEK
+fırsatı seçer, sıralamayı `strategicNeed` ve açık/boru hattı koruması belirler.
+Eşik yalnız yatırımın HIZINI ayarlar — bu yüzden indirmek R48'in yığılmasını
+geri getirmez.
+
+---
+
+## R50 — İlk haftanın tamamı tek ürün: ticaret kilitleri oyuncuyu dışarıda tutuyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** F8 teşhis çıktısı · **Durum:** ✅ çözüldü
+
+`week1_value` üç kapı koşusunda 0/5 tuttu ve hiç kazılmamıştı. Kapıya teşhis
+adımı ekleyince ilk koşusunda çıktı: süresi dolan **2.141 oyuncu alış emrinin
+hepsi domatesti.** Ekmek, sigara, mobilya için tek emir bile yoktu.
+
+Sebep `products.unlock_level` — ürün TİCARETİNİ kilitliyor:
+
+| ürün | kilit | perakende talebi |
+|---|---|---|
+| TOMATO | 1 | 634 kg/tur |
+| BREAD | **6** | 1.014 kg/tur |
+| CIGARETTE | **8** | — |
+| FURNITURE | **12** | — |
+
+400. turda oyuncular Lv1 (39), Lv2 (17), Lv3 (4) dağılımındaydı. Yani ilk
+haftanın tamamı tek ürün. 86 oyuncu dükkânı aynı domates için yarışırken NPC
+marketleri dördünü birden satıyordu — dükkân başına **2,8 kg/tur vs 37,6**.
+
+Bu tek bulgu iki metriği birden açıklıyor: `week1_value` (seviye 1 oyuncunun
+eriştiği tek pazar haftada ~17.600 ₺ eder, 34.000 başlangıçla ~52.000 — hedef
+100–250 bin tasarım gereği ulaşılamaz) ve `npc_share` (%85,6; oyuncu üç üründen
+dışlanmışken NPC payı düşemez).
+
+**Yapılan:** ekmek 6 → 2, sigara 8 → 4. Üretim kilitleri (buğday 5, un 6)
+bilerek yukarıda: oyuncu önce satmayı, sonra üretmeyi öğrenir.
+
+**Ölçülen (1 tohum × 400 tur):** oyuncu değeri p50 37.417 → **44.806 ₺**,
+ortalama seviye 1,42 → 1,67, dolan alış emri 326 → 516. Aynı koşuda
+`supply_demand` geriledi (0,84–1,03 kümesi 0,66–1,28'e yayıldı): oyuncunun yeni
+ekmek talebi zincire bindi, NPC yatırımı tepki verdi (fırın 11→37, tarla 4→26)
+ama 400 turda yetişemedi. Tek koşu karar vermez (R39).
+
+★ **İkinci kilit — XP kapısı.** Merdiveni indirmek gerekliydi ama yetmiyordu:
+Lv2'nin kendisi 700 XP istiyordu, Lv1 oyuncusu 113 XP'deydi. Ölçülen kazanım
+~0,94 XP/tur, yani 700'e ~745 turda varılıyor — ilk hafta (672 tur) tam biterken.
+Kilit döngüseldi: **ekmek için Lv2, Lv2 için ekmek cirosu.** R30'un bir basamak
+yukarıdaki kardeşi. Lv2 eşiği ölçülen hıza göre 700 → **200** (≈2 gün). Sonraki
+basamaklara dokunulmadı: ekmek açılınca ciro ve dolayısıyla XP hızlandığı için
+merdiven kendi kendini toparlar.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
