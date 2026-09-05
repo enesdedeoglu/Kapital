@@ -80,6 +80,8 @@ export interface DecisionContext {
    * onun için bir MALİYET çıpasıdır, fiyat çıpası değil.
    */
   readonly retailMarkup: number;
+  /** `tesisId:urunId` → tur başına satılan kg. */
+  readonly salesRate: ReadonlyMap<string, number>;
 }
 
 /** Karar girdileri — tek turda tek sorgu seti. */
@@ -116,13 +118,24 @@ export async function loadDecisionContext(
     SELECT product_id, AVG(selling_price)::bigint AS price
       FROM retail_offers WHERE enabled GROUP BY 1`;
   const marketPrices = new Map(shelfRows.map((r) => [r.product_id, r.price]));
+
+  // Dükkânın KENDİ satış hızı — raf fiyatına stok baskısı bunun üzerinden
+  // hesaplanır (R51). NPC tarafındaki (`p6-govern`) kuralla aynı.
+  const salesRate = new Map<string, number>();
+  for (const row of await sql<{ facility_id: string; product_id: number; per_tick: number }[]>`
+    SELECT facility_id, product_id, (SUM(quantity) / 1000.0 / 96)::float8 AS per_tick
+      FROM retail_sales
+     WHERE tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
+     GROUP BY 1, 2`) {
+    salesRate.set(`${row.facility_id}:${row.product_id}`, row.per_tick);
+  }
   const [retailCfg] = await sql<{ value: { retailMarkup?: number } }[]>`
     SELECT value FROM game_configs WHERE key = 'economy.retail'
      ORDER BY version DESC LIMIT 1`;
   const retailMarkup = retailCfg?.value?.retailMarkup ?? 1.35;
   return {
     references, retailProducts, recipeInputs, buildable, recipeByFacilityType,
-    freight, marketPrices, retailMarkup,
+    freight, marketPrices, retailMarkup, salesRate,
   } satisfies DecisionContext;
 }
 
@@ -251,6 +264,11 @@ export async function actPlayer(
               Number(ctx.references.get(s.product_id) ?? s.unit_cost) * ctx.retailMarkup,
             ))),
             asMoney(ctx.marketPrices.get(s.product_id) ?? 0n),
+            // Hiç satmamış dükkânda kapsam ölçülemez: indirim uygulanmaz.
+            (() => {
+              const perTick = ctx.salesRate.get(`${facility.facility_id}:${s.product_id}`) ?? 0;
+              return perTick > 0 ? Number(s.available) / 1000 / perTick : undefined;
+            })(),
           )),
           enabled: true,
         }));

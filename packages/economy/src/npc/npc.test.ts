@@ -3,7 +3,7 @@ import { money, mulberry32, mulMoney, qty, type Money } from '@kapital/shared';
 import { ARCHETYPES, varyTemplate } from './profile.js';
 import {
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
-  planInventory, representativeDistance,
+  planInventory, representativeDistance, clearanceFactor,
 } from './decisions.js';
 import { productionCapacity } from '../production/capacity.js';
 
@@ -315,5 +315,31 @@ describe('★ stratejik ihtiyaç beraberliği bozar (R48)', () => {
     const firin = investmentScore({ ...base, profitMargin: 0.36, strategicNeed: 0.5 });
     const tarla = investmentScore({ ...base, profitMargin: 0.31, strategicNeed: 0.5 });
     expect(Math.abs(firin - tarla)).toBeLessThan(0.02);
+  });
+});
+
+describe('★ raf fiyatına stok baskısı (R51)', () => {
+  const cfg = { targetTicks: 8, maxDiscount: 0.25 };
+
+  it('hedefin altında stokta indirim yok', () => {
+    expect(clearanceFactor({ coverageTicks: 3, ...cfg })).toBe(1);
+    expect(clearanceFactor({ coverageTicks: 8, ...cfg })).toBe(1);
+  });
+
+  it('stok biriktikçe fiyat kademeli düşer', () => {
+    const az = clearanceFactor({ coverageTicks: 10, ...cfg });
+    const cok = clearanceFactor({ coverageTicks: 14, ...cfg });
+    expect(az).toBeLessThan(1);
+    expect(cok).toBeLessThan(az);
+  });
+
+  it('★ indirim tavanı aşılmaz — zararına satış kuralı değil', () => {
+    expect(clearanceFactor({ coverageTicks: 16, ...cfg })).toBeCloseTo(0.75, 5);
+    expect(clearanceFactor({ coverageTicks: 200, ...cfg })).toBeCloseTo(0.75, 5);
+  });
+
+  it('bozuk girdi fiyatı bozmaz', () => {
+    expect(clearanceFactor({ coverageTicks: 50, targetTicks: 0, maxDiscount: 0.25 })).toBe(1);
+    expect(clearanceFactor({ coverageTicks: 50, targetTicks: 8, maxDiscount: 0 })).toBe(1);
   });
 });

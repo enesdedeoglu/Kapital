@@ -1,6 +1,6 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
-  decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
+  clearanceFactor, decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
   PRICE_MARKUP_BAND,
   planInventory, representativeDistance, shippingPerUnit, softFloor,
   type DirectiveLever, type PriceDecision,
@@ -70,6 +70,9 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const throttleCfg = configValue<{ targetTicks: number; maxStepPerTick: number; floor: number }>(
     tick, 'npc.throttle', { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 },
   );
+  const clearCfg = configValue<{ targetTicks: number; maxDiscount: number }>(
+    tick, 'retail.clearance', { targetTicks: 8, maxDiscount: 0.25 },
+  );
   const retailCfg = configValue<{ retailMarkup: number }>(
     tick, 'economy.retail', { retailMarkup: 1.35 },
   );
@@ -101,6 +104,20 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const health = await loadMarketHealth(sql, tick);
   const facilities = await loadFacilities(sql, tick, npcs.map((n) => n.company_id));
   const stock = await loadStock(sql, facilities.map((f) => f.inventory_id));
+
+  /*
+   * Dükkânın KENDİ satış hızı — raf fiyatına stok baskısı bunun üzerinden
+   * hesaplanır. Tahmin (`base_demand × 0,35`) kullanılamaz: dükkânlar arası
+   * fark tam da ölçmek istediğimiz şey.
+   */
+  const salesRate = new Map<string, number>();
+  for (const row of await sql<{ facility_id: string; product_id: number; per_tick: number }[]>`
+    SELECT facility_id, product_id, (SUM(quantity) / 1000.0 / 96)::float8 AS per_tick
+      FROM retail_sales
+     WHERE tick_id > ${tick.seq - 96n} AND tick_id <= ${tick.seq}
+     GROUP BY 1, 2`) {
+    salesRate.set(`${row.facility_id}:${row.product_id}`, row.per_tick);
+  }
   const inputs = await loadRecipeInputs(sql, facilities);
   const openOrders = await loadOpenOrders(sql, npcs.map((n) => n.company_id));
   const retailDemand = await loadRetailProducts(sql);
@@ -234,9 +251,25 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
              * tüketicinin rezervasyon tavanı (referans × 3) çok üstünde
              * olduğu için talep kırılmaz.
              */
+            /*
+             * ★ Stok baskısı: rafta biriken mal fiyatı aşağı çeker (R51).
+             * Satış hızı ölçülemeyen (henüz hiç satmamış) dükkânda indirim
+             * uygulanmaz — kapsam sonsuz çıkar ve yeni açılan her dükkân
+             * kendini indirime sokardı.
+             */
+            const perTick = salesRate.get(`${facility.facility_id}:${product.id}`) ?? 0;
+            const clearance = perTick > 0
+              ? clearanceFactor({
+                  coverageTicks: Number(held.available) / 1000 / perTick,
+                  targetTicks: clearCfg.targetTicks,
+                  maxDiscount: clearCfg.maxDiscount,
+                })
+              : 1;
             const retailAnchor = new Map(references);
             retailAnchor.set(product.id, asMoney(
-              (references.get(product.id)! * BigInt(Math.round(retailCfg.retailMarkup * 1000))) / 1000n,
+              (references.get(product.id)! * BigInt(Math.round(
+                retailCfg.retailMarkup * clearance * 1000,
+              ))) / 1000n,
             ));
             const decision = priceFor(npc, held.unit_cost, product.id, retailAnchor, health, npcCfg, facility.facility_id);
             if (decision) {

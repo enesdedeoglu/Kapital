@@ -8,6 +8,7 @@
  * Saf fonksiyonlar: veritabanına dokunmaz, rastgeleliği enjekte edilir
  * (ADR-0003 ile aynı disiplin).
  */
+import { clearanceFactor } from '@kapital/economy';
 import type { Money } from '@kapital/shared';
 
 export type ProfileCode =
@@ -152,6 +153,8 @@ export function actsThisTick(
  */
 export function retailPrice(
   profile: PlayerProfile, unitCost: Money, reference: Money, marketPrice?: Money,
+  /** Eldeki stok kaç turluk satışa yeter — bilinmiyorsa indirim uygulanmaz. */
+  coverageTicks?: number,
 ): Money {
   const floor = (unitCost * BigInt(Math.round((1 + profile.targetMargin * 0.35) * 1000))) / 1000n;
 
@@ -161,7 +164,14 @@ export function retailPrice(
   const position = 0.94 + profile.qualityBias * 0.18;
   const positioned = (anchor * BigInt(Math.round(position * 1000))) / 1000n;
 
-  return (positioned > floor ? positioned : floor) as Money;
+  // ★ Stok baskısı: rafta biriken mal fiyatı aşağı çeker (R51). Taban
+  // korunur — indirim zararına satışa dönüşmez.
+  const clearance = coverageTicks === undefined ? 1 : clearanceFactor({
+    coverageTicks, targetTicks: 8, maxDiscount: 0.25,
+  });
+  const discounted = (positioned * BigInt(Math.round(clearance * 1000))) / 1000n;
+
+  return (discounted > floor ? discounted : floor) as Money;
 }
 
 /**

@@ -60,3 +60,43 @@ SELECT ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cf.company_value)/10000
   FROM company_financials cf JOIN companies c ON c.id = cf.company_id
  WHERE c.kind = 'PLAYER'
    AND cf.tick_id = (SELECT MAX(tick_id) FROM company_financials);
+
+\echo '=== ADAY 2 — oyuncu serveti ne kadar eşitsiz (Gini) ==='
+-- week1_value medyanı 58k ama p90 358k. Soru: oyuncular kazanamıyor mu,
+-- yoksa kazanç birkaç oyuncuda mı toplanıyor? Gini 0 = tam eşit, 1 = tek elde.
+WITH v AS (
+  SELECT cf.company_value::numeric AS x,
+         ROW_NUMBER() OVER (ORDER BY cf.company_value) AS i,
+         COUNT(*) OVER () AS n
+    FROM company_financials cf JOIN companies c ON c.id = cf.company_id
+   WHERE c.kind = 'PLAYER'
+     AND cf.tick_id = (SELECT MAX(tick_id) FROM company_financials)
+)
+SELECT ROUND((2 * SUM(i * x) / NULLIF(n * SUM(x), 0)) - (n + 1)::numeric / n, 3) AS gini,
+       MAX(n) AS oyuncu,
+       ROUND(MIN(x)/10000.0) AS en_dusuk,
+       ROUND(MAX(x)/10000.0) AS en_yuksek
+  FROM v GROUP BY n;
+
+\echo '=== ADAY 2b — servet nereden: tesis mi, nakit mi, stok mu ==='
+SELECT ROUND(AVG(cf.company_value)/10000.0) AS ort_deger,
+       ROUND(AVG(cf.facility_value)/10000.0) AS tesis,
+       ROUND(AVG(c.cash)/10000.0)            AS nakit,
+       ROUND(AVG(cf.company_value - cf.facility_value - c.cash)/10000.0) AS stok_vs_diger,
+       ROUND(AVG(c.level), 2) AS seviye
+  FROM company_financials cf JOIN companies c ON c.id = cf.company_id
+ WHERE c.kind = 'PLAYER'
+   AND cf.tick_id = (SELECT MAX(tick_id) FROM company_financials);
+
+\echo '=== ADAY 3 — para arzı: musluk ve gider dengesi (son 96 tur) ==='
+-- Para arzı haftada %33-42 büyüyor. Hangi hesap yaratıyor, hangisi siliyor?
+SELECT account, direction,
+       ROUND(SUM(amount)/10000.0) AS tutar
+  FROM ledger_entries
+ WHERE tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
+   AND company_id IN (SELECT id FROM companies WHERE kind = 'SYSTEM')
+ GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 12;
+
+\echo '=== ADAY 3b — sistem şirketlerinin bakiyesi ==='
+SELECT c.system_code, ROUND(c.cash/10000.0) AS bakiye
+  FROM companies c WHERE c.kind = 'SYSTEM' ORDER BY 2;

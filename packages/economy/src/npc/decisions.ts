@@ -290,3 +290,37 @@ export function outputThrottle(input: OutputThrottleInput): number {
   const step = Math.max(-maxStep, Math.min(maxStep, delta));
   return Math.max(floor, Math.min(1, input.previous + step));
 }
+
+/**
+ * Raf fiyatına STOK BASKISI — satılmayan mal fiyatı aşağı çeker.
+ *
+ * ★ Üretimde bu geri besleme vardı (`outputThrottle`: satılmayan stok
+ * birikince kapasiteyi kıs), fiyatta yoktu. Hem NPC hem oyuncu rafı,
+ * referansın sabit `retailMarkup` katıyla fiyatlıyordu — dükkânın kendi
+ * deposu taşarken bile. Üstelik çıpa rakiplerin ortalama raf fiyatı olduğu
+ * için herkes pahalıysa herkes pahalı kalıyordu: kapalı bir döngü.
+ *
+ * Ölçülen (F8): domates arz/talep oranı 1,28–1,67 ile FAZLA üretilirken
+ * talebin %38,6'sı tüketicinin bütçesi yetmediği için alınamıyordu. Fazla
+ * mal, buna rağmen pahalı — fiyatın düşmesini sağlayan hiçbir kuvvet yoktu.
+ *
+ * İndirim KADEMELİdir ve maliyet tabanını delmez (çağıran taraf tabanı
+ * ayrıca uygular): amaç zararına satmak değil, rafı döndürmektir.
+ */
+export interface ClearanceInput {
+  /** Eldeki stok kaç turluk satışa yeter. */
+  readonly coverageTicks: number;
+  /** Normal kabul edilen kapsam — bunun altında indirim yok. */
+  readonly targetTicks: number;
+  /** En fazla indirim oranı (0,25 = %25). */
+  readonly maxDiscount: number;
+}
+
+export function clearanceFactor(input: ClearanceInput): number {
+  const { coverageTicks, targetTicks, maxDiscount } = input;
+  if (!(targetTicks > 0) || !(maxDiscount > 0)) return 1;
+  if (!(coverageTicks > targetTicks)) return 1;
+  // Fazla kapsam hedefin KATI olarak ölçülür: hedefin iki katında doyar.
+  const excess = Math.min(1, (coverageTicks - targetTicks) / targetTicks);
+  return 1 - maxDiscount * excess;
+}
