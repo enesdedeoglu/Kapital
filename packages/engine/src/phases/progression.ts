@@ -74,7 +74,8 @@ export async function runProgression(sql: Sql, tick: EngineTick): Promise<Progre
       LEFT JOIN company_financials cf ON cf.company_id = c.id AND cf.tick_id = ${tick.seq}
       LEFT JOIN (SELECT company_id, COUNT(*) AS count FROM company_products
                   GROUP BY 1) cp ON cp.company_id = c.id
-     WHERE c.kind = 'PLAYER' AND c.status = 'ACTIVE'`;
+     WHERE c.kind = 'PLAYER' AND c.status = 'ACTIVE'
+      ORDER BY c.id`;
 
   const out: ProgressionResult = { companies: rows.length, experienceAwarded: 0, levelUps: 0 };
 

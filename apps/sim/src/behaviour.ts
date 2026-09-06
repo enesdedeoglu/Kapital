@@ -202,6 +202,8 @@ export async function loadPlayerStates(sql: Sql, companyIds: string[]) {
                         AND cf.tick_id > (SELECT COALESCE(MAX(seq), 0) - 24 FROM economic_ticks)
                     ), 0)::bigint AS recent_profit
       FROM companies c WHERE c.id = ANY(${companyIds}::uuid[])`;
+  // ★ Sıra belirleyici olmalı (R56): oyuncu tesisleri sırayla karar verir ve
+  // kıt malı kimin önce aldığı sonucu değiştirir.
   const facilities = await sql<FacilityState[]>`
     SELECT f.company_id, f.id AS facility_id, f.city_id, ci.code AS city_code,
            ft.category::text AS category, ft.code AS type_code, i.id AS inventory_id,
@@ -213,7 +215,8 @@ export async function loadPlayerStates(sql: Sql, companyIds: string[]) {
       JOIN inventories i ON i.facility_id = f.id
       LEFT JOIN production_recipes r ON r.id = f.active_recipe_id
       LEFT JOIN products p ON p.id = r.output_product_id
-     WHERE f.company_id = ANY(${companyIds}::uuid[]) AND f.closed_at IS NULL`;
+     WHERE f.company_id = ANY(${companyIds}::uuid[]) AND f.closed_at IS NULL
+     ORDER BY f.id`;
   const stock = await sql<StockState[]>`
     SELECT b.inventory_id, b.product_id, p.code AS product_code,
            SUM(b.quantity - b.reserved_quantity)::bigint AS available,
@@ -224,7 +227,8 @@ export async function loadPlayerStates(sql: Sql, companyIds: string[]) {
       JOIN facilities f ON f.id = i.facility_id
      WHERE f.company_id = ANY(${companyIds}::uuid[])
      GROUP BY 1, 2, 3
-    HAVING SUM(b.quantity - b.reserved_quantity) > 0`;
+    HAVING SUM(b.quantity - b.reserved_quantity) > 0
+     ORDER BY 1, 2, 3`;
   return { players, facilities, stock };
 }
 

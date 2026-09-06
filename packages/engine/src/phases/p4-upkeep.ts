@@ -60,7 +60,8 @@ export async function runUpkeepPhase(sql: Sql, tick: EngineTick): Promise<Upkeep
     JOIN companies c ON c.id = f.company_id AND c.status = 'ACTIVE'
     WHERE f.closed_at IS NULL
       AND f.construction_complete_at_tick <= ${tick.seq}
-      AND ft.maintenance_cost > 0`;
+      AND ft.maintenance_cost > 0
+    ORDER BY f.id`;
 
   let charged = 0n;
   let halted = 0;

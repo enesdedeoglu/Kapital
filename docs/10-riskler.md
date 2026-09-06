@@ -1567,6 +1567,41 @@ Alternatifi çevrimdışı oyuncunun dolu depoya üretip işçilik yakmasıydı.
 
 ---
 
+## R56 — Tur belirleyici değildi: aynı tohum farklı dünya üretiyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** iki kapı koşusunun karşılaştırılması · **Durum:** ✅ çözüldü
+
+Arka arkaya iki kapı koşusu, **aynı tohumlarla** farklı sonuç verdi:
+
+| tohum | koşu A | koşu B |
+|---|---|---|
+| 20261917 | 9/13 | 10/13 |
+| 20263943 | **10/13** | **7/13** |
+| 20264956 | 9/13 | 10/13 |
+
+İki etiket arasındaki fark `git diff --stat` ile bakıldığında tek dosyaydı:
+`apps/sim/sql/teshis.sql` — simülasyondan SONRA çalışan bir teşhis sorgusu.
+Sonucu değiştirmesi mümkün değildi.
+
+Kaynak, durumu sırayla değiştiren döngüleri besleyen **ORDER BY'sız sorgular**.
+Postgres sıra garantisi vermez ve satırlar güncellendikçe fiziksel düzen
+değişir. Sıranın önemi R45'te eklediğim tur içi taahhüt defteriyle arttı: ilk
+karar veren NPC açığı kapıyor, sonrakiler kapanmış görüyor. Sıra değişince
+kimin yatırım yaptığı, kimin kıt malı aldığı, kimin bütçesinin yettiği değişti.
+
+Sıralanan yerler: NPC karar döngüsü, üretim, perakende teklifleri, bakım,
+ilerleme ve simülasyonun oyuncu tesisi döngüsü. `p2-exchange` zaten doğruydu
+(fiyat + `o.id` eşitlik bozucu) — kıt malın dağıtımı en kritik yerdi ve orada
+sorun yoktu.
+
+★ Bunun ağırlığı bir denge ayarından fazladır: **R51'den R55'e kadar yaptığım
+her karşılaştırma bu gürültüyü içeriyordu.** "Tohum varyansı" dediğim ve
+`unstableKeys` uyarısının işaret ettiği şeyin bir kısmı dünyanın gerçek farkı
+değil, ölçüm aletinin kendi titremesiydi. R39'un çok tohumlu kapısı doğru bir
+araçtı ama bu gürültüyü ortalamayla gizliyordu.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1705,6 +1740,7 @@ kendi kendini yukarıda tutar.
 | R53 | İndirim fazlayı değil küçük dükkânı cezalandırıyor | 🟠 Yüksek | ✅ F8 — piyasa oranı kapısı |
 | R54 | Zincir kökten doldu, değirmen halkası büyümedi | 🔴 Kritik | ✅ F8 — `strategicNeed` = değer katkısı |
 | R55 | Üretim kısma oyuncuyu korumuyor (domates fazlası) | 🟠 Yüksek | ✅ F8 — kısma oyuncuya da |
+| R56 | Tur belirleyici değil: aynı tohum farklı dünya | 🔴 Kritik | ✅ F8 — döngü sorgularına `ORDER BY` |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

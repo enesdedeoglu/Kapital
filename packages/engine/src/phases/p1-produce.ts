@@ -57,6 +57,8 @@ export async function runProducePhase(sql: Sql, tick: EngineTick): Promise<Produ
 
   // Yalnız iş gerektiren tesisler taranır (madde 54): üretimi açık, inşaatı
   // bitmiş, reçetesi atanmış, şirketi aktif.
+  // ★ Sıra belirleyici olmalı (R56): döngü durumu sırayla değiştirir, Postgres
+  // ise ORDER BY olmadan sıra garantisi vermez.
   const producers = await sql<ProducerRow[]>`
     SELECT f.id AS facility_id, f.company_id, f.city_id, i.id AS inventory_id,
            COALESCE(f.name, ft.name) AS facility_name, ft.category, f.level,
@@ -80,7 +82,8 @@ export async function runProducePhase(sql: Sql, tick: EngineTick): Promise<Produ
       AND NOT EXISTS (
         SELECT 1 FROM production_jobs j
         WHERE j.facility_id = f.id AND j.started_tick = ${tick.seq}
-      )`;
+      )
+    ORDER BY f.id`;
 
   const recipeIds = [...new Set(producers.map((p) => p.recipe_id))];
   const inputsByRecipe = new Map<number, RecipeInputRow[]>();

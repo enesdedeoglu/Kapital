@@ -90,12 +90,24 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
    */
   const standing = await runStandingOrders(sql, tick);
 
+  /*
+   * ★ SIRA BELİRLEYİCİ OLMALI (R56).
+   *
+   * Postgres, ORDER BY olmadan satır sırasını GARANTİ ETMEZ ve satırlar
+   * güncellendikçe fiziksel düzen değişir. Bu döngü durumu sırayla değiştirir:
+   * tur içi taahhüt defteri (R45) ilk karar verene açığı kaptırır, bütçe ve
+   * fırsat sırayla tükenir. Sıra değişince sonuç değişir.
+   *
+   * Ölçüldü: aynı tohum ve AYNI KOD iki kapı koşusunda 10/13 ve 7/13 verdi.
+   * "Tohum varyansı" sandığım şeyin bir kısmı buydu.
+   */
   const npcs = await sql<NpcRow[]>`
     SELECT c.id AS company_id, c.name, c.cash, c.home_city_id, p.archetype, p.target_margin,
            p.price_aggressiveness, p.inventory_target_ticks, p.cash_reserve_ratio,
            p.strategy_interval_ticks, p.last_strategy_tick, p.investment_aggressiveness
     FROM npc_profiles p
-    JOIN companies c ON c.id = p.company_id AND c.kind = 'NPC' AND c.status = 'ACTIVE'`;
+    JOIN companies c ON c.id = p.company_id AND c.kind = 'NPC' AND c.status = 'ACTIVE'
+    ORDER BY c.id`;
   // Oyuncu kısması NPC'lerin varlığına bağlı değildir: erken çıkıştan önce.
   const directives = await loadDirectives(sql, tick);
   const playerThrottled = await throttlePlayerFacilities(sql, directives, throttleCfg);

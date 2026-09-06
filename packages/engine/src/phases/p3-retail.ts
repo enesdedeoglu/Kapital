@@ -49,6 +49,8 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
 
   // Yalnız iş gerektiren kayıtlar taranır (madde 54): açık rafı ve stoğu olan,
   // inşaatı bitmiş tesisler.
+  // ★ Sıra belirleyici olmalı (R56): döngü durumu sırayla değiştirir, Postgres
+  // ise ORDER BY olmadan sıra garantisi vermez.
   const offers = await sql<OfferRow[]>`
     SELECT ro.facility_id, f.company_id, f.city_id, ro.product_id, f.level AS facility_level,
            ro.selling_price, c.reputation::text AS reputation,
@@ -64,7 +66,8 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
     WHERE ro.enabled
     GROUP BY ro.facility_id, f.company_id, f.city_id, ro.product_id, f.level,
              ro.selling_price, c.reputation
-    HAVING SUM(b.quantity - b.reserved_quantity) > 0`;
+    HAVING SUM(b.quantity - b.reserved_quantity) > 0
+     ORDER BY ro.facility_id, ro.product_id`;
 
   const cities = await sql<{ id: number; population_index: number; income_index: number; consumer_demand_index: number }[]>`
     SELECT id, population_index, income_index, consumer_demand_index FROM cities WHERE is_active`;

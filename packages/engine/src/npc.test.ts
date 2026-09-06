@@ -340,3 +340,47 @@ describe('★ üretim kısma oyuncuya da uygulanır (R55)', () => {
     expect(row!.utilization).toBe(1);
   });
 });
+
+describe('★ tur belirleyicidir — aynı tohum aynı sonucu verir (R56)', () => {
+  /**
+   * Ölçülen: aynı tohum ve AYNI KOD iki kapı koşusunda 10/13 ve 7/13 verdi.
+   * İki etiket arasındaki tek fark, simülasyondan SONRA çalışan bir teşhis
+   * SQL dosyasıydı — yani sonucu değiştiremezdi.
+   *
+   * Kaynak, durumu sırayla değiştiren döngüleri besleyen ORDER BY'sız
+   * sorgulardı. Postgres sıra garantisi vermez ve satırlar güncellendikçe
+   * fiziksel düzen değişir; tur içi taahhüt defteri (R45) ise ilk karar
+   * verene açığı kaptırır. Sıra değişince dünya değişiyordu.
+   */
+  const npcSirasi = () => sql<{ company_id: string }[]>`
+    SELECT c.id AS company_id
+      FROM npc_profiles p
+      JOIN companies c ON c.id = p.company_id AND c.kind = 'NPC' AND c.status = 'ACTIVE'
+     ORDER BY c.id`;
+
+  it('satırlar fiziksel olarak yer değiştirse de sıra korunur', async () => {
+    for (let i = 0; i < 6; i++) {
+      await makeNpc(sql, { typeCode: 'GREENGROCER', cityId: KONYA });
+    }
+    const once = (await npcSirasi()).map((r) => r.company_id);
+    expect(once.length).toBeGreaterThanOrEqual(6);
+
+    // HOT güncelleme satırları sayfada taşır: ORDER BY olmadan sıra kayar.
+    await sql`UPDATE npc_profiles SET last_strategy_tick = last_strategy_tick + 1`;
+    await sql`UPDATE npc_profiles SET last_strategy_tick = last_strategy_tick - 1`;
+
+    const sonra = (await npcSirasi()).map((r) => r.company_id);
+    expect(sonra).toEqual(once);
+  });
+
+  it('★ durum değiştiren döngülerin sorguları sıralıdır', async () => {
+    const { readFileSync } = await import('node:fs');
+    const dosyalar = [
+      'src/phases/p1-produce.ts', 'src/phases/p3-retail.ts',
+      'src/phases/p4-upkeep.ts', 'src/phases/p6-govern.ts',
+      'src/phases/progression.ts', 'src/phases/standing-orders.ts',
+    ];
+    const eksik = dosyalar.filter((f) => !readFileSync(f, 'utf8').includes('ORDER BY'));
+    expect(eksik).toEqual([]);
+  });
+});
