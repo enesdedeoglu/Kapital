@@ -66,7 +66,8 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
   const products = await sql<{ id: number; weight_per_unit: number; shelf_life_ticks: number | null }[]>`
     SELECT DISTINCT p.id, p.weight_per_unit, p.shelf_life_ticks
     FROM market_orders o JOIN products p ON p.id = o.product_id
-    WHERE o.side = 'BUY' AND o.status IN ('OPEN','PARTIAL') AND o.remaining_quantity > 0`;
+    WHERE o.side = 'BUY' AND o.status IN ('OPEN','PARTIAL') AND o.remaining_quantity > 0
+     ORDER BY p.id`;
 
   for (const product of products) {
     out.products++;

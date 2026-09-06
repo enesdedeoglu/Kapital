@@ -145,7 +145,9 @@ async function liquidate(
     SELECT f.id, ft.base_cost, COALESCE(f.name, ft.name) AS name
     FROM facilities f JOIN facility_types ft ON ft.id = f.facility_type_id
     WHERE f.company_id = ${loan.company_id}::uuid AND f.closed_at IS NULL
-    ORDER BY ft.base_cost ASC, f.created_at ASC LIMIT 1`;
+    -- f.id son eşitlik bozucudur: aynı anda kurulan tesisler eşit zaman
+    -- damgası taşır ve sıra keyfi kalırdı (R56).
+    ORDER BY ft.base_cost ASC, f.created_at ASC, f.id ASC LIMIT 1`;
 
   if (!facility) {
     await sql`UPDATE companies SET status = 'BANKRUPT' WHERE id = ${loan.company_id}::uuid`;

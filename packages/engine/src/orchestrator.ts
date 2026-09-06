@@ -88,11 +88,33 @@ async function openTick(sql: Sql, isCatchUp: boolean): Promise<EngineTick> {
     SELECT id, seq, rng_seed, season, is_catch_up, config_version
     FROM economic_ticks WHERE status IN ('PENDING','RUNNING') ORDER BY seq LIMIT 1`;
 
+  /*
+   * ★ TURUN TOHUMU DUVAR SAATİNDEN TÜREMEZ (R57).
+   *
+   * Önce `EXTRACT(EPOCH FROM NOW())` idi. ADR-0003 "zaman tick.seq'tir,
+   * rastgelelik enjekte edilir" der ve `rngFor` dokümanı "aynı tohum aynı
+   * dünyayı üretir" diye söz verir — ama turun KENDİ tohumu her koşuda
+   * farklıydı, yani söz hiç tutulmuyordu.
+   *
+   * Ölçüldü: aynı tohum ve aynı kodla iki koşu 11/13 ve 12/13 verdi; biri
+   * 2, diğeri 4 dünya olayı üretti. Kapının "tohum" parametresi yalnız
+   * OYUNCU dünyasının kurulumunu tohumluyordu; ekonomik olaylar her koşuda
+   * yeniden zar atıyordu.
+   *
+   * Artık dünya tohumu + sıra sayısından türer: aynı dünya, aynı tur, aynı
+   * zar. Üretimde de değerlidir — bir turu yeniden oynatıp hata ayıklamak
+   * ancak böyle mümkün.
+   */
+  const [seedRow] = await sql<{ seed: string }[]>`
+    SELECT (value->>'seed') AS seed FROM game_configs
+     WHERE key = 'world.rng' ORDER BY version DESC LIMIT 1`;
+  const worldSeed = BigInt(seedRow?.seed ?? '20260101');
   const row = existing ?? (await sql<Record<string, never>[]>`
     INSERT INTO economic_ticks (seq, scheduled_at, started_at, status, rng_seed, season, is_catch_up)
     SELECT COALESCE(MAX(seq), 0) + 1,
            NOW() + ${TICK_MINUTES + ' minutes'}::interval, NOW(), 'RUNNING',
-           (EXTRACT(EPOCH FROM NOW())::bigint * 2654435761) % 9223372036854775807,
+           ((${worldSeed}::bigint * 2654435761
+             + (COALESCE(MAX(seq), 0) + 1) * 40503) % 9223372036854775807),
            0, ${isCatchUp}
     FROM economic_ticks
     RETURNING id, seq, rng_seed, season, is_catch_up, config_version`)[0]!;

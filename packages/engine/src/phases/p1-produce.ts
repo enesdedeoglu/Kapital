@@ -287,7 +287,8 @@ async function completeJobs(sql: Sql, tick: EngineTick): Promise<{ count: number
     JOIN production_recipes r ON r.id = j.recipe_id
     JOIN products p           ON p.id = r.output_product_id
     JOIN inventories i        ON i.facility_id = j.facility_id
-    WHERE j.status = 'RUNNING' AND j.complete_tick <= ${tick.seq}`;
+    WHERE j.status = 'RUNNING' AND j.complete_tick <= ${tick.seq}
+     ORDER BY j.id`;
 
   let produced = 0n;
   let count = 0;

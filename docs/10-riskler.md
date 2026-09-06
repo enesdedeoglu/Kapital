@@ -1602,6 +1602,50 @@ araçtı ama bu gürültüyü ortalamayla gizliyordu.
 
 ---
 
+## R57 — Turun rastgelelik tohumu DUVAR SAATİNDEN türüyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R56 sonrası determinizm doğrulaması · **Durum:** ✅ çözüldü
+
+R56'da döngü sorgularını sıraladıktan sonra aynı tohumu iki kez koşturdum.
+Hâlâ farklıydı — ve çıktı kaynağı gösterdi: bir koşu **2 dünya olayı**, diğeri
+**4 dünya olayı** üretti.
+
+Turun tohumu şuydu:
+
+    (EXTRACT(EPOCH FROM NOW())::bigint * 2654435761) % 9223372036854775807
+
+ADR-0003 "zaman `tick.seq`'tir, rastgelelik enjekte edilir" der; `rngFor`'un
+kendi dokümanı "aynı tohum aynı dünyayı üretir" diye söz verir. Ama turun KENDİ
+tohumu her koşuda farklıydı, yani söz hiç tutulmuyordu. Kapının "tohum"
+parametresi yalnız OYUNCU dünyasının kurulumunu tohumluyordu; dünya olayları,
+kalite dağılımı ve gürültü her koşuda yeniden zar atıyordu.
+
+Tur tohumu artık **dünya tohumu + sıra sayısından** türer. Kapı tohumu
+`world.rng` yapılandırmasına yazılır: her tohum farklı ama kendi içinde
+tekrarlanabilir bir dünya kurar. Üretimde de değerlidir — bir turu yeniden
+oynatıp hata ayıklamak ancak böyle mümkün.
+
+**Ölçülen sonuç:** üç ardışık doğrulamada iki koşu da aynı skoru (8/13) ve aynı
+sayıda dünya olayını (3) verdi. **Kapının KARARI artık tekrarlanabilir.**
+
+### Kalan sapma ve nedeni — varlık kimlikleri rastgele
+
+Sürekli metriklerde küçük sapmalar sürüyor (`npc_share` %0,7, `day1_growth`
+%3,1). Kaynağı bulundu ve R56'nın neden yetmediğini açıklıyor: `companies.id` ve
+`facilities.id` varsayılanı `gen_random_uuid()`. Yani `ORDER BY id` sırayı bir
+koşu İÇİNDE sabitler, koşular ARASINDA sabitlemez — her koşuda farklı bir sıra.
+
+Tam determinizm, varlık kimliklerinin içerikten türetilmesini gerektirir
+(`deterministicUuid` projede var ama yalnız defter işlem kimliklerinde
+kullanılıyor). Bu, şirket ve tesis oluşturma yollarına dokunan ayrı bir iştir.
+
+★ Şu anki seviye "yapısal olarak deterministik": aynı tohum aynı dünyayı, aynı
+olayları ve aynı kapı kararını üretir; sayısal ayrıntı milimetrik oynar. Kapı
+kararı bu seviyede güvenilir olduğu için denge işine dönmek makul — ama bu
+sınırın bilinerek kabul edildiğini not etmek gerekir.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1741,6 +1785,7 @@ kendi kendini yukarıda tutar.
 | R54 | Zincir kökten doldu, değirmen halkası büyümedi | 🔴 Kritik | ✅ F8 — `strategicNeed` = değer katkısı |
 | R55 | Üretim kısma oyuncuyu korumuyor (domates fazlası) | 🟠 Yüksek | ✅ F8 — kısma oyuncuya da |
 | R56 | Tur belirleyici değil: aynı tohum farklı dünya | 🔴 Kritik | ✅ F8 — döngü sorgularına `ORDER BY` |
+| R57 | Tur tohumu duvar saatinden türüyor | 🔴 Kritik | ✅ F8 — dünya tohumu + `seq` · sayısal kalıntı biliniyor |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

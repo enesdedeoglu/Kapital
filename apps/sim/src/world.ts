@@ -32,6 +32,21 @@ export async function buildSimWorld(
   const companies = new CompanyService(sql);
   const facilities = new FacilityService(sql);
 
+  /*
+   * ★ Kapı tohumu MOTORUN zarını da tohumlar (R57).
+   *
+   * Önce yalnız oyuncu dünyasının kurulumunu tohumluyordu; ekonomik olaylar
+   * duvar saatinden zar atıyordu. Aynı tohumla iki koşu 11/13 ve 12/13 verdi,
+   * biri 2 diğeri 4 dünya olayı üretti. Artık tohum dünyanın tamamını belirler.
+   */
+  // Yapılandırma SÜRÜMLÜdür (birincil anahtar `key, version`): üstüne yazılmaz,
+  // yeni sürüm eklenir. Okuyan taraf en yüksek sürümü alır.
+  await sql`
+    INSERT INTO game_configs (key, version, value)
+    SELECT 'world.rng', COALESCE(MAX(version), 0) + 1,
+           ${JSON.stringify({ seed: opts.seed })}::text::jsonb
+      FROM game_configs WHERE key = 'world.rng'`;
+
   const cities = await sql<{ code: string }[]>`
     SELECT code FROM cities WHERE is_active ORDER BY id`;
   if (cities.length === 0) throw new Error('şehir yok — önce tohumlama gerekir');

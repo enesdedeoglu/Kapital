@@ -70,12 +70,14 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
      ORDER BY ro.facility_id, ro.product_id`;
 
   const cities = await sql<{ id: number; population_index: number; income_index: number; consumer_demand_index: number }[]>`
-    SELECT id, population_index, income_index, consumer_demand_index FROM cities WHERE is_active`;
+    SELECT id, population_index, income_index, consumer_demand_index FROM cities WHERE is_active
+     ORDER BY id`;
   const products = await sql<ProductRow[]>`
     SELECT p.id, p.code, p.base_demand, p.price_sensitivity, p.reservation_price_mult,
            pc.price_weight, pc.quality_weight, pc.brand_weight
     FROM products p JOIN product_categories pc ON pc.id = p.category_id
-    WHERE p.is_active AND p.is_retail_product AND p.base_demand > 0`;
+    WHERE p.is_active AND p.is_retail_product AND p.base_demand > 0
+     ORDER BY p.id`;
 
   const cycle = economicCycle(tick.seq, retailCfg.cycleAmplitude);
 

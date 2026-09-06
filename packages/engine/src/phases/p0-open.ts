@@ -80,7 +80,8 @@ async function refreshNpcSupply(sql: Sql, tick: EngineTick): Promise<number> {
       SELECT c.id AS company_id, ct.id AS city_id, p.id AS product_id
       FROM companies c, cities ct, products p
       WHERE c.name = ${seller.name} AND c.kind = 'NPC'
-        AND ct.code = ${seller.cityCode} AND p.code = ${seller.productCode}`;
+        AND ct.code = ${seller.cityCode} AND p.code = ${seller.productCode}
+     ORDER BY c.id`;
     if (!row) continue;
 
     const reference = references.get(row.product_id);
