@@ -100,3 +100,40 @@ SELECT account, direction,
 \echo '=== ADAY 3b — sistem şirketlerinin bakiyesi ==='
 SELECT c.system_code, ROUND(c.cash/10000.0) AS bakiye
   FROM companies c WHERE c.kind = 'SYSTEM' ORDER BY 2;
+
+\echo '=== DENGE — kapasite mi, kısma mı, dağıtım mı? ==='
+-- Zincir kısa kalıyor ama kapasite yeterli. Üç aday: tesis kısılmış olabilir,
+-- girdi bulamamış olabilir, ya da malı satamamış olabilir. Bu tablo üçünü
+-- yan yana koyar; hangisinin bağladığını tahmin etmeye gerek kalmasın.
+SELECT p.code AS urun,
+       COUNT(*) AS tesis,
+       ROUND(AVG(f.utilization)::numeric, 2) AS kullanim,
+       ROUND((SUM(ft.base_capacity * r.output_quantity / r.cycle_ticks / 1000.0))::numeric, 0) AS tam_kap,
+       ROUND((SUM(ft.base_capacity * r.output_quantity / r.cycle_ticks / 1000.0 * f.utilization))::numeric, 0) AS kisilmis_kap,
+       ROUND((SELECT COALESCE(SUM(b.quantity),0)/1000.0 FROM inventory_batches b
+               JOIN inventories i ON i.id = b.inventory_id
+               JOIN facilities f2 ON f2.id = i.facility_id
+               JOIN production_recipes r2 ON r2.id = f2.active_recipe_id
+              WHERE b.product_id = p.id AND r2.output_product_id = p.id)::numeric, 0) AS uretici_stogu
+  FROM facilities f
+  JOIN facility_types ft ON ft.id = f.facility_type_id
+  JOIN production_recipes r ON r.id = f.active_recipe_id
+  JOIN products p ON p.id = r.output_product_id
+ WHERE f.closed_at IS NULL AND f.production_enabled
+ GROUP BY p.id, p.code ORDER BY 3;
+
+\echo '=== Üretim neden durdu (son 96 tur) ==='
+SELECT p.code, COALESCE(pr.halted_reason, '(üretti)') AS sebep, COUNT(*) AS kayit
+  FROM production_records pr JOIN products p ON p.id = pr.product_id
+ WHERE pr.tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
+ GROUP BY 1,2 HAVING COUNT(*) > 20 ORDER BY 1, 3 DESC;
+
+\echo '=== Toptan piyasa temizleniyor mu (son 96 tur) ==='
+SELECT p.code,
+       COUNT(*) FILTER (WHERE o.side='BUY') AS alis_emri,
+       COUNT(*) FILTER (WHERE o.side='SELL') AS satis_emri,
+       ROUND(AVG(1 - o.remaining_quantity::numeric/NULLIF(o.quantity,0)) FILTER (WHERE o.side='BUY') * 100, 1) AS alis_dolum,
+       ROUND(AVG(1 - o.remaining_quantity::numeric/NULLIF(o.quantity,0)) FILTER (WHERE o.side='SELL') * 100, 1) AS satis_dolum
+  FROM market_orders o JOIN products p ON p.id = o.product_id
+ WHERE o.expires_at_tick > (SELECT MAX(seq) - 192 FROM economic_ticks)
+ GROUP BY 1 ORDER BY 1;
