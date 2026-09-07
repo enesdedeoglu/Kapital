@@ -108,8 +108,13 @@ SELECT c.system_code, ROUND(c.cash/10000.0) AS bakiye
 SELECT p.code AS urun,
        COUNT(*) AS tesis,
        ROUND(AVG(f.utilization)::numeric, 2) AS kullanim,
-       ROUND((SUM(ft.base_capacity * r.output_quantity / r.cycle_ticks / 1000.0))::numeric, 0) AS tam_kap,
-       ROUND((SUM(ft.base_capacity * r.output_quantity / r.cycle_ticks / 1000.0 * f.utilization))::numeric, 0) AS kisilmis_kap,
+       -- ★ `base_capacity` ZATEN tur başına çıktı kilogramıdır: p1-produce
+       -- `planned = qtyFromNumber(base_capacity × çarpanlar)` der ve
+       -- `output_quantity` yalnız GİRDİ oranı için kullanılır. Önce ikisi
+       -- çarpılıyordu ve bir çevrimde 1 kg'dan fazla üreten her tesisin
+       -- kapasitesi `output_quantity` katı şişiyordu (sigarada 20, ekmekte 4).
+       ROUND(SUM(ft.base_capacity)::numeric, 0) AS tam_kap,
+       ROUND(SUM(ft.base_capacity * f.utilization)::numeric, 0) AS kisilmis_kap,
        ROUND((SELECT COALESCE(SUM(b.quantity),0)/1000.0 FROM inventory_batches b
                JOIN inventories i ON i.id = b.inventory_id
                JOIN facilities f2 ON f2.id = i.facility_id
