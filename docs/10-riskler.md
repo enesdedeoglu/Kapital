@@ -1646,6 +1646,46 @@ sınırın bilinerek kabul edildiğini not etmek gerekir.
 
 ---
 
+## R58 — Sermaye tahsisi tek yönlü cırcırdı: NPC kötü yatırımdan çıkamıyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** determinizm sonrası ilk temiz kapı · **Durum:** ✅ çözüldü
+
+Determinizm oturunca (R56, R57) beklentim tohumlar arası yayılmanın daralmasıydı.
+**Daralmadı** — 7 ile 10 arasında kaldı ve kararsız metrik listesi uzadı. Yani o
+fark ölçüm gürültüsü değil, ekonominin **gerçekten yol bağımlı** olmasıydı.
+
+İki tohumun karşılaştırması mekanizmayı verdi (kapasiteler kg/tur):
+
+| | tohum 1 (10/13) | tohum 0 (7/13) |
+|---|---|---|
+| un | **220** | 198 |
+| buğday | 510 | **630** |
+| sigara | 210 | **308** |
+| sigara kullanımı | 1,00 · stok 148 | **0,48 · stok 6.056** |
+
+Neredeyse aynı tesis sayılarıyla başlayan iki dünya farklı yerlere kilitlendi.
+Kötü tohum sermayeyi sigaraya ve buğdaya yatırdı, una yatırmadı.
+
+Sebep: **tesisler yalnız kredi tasfiyesiyle kapanıyordu** (`loans.ts`). NPC kötü
+bir yatırımdan kendi iradesiyle asla çıkmıyordu. Sigara fabrikası bir kez
+kurulunca sonsuza dek duruyor, malı satılmasa da bakım ve işçilik yakıyordu.
+Kısma üretimi tabana indiriyor ama gideri durdurmuyor. Üstelik `maxFacilities`
+sınırı yüzünden dört kötü tesise sıkışan NPC bir daha HİÇ yatırım yapamıyordu —
+erken bir hata kalıcı felç oluyordu.
+
+`shouldDivest` eklendi. Kural KATIDIR: yalnız kısma tabanında en az bir gün
+geçirmiş VE çıktı stoğu birikmiş tesis kapanır.
+
+★ İkinci şart kritiktir: **girdi bulamadığı için duran tesisi korur.** Un
+bulamayan fırının çıktı stoğu yoktur; onu kapatmak kıtlığı derinleştirirdi.
+Kapanan yalnız malı satılmadığı için duran tesistir.
+
+Sermaye geri gelmez — batmış maliyet batmıştır. Kazanç, giderin durması ve
+`maxFacilities` yuvasının boşalmasıdır; çıkış girişten ÖNCE değerlendirilir ki
+NPC aynı turda daha iyi bir yere yatırım yapabilsin.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1786,6 +1826,7 @@ kendi kendini yukarıda tutar.
 | R55 | Üretim kısma oyuncuyu korumuyor (domates fazlası) | 🟠 Yüksek | ✅ F8 — kısma oyuncuya da |
 | R56 | Tur belirleyici değil: aynı tohum farklı dünya | 🔴 Kritik | ✅ F8 — döngü sorgularına `ORDER BY` |
 | R57 | Tur tohumu duvar saatinden türüyor | 🔴 Kritik | ✅ F8 — dünya tohumu + `seq` · sayısal kalıntı biliniyor |
+| R58 | NPC kötü yatırımdan çıkamıyor (tek yönlü cırcır) | 🔴 Kritik | ✅ F8 — `shouldDivest` |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

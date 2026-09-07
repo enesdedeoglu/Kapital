@@ -1,6 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
   clearanceFactor, decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
+  shouldDivest,
   strategicNeed,
   PRICE_MARKUP_BAND,
   planInventory, representativeDistance, shippingPerUnit, softFloor,
@@ -39,6 +40,8 @@ export interface GovernPhaseResult {
   retailOffers: number;
   strategicDecisions: number;
   throttled: number;
+  /** Kapatılan zarar eden tesis sayısı. */
+  divested: number;
   built: number;
   director: DirectorResult;
   standing: StandingOrderResult;
@@ -70,6 +73,9 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   );
   const throttleCfg = configValue<{ targetTicks: number; maxStepPerTick: number; floor: number }>(
     tick, 'npc.throttle', { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 },
+  );
+  const divestCfg = configValue<{ minIdleTicks: number }>(
+    tick, 'npc.divest', { minIdleTicks: 96 },
   );
   const clearCfg = configValue<{ targetTicks: number; maxDiscount: number }>(
     tick, 'retail.clearance', { targetTicks: 8, maxDiscount: 0.25 },
@@ -114,7 +120,8 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
 
   if (npcs.length === 0) {
     return { npcs: 0, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-             strategicDecisions: 0, throttled: playerThrottled, built: 0, director, standing };
+             strategicDecisions: 0, throttled: playerThrottled, built: 0, divested: 0,
+             director, standing };
   }
 
   const references = await loadReferencePrices(sql, tick.seq);
@@ -158,7 +165,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const committed = new Map<number, number>();
 
   const out = { npcs: npcs.length, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-                strategicDecisions: 0, throttled: 0, built: 0, director, standing };
+                strategicDecisions: 0, throttled: 0, built: 0, divested: 0, director, standing };
   out.throttled += playerThrottled;
   const byCompany = new Map<string, NpcFacilityRow[]>();
   for (const f of facilities) {
@@ -252,6 +259,13 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
                      WHERE id = ${facility.facility_id}::uuid`;
           out.throttled++;
         }
+        // Tabana inildiği tur damgalanır, tabandan çıkınca temizlenir (R58):
+        // çıkış kararı "ne kadar süredir tabanda" sorusunu buradan okur.
+        const tabanda = capped <= throttleCfg.floor * 1.05;
+        await sql`
+          UPDATE facilities
+             SET idle_since_tick = ${tabanda ? sql`COALESCE(idle_since_tick, ${tick.seq})` : sql`NULL`}
+           WHERE id = ${facility.facility_id}::uuid`;
       }
 
       // ---- PERAKENDECİ / TÜCCAR: nihai ürün al, rafa koy -----------------
@@ -346,6 +360,9 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
       await sql`UPDATE npc_profiles SET last_strategy_tick = ${tick.seq}
                  WHERE company_id = ${npc.company_id}::uuid`;
       out.strategicDecisions++;
+      // Önce ÇIKIŞ, sonra giriş: kapanan tesis `maxFacilities` yuvasını
+      // boşaltır ve NPC aynı turda daha iyi bir yere yatırım yapabilir.
+      out.divested += await divestIdle(sql, tick, npc.company_id, throttleCfg.floor, divestCfg);
       if (await maybeInvest(sql, tick, npc, directives, opportunities, invCfg, committed)) out.built++;
     }
   }
@@ -946,4 +963,52 @@ async function throttlePlayerFacilities(
     }
   }
   return throttled;
+}
+
+/**
+ * Zarar eden hattı kapatır — sermaye tahsisi tek yönlü olmasın (R58).
+ *
+ * Kural KATIDIR: yalnız uzun süre kısma tabanında çalışmış VE çıktı stoğu
+ * birikmiş tesis kapanır. İkinci şart, girdi bulamadığı için duran tesisi
+ * korur — onun çıktı stoğu yoktur ve kapatmak kıtlığı derinleştirirdi.
+ *
+ * Sermaye geri gelmez: batmış maliyet batmıştır. Kazanç, bakım ve işçiliğin
+ * durması ve `maxFacilities` yuvasının boşalmasıdır.
+ */
+async function divestIdle(
+  sql: Sql, tick: EngineTick, companyId: string, floor: number,
+  cfg: { minIdleTicks: number },
+): Promise<number> {
+  const adaylar = await sql<{
+    id: string; utilization: number; idle_since_tick: bigint;
+    base_capacity: number; stock: bigint;
+  }[]>`
+    SELECT f.id, f.utilization, f.idle_since_tick, ft.base_capacity,
+           COALESCE((SELECT SUM(b.quantity) FROM inventory_batches b
+                      JOIN inventories i ON i.id = b.inventory_id
+                     WHERE i.facility_id = f.id AND b.product_id = r.output_product_id), 0) AS stock
+      FROM facilities f
+      JOIN facility_types ft ON ft.id = f.facility_type_id
+      JOIN production_recipes r ON r.id = f.active_recipe_id
+     WHERE f.company_id = ${companyId}::uuid AND f.closed_at IS NULL
+       AND f.idle_since_tick IS NOT NULL
+     ORDER BY f.id`;
+
+  let kapanan = 0;
+  for (const a of adaylar) {
+    const perTick = a.base_capacity;
+    if (!(perTick > 0)) continue;
+    if (!shouldDivest({
+      utilization: a.utilization, floor,
+      coverageTicks: Number(a.stock) / 1000 / perTick,
+      idleTicks: Number(tick.seq - a.idle_since_tick),
+      minIdleTicks: cfg.minIdleTicks,
+    })) continue;
+
+    await sql`
+      UPDATE facilities SET closed_at = NOW(), production_enabled = FALSE
+       WHERE id = ${a.id}::uuid`;
+    kapanan++;
+  }
+  return kapanan;
 }

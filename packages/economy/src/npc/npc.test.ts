@@ -3,7 +3,7 @@ import { money, mulberry32, mulMoney, qty, type Money } from '@kapital/shared';
 import { productionCapacity } from '../production/capacity.js';
 import {
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
-  planInventory, representativeDistance, clearanceFactor, strategicNeed,
+  planInventory, representativeDistance, clearanceFactor, shouldDivest, strategicNeed,
 } from './decisions.js';
 import { ARCHETYPES, varyTemplate } from './profile.js';
 
@@ -384,5 +384,29 @@ describe('★ stratejik ihtiyaç: nerede değer katılır (R54)', () => {
     const kit = strategicNeed(1, 0.2);
     const bol = strategicNeed(1, 0.9);
     expect(kit).toBeGreaterThan(bol);
+  });
+});
+
+describe('★ yatırımdan çıkış — cırcır kırılır (R58)', () => {
+  const temel = { floor: 0.10, minIdleTicks: 96 };
+
+  it('uzun süre tabanda ve stoğu birikmiş tesis kapanır', () => {
+    expect(shouldDivest({ ...temel, utilization: 0.10, coverageTicks: 200, idleTicks: 150 }))
+      .toBe(true);
+  });
+
+  it('★ geçici durgunluk kapatma sebebi değildir', () => {
+    expect(shouldDivest({ ...temel, utilization: 0.10, coverageTicks: 200, idleTicks: 20 }))
+      .toBe(false);
+  });
+
+  it('★ stok birikmemişse sorun talep değildir — kapatma', () => {
+    expect(shouldDivest({ ...temel, utilization: 0.10, coverageTicks: 5, idleTicks: 300 }))
+      .toBe(false);
+  });
+
+  it('çalışan tesise dokunulmaz', () => {
+    expect(shouldDivest({ ...temel, utilization: 0.8, coverageTicks: 300, idleTicks: 300 }))
+      .toBe(false);
   });
 });

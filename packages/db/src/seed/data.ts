@@ -337,6 +337,12 @@ export const gameConfigs: { key: string; value: unknown }[] = [
    * belirler. Eşik yalnız yatırımın HIZINI ayarlar.
    */
   { key: 'npc.investment',   value: { threshold: 0.38, cashBufferRatio: 1.5, maxFacilities: 4 } },
+  /*
+   * Yatırımdan çıkış (R58): tesis kısma tabanında bu kadar tur geçirir VE
+   * çıktı stoğu bu kadar turluk üretime denk birikirse kapanır. 96 tur = 1 gün.
+   * Katı tutulur: dalgalanmayla kapasite yok edilirse kıtlık derinleşir.
+   */
+  { key: 'npc.divest',       value: { minIdleTicks: 96 } },
   // Seviye ilerleyişi — madde 11. Onboarding zinciri 7 adımda 700 XP verir
   // (Lv2 şartı); sürekli oyun da benzer büyüklükte olmalı.
   { key: 'progression.experience', value: { retailPerXp: 100, tradePerXp: 200,

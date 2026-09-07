@@ -356,3 +356,44 @@ export function clearanceFactor(input: ClearanceInput): number {
 export function strategicNeed(inputSupply: number, outputSupply: number): number {
   return Math.max(0, Math.min(1, 0.5 + inputSupply - outputSupply));
 }
+
+/**
+ * Yatırımdan ÇIKIŞ — zarar eden hat kapatılır.
+ *
+ * ★ Tesisler yalnız kredi tasfiyesiyle kapanıyordu; NPC kötü bir yatırımdan
+ * kendi iradesiyle asla çıkmıyordu. Sermaye tahsisi tek yönlü bir cırcırdı:
+ * sigara fabrikası bir kez kurulunca sonsuza dek duruyor, malı satılmasa da
+ * bakım ve işçilik yakıyordu. Üstelik `maxFacilities` sınırı yüzünden dört
+ * kötü tesise sıkışan NPC bir daha hiç yatırım yapamıyordu.
+ *
+ * Ölçülen (F8): iki tohum neredeyse aynı tesis sayılarıyla başlayıp farklı
+ * yerlere kilitlendi. Kötü tohumda sigara kapasitesi 308 kg/tur, kullanım
+ * 0,48 ve 6.056 kg satılmamış stok; iyi tohumda 210 kg/tur, kullanım 1,00,
+ * stok 148. Erken tercih bileşik büyüyor ve geri dönüşü yok.
+ *
+ * Çıkış KATIDIR: yalnız uzun süre tabanda çalışmış VE stoğu birikmiş tesis
+ * kapanır. Geçici bir durgunluk yeterli değildir — aksi halde dalgalanma
+ * kapasiteyi yok eder ve kıtlık derinleşir.
+ */
+export interface DivestInput {
+  /** Tesisin şu anki kapasite kullanımı. */
+  readonly utilization: number;
+  /** Kısmanın taban değeri — bu seviyede tesis fiilen durmuştur. */
+  readonly floor: number;
+  /** Eldeki çıktı stoğu kaç turluk üretime denk. */
+  readonly coverageTicks: number;
+  /** Bu tesis kaç turdur tabanda. */
+  readonly idleTicks: number;
+  /** Tabanda geçmesi gereken en az tur. */
+  readonly minIdleTicks: number;
+}
+
+export function shouldDivest(input: DivestInput): boolean {
+  const { utilization, floor, coverageTicks, idleTicks, minIdleTicks } = input;
+  // Tabanda mı — kısma daha fazlasını yapamıyor demektir.
+  if (utilization > floor * 1.05) return false;
+  // Yeterince uzun süredir mi: bir günlük durgunluk kapatma sebebi değil.
+  if (idleTicks < minIdleTicks) return false;
+  // Ve mal gerçekten satılmıyor mu: stok birikmediyse sorun talep değildir.
+  return coverageTicks > minIdleTicks;
+}
