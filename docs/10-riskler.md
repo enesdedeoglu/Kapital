@@ -1869,6 +1869,47 @@ kaldırılan kısma kapısı çifte sayımın yanı sıra bir şiddet filtresi d
 görüyordu ve yerine bir şey konmamıştı. Tek eşik (`minCoverageTicks`, bir
 günlük satılmamış üretim) hem saati başlatıyor hem kapatma kararını veriyor.
 
+### Kapı dünyasında ölçüldü: açık terimi ORAN, fırsat ise BÜYÜKLÜK
+
+(a) ve (d) düzeltilince kapı **9,9,10,10,9**'a çıktı (önce 7,9,8,10,8) ve
+`supply_demand` oturum boyunca çakılı durduğu 1/10'dan **4/10**'a geldi.
+Aynı koşumda teşhis ilk kez gerçek dünyada okundu — tohum 2, son 96 tur:
+
+| ürün | skor | eşik | marj | açık | eğilim | zincir | rekabet | açık/tur | yolda |
+|---|---|---|---|---|---|---|---|---|---|
+| FURNITURE | 0,152 | 0,380 | 0,117 | 0,027 | 0,000 | 0,059 | −0,050 | **0,3** | 0,0 |
+| BREAD | 0,135 | 0,380 | 0,125 | **0,049** | 0,010 | 0,052 | −0,100 | **140,9** | 0,0 |
+| FLOUR | 0,124 | 0,380 | 0,115 | 0,044 | 0,000 | 0,064 | −0,100 | 31,8 | 0,0 |
+
+Hiçbir üründe, hiçbir turda skor eşiği geçmiyor (`skor_yetti` = 0/96, her
+üründe). Ekmekte tur başına **140,9 birimlik** karşılanmamış açık ve yolda
+SIFIR kapasite varken açık terimi 0,049 puan veriyor; sıralamanın birincisi
+ise tur başına **0,3 birim** açığı olan mobilya.
+
+Sebep: `kitlik = 1 − arz/talep` bir ORANdır ve doyar. Ekmeğin oranı 0,837,
+yani "neredeyse bandın içinde" görünüyor — oysa mutlak boşluk devasa. Büyük
+bir pazardaki %16'lık açık, küçük bir pazardaki %90'lık açıktan daha büyük
+bir iş fırsatıdır; skor tersini söylüyordu.
+
+Açığın kaç TESİSE denk geldiği ölçülünce sıralama tersine dönüyor:
+
+| ürün | açık/tur | tesis kapasitesi | kaç tesis |
+|---|---|---|---|
+| BREAD | 140,9 | 40 | **3,5** |
+| CIGARETTE | 27,1 | 14 | 1,9 |
+| FLOUR | 31,8 | 22 | 1,4 |
+| FURNITURE | 0,3 | 2 | **0,15** |
+
+Düzeltildi: `demandGapScore(gapPerTick, facilityCapacity)`, tam sinyal iki
+tesislik açık. Yön korunur (fazla arzda `gapPerTick` negatif → 0, R59).
+
+★ Oran YANLIŞ araç değil — başka bir sorunun aracı. `strategicNeed` zincirin
+iki AŞAMASINI karşılaştırır, o göreli bir sorudur ve orada kitlik kalıyor.
+
+**Beklenen etki (bir sonraki koşum bunu sınayacak):** ekmek skoru
+0,135 → ~0,387, eşiğin (0,380) hemen üstüne çıkar ve fırın yapılır; mobilya
+0,152 → ~0,149 ile sıralamanın sonuna düşer. Tahmin tutmazsa buraya yazılır.
+
 ---
 
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
@@ -2014,7 +2055,7 @@ kendi kendini yukarıda tutar.
 | R58 | NPC kötü yatırımdan çıkamıyor (tek yönlü cırcır) | 🔴 Kritik | ✅ F8 — `shouldDivest` |
 | R59 | Kıtlık ölçüsü simetrik: dolu ambar cazip görünüyor | 🔴 Kritik | ✅ F8 — yönlü `kitlik` |
 | R60 | Aynı sinyale iki denetleyici: kısma + kapatma | 🔴 Kritik | ✅ F8 — çıkış kısmadan ayrıldı · şiddet R61'de geri geldi |
-| R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim düzeltildi · kalanı ölçülüyor |
+| R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim + açık düzeltildi · zincir/rekabet ölçülüyor |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

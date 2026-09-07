@@ -1,7 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
-  clearanceFactor, decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
-  priceTrendScore,
+  clearanceFactor, decidePrice, demandGapScore, inputBid, investmentScore, leverMultiplier,
+  outputThrottle, priceTrendScore,
   shouldDivest,
   strategicNeed,
   PRICE_MARKUP_BAND,
@@ -892,7 +892,8 @@ async function maybeInvest(
     if (inFlight >= Math.max(0, o.gap_per_tick)) continue;
     const score = investmentScore({
       profitMargin: o.margin,
-      demandGap: o.demand_gap,
+      // Açık BÜYÜKLÜKÇE ölçülür (kaç tesis doldurur), oranla değil (R61).
+      demandGap: demandGapScore(o.gap_per_tick, o.base_capacity),
       priceTrend: priceTrendScore(o.price_trend),
       strategicNeed: strategicNeed(o.input_supply, o.output_supply),
       competition: o.competition,
@@ -1037,16 +1038,17 @@ async function logOpportunities(
     // Kararın KULLANDIĞI değerler yazılır, ham girdiler değil: teşhis
     // skorun bileşenlerini gösterir, onları yeniden hesaplamaz (R46).
     const trend = priceTrendScore(o.price_trend);
+    const gap = demandGapScore(o.gap_per_tick, o.base_capacity);
     return {
       tick_id: tick.seq,
       product_id: o.product_id,
       margin: o.margin,
-      demand_gap: o.demand_gap,
+      demand_gap: gap,
       price_trend: trend,
       strategic_need: need,
       competition: o.competition,
       score: investmentScore({
-        profitMargin: o.margin, demandGap: o.demand_gap, priceTrend: trend,
+        profitMargin: o.margin, demandGap: gap, priceTrend: trend,
         strategicNeed: need, competition: o.competition,
       }),
       threshold: invest.threshold / lever(directives, o.product_id, 'INVESTMENT_BIAS'),

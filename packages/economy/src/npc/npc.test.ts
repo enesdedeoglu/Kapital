@@ -4,7 +4,7 @@ import { productionCapacity } from '../production/capacity.js';
 import {
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
   planInventory, representativeDistance, clearanceFactor, shouldDivest, strategicNeed,
-  priceTrendScore, PRICE_TREND_FULL_SIGNAL,
+  priceTrendScore, PRICE_TREND_FULL_SIGNAL, demandGapScore,
 } from './decisions.js';
 import { ARCHETYPES, varyTemplate } from './profile.js';
 
@@ -450,5 +450,39 @@ describe('★ fiyat eğilimi — yön ve ölçek (R61)', () => {
 
   it('tam sinyalin üstü doyar', () => {
     expect(priceTrendScore(5)).toBe(1);
+  });
+});
+
+describe('★ talep açığı BÜYÜKLÜKÇE ölçülür (R61)', () => {
+  it('fazla arz fırsat değildir — yön korunur', () => {
+    expect(demandGapScore(-50, 40)).toBe(0);
+    expect(demandGapScore(0, 40)).toBe(0);
+  });
+
+  it('★ büyük pazardaki küçük ORAN, küçük pazardaki büyük orandan üstündür', () => {
+    // Ölçülen gerçek durum: ekmeğin açığı 140,9 birim/tur (3,5 fırınlık) iken
+    // oran 0,837 olduğu için açık terimi 0,049 puan veriyordu. Mobilyanın
+    // açığı 0,3 birim/tur (0,15 fabrikalık) iken sıralamanın birincisiydi.
+    const ekmek = demandGapScore(140.9, 40);
+    const mobilya = demandGapScore(0.3, 2);
+    expect(ekmek).toBeGreaterThan(mobilya);
+    expect(ekmek).toBe(1);
+    expect(mobilya).toBeLessThan(0.1);
+  });
+
+  it('★ birim TESİStir: aynı tesis karşılığı aynı puanı alır', () => {
+    // 140 kg ekmek açığı ile 140 kg demir açığı aynı şey değil; "iki fırınlık"
+    // ile "iki madenlik" aynı şeydir.
+    expect(demandGapScore(80, 40)).toBe(demandGapScore(4, 2));
+  });
+
+  it('tam sinyal iki tesislik açıktır, üstü doyar', () => {
+    expect(demandGapScore(80, 40)).toBe(1);
+    expect(demandGapScore(40, 40)).toBe(0.5);
+    expect(demandGapScore(800, 40)).toBe(1);
+  });
+
+  it('kapasitesi bilinmeyen tesis puan almaz', () => {
+    expect(demandGapScore(100, 0)).toBe(0);
   });
 });

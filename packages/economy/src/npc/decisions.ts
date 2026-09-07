@@ -173,6 +173,37 @@ export function marginScore(markup: number): number {
  * eğilim teriminin skora katkısı 0,000–0,012 aralığında kaldı — ağırlığın
  * %15'i ölü ağırlıktı, tıpkı R47'deki marj terimi gibi.
  */
+/**
+ * Açığın TAM sinyal saydığı büyüklüğü — kaç tesis dolduracak kadar.
+ *
+ * ★ Birim "tesis"tir, ürün birimi değil: 140 kg ekmek açığı ile 140 kg demir
+ * açığı aynı şey değildir, ama "iki fırınlık açık" ile "iki madenlik açık"
+ * karşılaştırılabilir. Yatırımcının sorduğu soru budur.
+ */
+export const DEMAND_GAP_FULL_SIGNAL_FACILITIES = 2;
+
+/**
+ * Karşılanmamış talebi 0..1 fırsat puanına çevirir — BÜYÜKLÜKÇE.
+ *
+ * ★ Önce ORAN kullanılıyordu (kitlik = 1 − arz/talep). Oran doyar: büyük bir
+ * pazarda %16'lık açık 0,16 puan alır, küçük bir pazardaki %90'lık açık 0,90.
+ * Oysa iş fırsatı olarak birincisi çok daha büyüktür. Ölçüldü (R61): ekmekte
+ * tur başına 140,9 birimlik açık ve yolda sıfır kapasite varken açık terimi
+ * 0,049 puan veriyordu; sıralamanın BİRİNCİSİ ise tur başına 0,3 birim açığı
+ * olan mobilyaydı.
+ *
+ * Yön korunur: fazla arzda `gapPerTick` negatiftir ve puan 0'dır (R59).
+ *
+ * Not: oran hâlâ doğru araçtır — ama başka bir soru için. `strategicNeed`
+ * zincirin İKİ AŞAMASINI karşılaştırır, o göreli bir sorudur ve orada kitlik
+ * kullanılmaya devam eder.
+ */
+export function demandGapScore(gapPerTick: number, facilityCapacityPerTick: number): number {
+  if (!(gapPerTick > 0) || !(facilityCapacityPerTick > 0)) return 0;
+  const facilities = gapPerTick / facilityCapacityPerTick;
+  return Math.min(1, facilities / DEMAND_GAP_FULL_SIGNAL_FACILITIES);
+}
+
 export const PRICE_TREND_FULL_SIGNAL = 0.10;
 
 /**
