@@ -1784,9 +1784,32 @@ olmamasıdır.
 - Kapatma kısmadan belirgin biçimde yavaş: kısma ≤%5/tur ile ~20 turda oturur,
   kapatma 192 tur (2 gün) ister.
 
-`npc.divest`: `{ minIdleTicks: 192, minCoverageTicks: 48 }`.
+`npc.divest`: `{ minIdleTicks: 192, minCoverageTicks: 96 }`.
 
-Büyüklükler ampiriktir, kapı ölçer; düzeltilen şey yapıdır.
+### Ölçülen sonuç — düzeltme hedefini tutturmadı
+
+Kapı 7,9,9,9,7'den **7,9,8,10,8**'e geçti (bir tohum 10'a çıktı, tekil rekor)
+ama asıl hedef ıskalandı: `npc_share` %59,6 → **%58,9**, banda dönmedi.
+Yayılma daraldığı yerde GENİŞLEDİ (%51,5–70,2 · önce %59,3–75,5) ve iki
+tohumda perakende karşılanması çöktü (%88,5 → %60,8 ve %53,7).
+
+Sebep akıl yürütmedeki bir boşluktu. Kısma kapısı gerçekten çifte sayımdı —
+o kısım doğru — ama aynı zamanda bir **ŞİDDET FİLTRESİ** görüyordu: yalnız
+belirgin geri çekilmiş tesisler aday oluyordu. Yerine konan "stok kısmanın
+hedefinin (8 tur) üstünde" koşulu neredeyse her tesisi aday yaptı; üstelik
+stok eşiği de 96'dan 48'e indirilmişti. İki şey gevşetilip biri sıkılmıştı.
+
+Ölçülen: tohum dünyasının KURUCU tesisleri kapandı — tohum 2'de çelik
+fabrikası 2+6'dan 1+1'e, buğday tarlası tohumdan 4'ten 3'e, tütün çiftliği
+4'ten 3'e, mobilya fabrikası 2'den 1'e indi.
+
+Düzeltildi (R61): tek eşik iki işi de görüyor — saat `minCoverageTicks`'in
+üstünde işler, kapatma kararı da aynı seviyeyi arar; seviye bir GÜNLÜK
+satılmamış üretime (96 tur) geri çekildi.
+
+**Ders:** bir kapıyı kaldırırken o kapının kaç iş yaptığını saymak gerekiyor.
+"Çifte sayım" teşhisi doğruydu ama kapı ikinci bir iş de görüyordu ve yerine
+bir şey konmadı.
 
 ---
 
@@ -1840,6 +1863,11 @@ referans fiyat perakende markupunu taşır, ara mal taşımaz. Tohum 0'da ekmek
 
 (b) ve (c) düzeltilmeden ÖNCE kapı koşumunda ölçülecek: 200 turluk kısa
 koşumun oranları 700 turluk dünyaya genellenemez.
+
+**(d) R60'ın çıkış kuralı fazla gevşekti.** Ayrıntı R60 bölümünde; özeti:
+kaldırılan kısma kapısı çifte sayımın yanı sıra bir şiddet filtresi de
+görüyordu ve yerine bir şey konmamıştı. Tek eşik (`minCoverageTicks`, bir
+günlük satılmamış üretim) hem saati başlatıyor hem kapatma kararını veriyor.
 
 ---
 
@@ -1985,7 +2013,7 @@ kendi kendini yukarıda tutar.
 | R57 | Tur tohumu duvar saatinden türüyor | 🔴 Kritik | ✅ F8 — dünya tohumu + `seq` · sayısal kalıntı biliniyor |
 | R58 | NPC kötü yatırımdan çıkamıyor (tek yönlü cırcır) | 🔴 Kritik | ✅ F8 — `shouldDivest` |
 | R59 | Kıtlık ölçüsü simetrik: dolu ambar cazip görünüyor | 🔴 Kritik | ✅ F8 — yönlü `kitlik` |
-| R60 | Aynı sinyale iki denetleyici: kısma + kapatma | 🔴 Kritik | ✅ F8 — çıkış kısmadan ayrıldı |
+| R60 | Aynı sinyale iki denetleyici: kısma + kapatma | 🔴 Kritik | ✅ F8 — çıkış kısmadan ayrıldı · şiddet R61'de geri geldi |
 | R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim düzeltildi · kalanı ölçülüyor |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |

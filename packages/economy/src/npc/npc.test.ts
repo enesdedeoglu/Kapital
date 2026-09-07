@@ -389,10 +389,15 @@ describe('★ stratejik ihtiyaç: nerede değer katılır (R54)', () => {
 });
 
 describe('★ yatırımdan çıkış — cırcır kırılır (R58, R60)', () => {
-  const temel = { minIdleTicks: 192, minCoverageTicks: 48 };
+  const temel = { minIdleTicks: 192, minCoverageTicks: 96 };
 
   it('uzun süredir stoğu erimeyen tesis kapanır', () => {
     expect(shouldDivest({ ...temel, coverageTicks: 200, idleTicks: 250 })).toBe(true);
+  });
+
+  it('★ eşik ŞİDDET filtresidir: yarım günlük stok kapatma sebebi değil', () => {
+    // R60'ta eşik 48'e indirilince tohum dünyasının kurucu tesisleri kapandı.
+    expect(shouldDivest({ ...temel, coverageTicks: 50, idleTicks: 500 })).toBe(false);
   });
 
   it('★ geçici durgunluk kapatma sebebi değildir', () => {

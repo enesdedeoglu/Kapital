@@ -76,7 +76,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
     tick, 'npc.throttle', { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 },
   );
   const divestCfg = configValue<{ minIdleTicks: number; minCoverageTicks: number }>(
-    tick, 'npc.divest', { minIdleTicks: 192, minCoverageTicks: 48 },
+    tick, 'npc.divest', { minIdleTicks: 192, minCoverageTicks: 96 },
   );
   const clearCfg = configValue<{ targetTicks: number; maxDiscount: number }>(
     tick, 'retail.clearance', { targetTicks: 8, maxDiscount: 0.25 },
@@ -262,16 +262,27 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           out.throttled++;
         }
         /*
-         * Çıkış saati: stok kısmanın HEDEFİNİN üstünde kaldığı sürece işler,
-         * hedefin altına inince sıfırlanır.
+         * Çıkış saati: stok KAPATMA EŞİĞİNİN üstünde kaldığı sürece işler,
+         * altına inince sıfırlanır.
          *
          * ★ Önce KISMA SEVİYESİ damgalıyordu (capped <= idleBelow). Kısma
          * zaten fazla arza verilen cevaptır; onu kapatma gerekçesi saymak aynı
          * hata sinyaline ikinci denetleyici asmaktı (R60). Burada kısmanın
          * BAŞARAMADIĞI şey ölçülür: üretim geri çekildiği hâlde stok hâlâ
          * erimiyorsa malın alıcısı yoktur.
+         *
+         * ★★ Eşik olarak KISMANIN HEDEFİ (8 tur) kullanılmıştı ve bu çok
+         * düşüktü: kısma en ufak iş yaptığında saat başlıyordu, yani hemen
+         * her tesis aday oluyordu. Kaldırdığım kısma kapısı çifte sayımdı —
+         * o kısım doğruydu — ama aynı zamanda bir ŞİDDET FİLTRESİydi ve
+         * yerine bir şey koymamıştım. Ölçüldü (R61): tohum dünyasının kurucu
+         * tesisleri kapandı (tohum 2'de çelik fabrikası 2+6'dan 1+1'e indi),
+         * NPC üretim payının yayılması daraldığı yerde genişledi.
+         *
+         * Şimdi tek eşik iki işi de görüyor: saat bu seviyenin üstünde işler,
+         * kapatma kararı da aynı seviyeyi arar.
          */
-        const tabanda = coverage > throttleCfg.targetTicks * bias;
+        const tabanda = coverage > divestCfg.minCoverageTicks;
         await sql`
           UPDATE facilities
              SET idle_since_tick = ${tabanda ? sql`COALESCE(idle_since_tick, ${tick.seq})` : sql`NULL`}

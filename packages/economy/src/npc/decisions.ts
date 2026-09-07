@@ -416,7 +416,7 @@ export interface DivestInput {
    * hâlâ erimiyorsa sorun üretim hızı değil, malın alıcısının olmamasıdır.
    */
   readonly coverageTicks: number;
-  /** Stok kısmanın hedefinin üstünde kaç turdur duruyor. */
+  /** Stok `minCoverageTicks` seviyesinin üstünde kaç turdur duruyor. */
   readonly idleTicks: number;
   /**
    * Kapatmadan önce geçmesi gereken en az tur.
@@ -426,10 +426,16 @@ export interface DivestInput {
    */
   readonly minIdleTicks: number;
   /**
-   * Kapatmayı hak eden stok eşiği — ayrı bir sayı.
+   * Kapatmayı hak eden stok eşiği — süreden AYRI bir sayı.
    *
    * ★ Önce eşik olarak minIdleTicks kullanılıyordu: tek sayı iki ayrı soruya
    * (ne kadar süredir? ne kadar stok?) cevap veriyordu.
+   *
+   * ★★ Bu eşik aynı zamanda ŞİDDET FİLTRESİdir. R60'ta 48'e indirilmişti ve
+   * saat de kısmanın hedefinden (8 tur) başlıyordu: hemen her tesis aday
+   * oldu, tohum dünyasının kurucu tesisleri kapandı (R61). Kaldırılan kısma
+   * kapısı çifte sayımdı — o doğruydu — ama yerine bir şiddet ölçüsü
+   * konmamıştı. Bir GÜNLÜK satılmamış üretim yeterince yüksek bir çıtadır.
    */
   readonly minCoverageTicks: number;
 }
