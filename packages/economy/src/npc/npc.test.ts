@@ -4,6 +4,7 @@ import { productionCapacity } from '../production/capacity.js';
 import {
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
   planInventory, representativeDistance, clearanceFactor, shouldDivest, strategicNeed,
+  priceTrendScore, PRICE_TREND_FULL_SIGNAL,
 } from './decisions.js';
 import { ARCHETYPES, varyTemplate } from './profile.js';
 
@@ -418,5 +419,31 @@ describe('★ yatırımdan çıkış — cırcır kırılır (R58, R60)', () => 
     const anahtarlar = Object.keys({ ...temel, coverageTicks: 0, idleTicks: 0 });
     expect(anahtarlar).not.toContain('utilization');
     expect(anahtarlar).not.toContain('idleBelow');
+  });
+});
+
+describe('★ fiyat eğilimi — yön ve ölçek (R61)', () => {
+  it('düşen fiyat ödül vermez', () => {
+    expect(priceTrendScore(-0.20)).toBe(0);
+    expect(priceTrendScore(0)).toBe(0);
+  });
+
+  it('★ yükselen ve düşen fiyat AYNI puanı almaz', () => {
+    // Önce (MAX-MIN)/MIN, yani aralık ölçülüyordu: iki yön aynı değeri
+    // veriyordu ve çöken fiyat patlayan fiyat kadar cazip görünüyordu.
+    expect(priceTrendScore(0.20)).toBeGreaterThan(priceTrendScore(-0.20));
+  });
+
+  it('★ ölçek gerçekçi: günlük %10 artış TAM sinyaldir', () => {
+    // Ham kesir doğrudan [0,1]'e kırpıldığında %3'lük artış 0,03 puan
+    // veriyordu; terimin bir şey ifade etmesi için fiyatın bir günde ikiye
+    // katlanması gerekiyordu. Ağırlığın %15'i ölü ağırlıktı.
+    expect(priceTrendScore(PRICE_TREND_FULL_SIGNAL)).toBe(1);
+    expect(priceTrendScore(0.03)).toBeCloseTo(0.30, 5);
+    expect(priceTrendScore(0.05)).toBeCloseTo(0.50, 5);
+  });
+
+  it('tam sinyalin üstü doyar', () => {
+    expect(priceTrendScore(5)).toBe(1);
   });
 });

@@ -142,3 +142,36 @@ SELECT p.code,
   FROM market_orders o JOIN products p ON p.id = o.product_id
  WHERE o.expires_at_tick > (SELECT MAX(seq) - 192 FROM economic_ticks)
  GROUP BY 1 ORDER BY 1;
+
+\echo '=== R61 — SERMAYE NEDEN ORAYA GİTTİ: yatırım skorunun bileşenleri ==='
+-- Kararın kullandığı ham sayılar, karar anında yazıldıkları gibi. Ağırlıklar:
+-- marj 0,35 · açık 0,30 · fiyat eğilimi 0,15 · zincir ihtiyacı 0,10 · rekabet -0,10
+--
+-- "katki_*" sütunları skora yapılan GERÇEK katkıdır (ham × ağırlık): hangi
+-- terimin kararı belirlediği doğrudan okunur, tahmin edilmez.
+SELECT p.code,
+       ROUND(AVG(o.score)::numeric, 3)          AS skor,
+       ROUND(AVG(o.threshold)::numeric, 3)      AS esik,
+       ROUND(AVG(LEAST(GREATEST(o.margin,0),1)         * 0.35)::numeric, 3) AS katki_marj,
+       ROUND(AVG(LEAST(GREATEST(o.demand_gap,0),1)     * 0.30)::numeric, 3) AS katki_acik,
+       ROUND(AVG(LEAST(GREATEST(o.price_trend,0),1)    * 0.15)::numeric, 3) AS katki_egilim,
+       ROUND(AVG(LEAST(GREATEST(o.strategic_need,0),1) * 0.10)::numeric, 3) AS katki_zincir,
+       ROUND(AVG(LEAST(GREATEST(o.competition,0),1)    * -0.10)::numeric, 3) AS katki_rekabet,
+       ROUND(AVG(o.gap_per_tick)::numeric, 1)   AS acik_tur,
+       ROUND(AVG(o.pipeline_per_tick)::numeric, 1) AS yolda_tur
+  FROM investment_opportunities o JOIN products p ON p.id = o.product_id
+ WHERE o.tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
+ GROUP BY 1 ORDER BY skor DESC;
+
+\echo '=== R61 — yatırım kapısı: skor mu yetmedi, açık mı kapalıydı ==='
+-- Bir ürüne yatırım yapılmamasının iki ayrı sebebi var ve karıştırılmamalı:
+-- (a) skor eşiğin altında kaldı, (b) açık zaten yoldaki kapasiteyle kapanmış.
+SELECT p.code,
+       COUNT(*) FILTER (WHERE o.score >= o.threshold) AS skor_yetti,
+       COUNT(*) FILTER (WHERE o.pipeline_per_tick >= GREATEST(o.gap_per_tick, 0)) AS acik_kapali,
+       COUNT(*) FILTER (WHERE o.score >= o.threshold
+                          AND o.pipeline_per_tick < GREATEST(o.gap_per_tick, 0)) AS yatirilabilir,
+       COUNT(*) AS tur
+  FROM investment_opportunities o JOIN products p ON p.id = o.product_id
+ WHERE o.tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
+ GROUP BY 1 ORDER BY yatirilabilir DESC;

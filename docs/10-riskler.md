@@ -1790,6 +1790,59 @@ Büyüklükler ampiriktir, kapı ölçer; düzeltilen şey yapıdır.
 
 ---
 
+## R61 — Yatırım skorunun beş teriminden üçü bilgi taşımıyor
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** R60 sonrası, karar girdileri ölçülünce · **Durum:** ⏳ eğilim terimi düzeltildi, kalanı ölçülecek
+
+Sermayenin neden bir ürüne akıp ötekine akmadığını üç kez dolaylı sinyallerden
+okumaya çalıştım ve üçünde de yanlış okudum (R54, R59, R60). Dördüncüsünü
+tahminle yapmamak için kararın GİRDİLERİ kaydedilmeye başlandı
+(`investment_opportunities`; yalnız teşhis, hiçbir mekanik okumaz).
+
+İlk ölçüm (200 tur, 20 oyuncu — kapının 700/60 dünyası değil, oran göstergesi):
+
+| ürün | skor | eşik | marj | açık | eğilim | zincir | rekabet |
+|---|---|---|---|---|---|---|---|
+| CIGARETTE | 0,204 | 0,371 | 0,117 | 0,112 | 0,001 | 0,074 | −0,100 |
+| BREAD | 0,168 | 0,380 | 0,125 | 0,084 | 0,005 | 0,054 | −0,100 |
+| FLOUR | 0,145 | 0,380 | 0,115 | 0,071 | 0,004 | 0,055 | −0,100 |
+| IRON | 0,107 | 0,380 | 0,107 | 0,000 | 0,000 | 0,050 | −0,050 |
+
+Sütunlar skora yapılan GERÇEK katkıdır (ham değer × ağırlık). Okunanlar:
+
+**(a) Eğilim terimi ölü.** Ağırlığı 0,15, katkısı 0,000–0,012. İki kusur:
+
+- *Yön körü:* `(MAX − MIN) / MIN` bir eğilim değil ARALIKtır. %20 düşen fiyat
+  da %20 çıkan fiyat kadar cazip görünüyordu. Simetrik ölçü, yönlü soru —
+  R59/R60 ile aynı kalıbın dördüncü tekrarı.
+- *Ölçek körü:* ham kesir doğrudan `[0,1]`'e kırpılıyordu. Bir günde %3 artış
+  0,03 puan verir; terimin bir şey ifade etmesi için fiyatın bir günde İKİYE
+  KATLANMASI gerekirdi. R47'deki ölü marj teriminin aynısı.
+
+Düzeltildi: pencerenin başı ile sonu arasındaki YÖNLÜ değişim, ölçeği
+`priceTrendScore` / `PRICE_TREND_FULL_SIGNAL` (günlük %10 = tam sinyal) tek
+kaynakta. Düşen fiyat ceza değil, yalnız ödülsüz.
+
+**(b) `strategicNeed` çoğu üründe tam nötrde** (0,050 = ham 0,5). R54'te
+eklenen "değer katkısı" terimi hem ağırlıkça en küçük (0,10) hem de çoğu zaman
+sinyalsiz. Zincirin darboğazını göstermesi beklenen terim bunu yapmıyor.
+
+**(c) Rekabet cezası tam da kıt ürünlerde doymuş.** `competition = f_sellers`
+ve ekmek/un/buğday/sigarada 1,0'e oturmuş, yani −0,100 tavan ceza. Kapasitenin
+en çok gerektiği yerler en ağır cezayı alıyor ve terim 5 satıcı ile 50 satıcıyı
+ayırt edemiyor.
+
+**Sonuç:** beş terimden yalnız ikisi (marj 0,35 ve yönlü açık 0,30) ayırt edici
+bilgi taşıyor. Marj ise zincirin SON halkasını yapısal olarak kayırıyor —
+referans fiyat perakende markupunu taşır, ara mal taşımaz. Tohum 0'da ekmek
+0,71 ve un 0,72 iken (ikisi de kıt, kıtlık sinyalleri eşit) 17 fırın kuruldu,
+4 değirmen.
+
+(b) ve (c) düzeltilmeden ÖNCE kapı koşumunda ölçülecek: 200 turluk kısa
+koşumun oranları 700 turluk dünyaya genellenemez.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1933,6 +1986,7 @@ kendi kendini yukarıda tutar.
 | R58 | NPC kötü yatırımdan çıkamıyor (tek yönlü cırcır) | 🔴 Kritik | ✅ F8 — `shouldDivest` |
 | R59 | Kıtlık ölçüsü simetrik: dolu ambar cazip görünüyor | 🔴 Kritik | ✅ F8 — yönlü `kitlik` |
 | R60 | Aynı sinyale iki denetleyici: kısma + kapatma | 🔴 Kritik | ✅ F8 — çıkış kısmadan ayrıldı |
+| R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim düzeltildi · kalanı ölçülüyor |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

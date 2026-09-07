@@ -289,3 +289,33 @@ export const npcDecisions = pgTable(
     index('npc_decisions_company').on(t.companyId, t.tickId),
   ],
 );
+
+/**
+ * NPC yatırım kararının ham girdileri — YALNIZ TEŞHİS.
+ *
+ * Sermayenin neden bir ürüne akıp ötekine akmadığını üç kez dolaylı
+ * sinyallerden okumaya çalıştım ve üçünde de yanlış okudum (R54, R59, R60).
+ * Burada kararın kullandığı sayılar, karar anında, oldukları gibi durur.
+ *
+ * ★ Hiçbir oyun mekaniği bu tabloyu OKUMAZ. Model burada yeniden yazılmaz;
+ *   satırlar gerçek `loadOpportunities` + `investmentScore` çıktısıdır (R46).
+ */
+export const investmentOpportunities = pgTable(
+  'investment_opportunities',
+  {
+    tickId: bigint('tick_id', { mode: 'bigint' }).notNull(),
+    productId: smallint('product_id').notNull().references(() => products.id),
+    margin: doublePrecision('margin').notNull(),
+    demandGap: doublePrecision('demand_gap').notNull(),
+    priceTrend: doublePrecision('price_trend').notNull(),
+    strategicNeed: doublePrecision('strategic_need').notNull(),
+    competition: doublePrecision('competition').notNull(),
+    /** NPC iştahı uygulanmamış temel skor. */
+    score: doublePrecision('score').notNull(),
+    threshold: doublePrecision('threshold').notNull(),
+    /** Skor yetse bile bu iki sayı yatırımı durdurabilir. */
+    gapPerTick: doublePrecision('gap_per_tick').notNull(),
+    pipelinePerTick: doublePrecision('pipeline_per_tick').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tickId, t.productId] })],
+);

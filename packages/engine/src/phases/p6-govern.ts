@@ -1,6 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
   clearanceFactor, decidePrice, inputBid, investmentScore, leverMultiplier, outputThrottle,
+  priceTrendScore,
   shouldDivest,
   strategicNeed,
   PRICE_MARKUP_BAND,
@@ -160,6 +161,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
 
   const support = await loadSupportGuard(sql, tick);
   const opportunities = await loadOpportunities(sql, tick);
+  await logOpportunities(sql, tick, opportunities, directives);
   // Fırsat listesi tur başında bir kez hesaplanır; bu defter onu tur içinde
   // güncel tutar — bkz. `maybeInvest` içindeki taahhüt kuralı.
   const committed = new Map<number, number>();
@@ -745,20 +747,31 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
        WHERE f2.closed_at IS NULL AND f2.construction_complete_at_tick > ${tick.seq}
        GROUP BY 1
     ),
+    /*
+     * Fiyat eğilimi: pencerenin BAŞI ile SONU arasındaki değişim.
+     *
+     * Önce (MAX - MIN) / MIN yazıyordu; o bir eğilim değil ARALIKtır ve
+     * yön körüdür: %20 düşen fiyat da %20 çıkan fiyat kadar cazip
+     * görünüyordu (R61). Ölçek priceTrendScore'da, tek kaynakta.
+     */
     fiyat AS (
-      SELECT ph.product_id,
-             (MAX(ph.ema_reference) - MIN(ph.ema_reference))::float
-               / NULLIF(MIN(ph.ema_reference), 0) AS trend
-        FROM price_history ph
-       WHERE ph.city_id = 0 AND ph.tick_id > ${tick.seq - 96n}
-       GROUP BY 1
+      SELECT product_id, (son - ilk)::float / NULLIF(ilk, 0) AS trend
+        FROM (
+          SELECT ph.product_id,
+                 (ARRAY_AGG(ph.ema_reference ORDER BY ph.tick_id))[1] AS ilk,
+                 (ARRAY_AGG(ph.ema_reference ORDER BY ph.tick_id DESC))[1] AS son
+            FROM price_history ph
+           WHERE ph.city_id = 0 AND ph.tick_id > ${tick.seq - 96n}
+           GROUP BY 1
+        ) q
     )
     SELECT r.output_product_id AS product_id, ft.id AS facility_type_id,
            ft.code AS facility_code, r.id AS recipe_id,
            ft.base_cost, ft.base_capacity, ft.construction_ticks AS build_ticks, ft.unlock_level,
            -- Arz açığı YÖNLÜdür: fazla arz fırsat değildir (R59).
            COALESCE(s.kitlik, 0)::float8 AS demand_gap,
-           GREATEST(0, LEAST(1, COALESCE(f.trend, 0))) AS price_trend,
+           -- HAM değişim oranı; 0..1 puana çevirmek priceTrendScore'un işi.
+           COALESCE(f.trend, 0)::float8 AS price_trend,
            COALESCE(s.f_sellers, 1) AS competition,
            COALESCE(s.gap_per_tick, 0)::float8 AS gap_per_tick,
            COALESCE(bh.units, 0)::float8 AS pipeline_per_tick,
@@ -869,7 +882,7 @@ async function maybeInvest(
     const score = investmentScore({
       profitMargin: o.margin,
       demandGap: o.demand_gap,
-      priceTrend: o.price_trend,
+      priceTrend: priceTrendScore(o.price_trend),
       strategicNeed: strategicNeed(o.input_supply, o.output_supply),
       competition: o.competition,
       // Arketip iştahı 1 etrafında ölçekler: 0,5 iştah → ×1,0, 0,9 → ×1,4.
@@ -984,6 +997,55 @@ async function throttlePlayerFacilities(
     }
   }
   return throttled;
+}
+
+/**
+ * Yatırım fırsatlarının HAM girdilerini teşhis tablosuna yazar.
+ *
+ * ★ Sermayenin neden bir ürüne akıp ötekine akmadığını üç kez dolaylı
+ * sinyallerden okumaya çalıştım ve üçünde de yanlış okudum (R54, R59, R60).
+ * Burası tahmini bitirir.
+ *
+ * Model burada YENİDEN HESAPLANMAZ: skor gerçek `investmentScore` çağrısıdır,
+ * bileşenler `loadOpportunities` satırlarının kendisidir. Teşhisin kendi
+ * kopyasını hesaplaması, testin kendi modelini doğrulamasıyla aynı hata
+ * olurdu (R46).
+ *
+ * NPC iştahı (`investment_aggressiveness`) uygulanmaz — o NPC başına değişir,
+ * bu tablo ürün başına tek satırdır. Kaydedilen, herkesin gördüğü TEMEL skor.
+ */
+async function logOpportunities(
+  sql: Sql, tick: EngineTick, opportunities: Opportunity[], directives: DirectiveMap,
+): Promise<void> {
+  if (opportunities.length === 0) return;
+  const invest = configValue<{ threshold: number }>(
+    tick, 'npc.investment', { threshold: 0.38 },
+  );
+  const rows = opportunities.map((o) => {
+    const need = strategicNeed(o.input_supply, o.output_supply);
+    // Kararın KULLANDIĞI değerler yazılır, ham girdiler değil: teşhis
+    // skorun bileşenlerini gösterir, onları yeniden hesaplamaz (R46).
+    const trend = priceTrendScore(o.price_trend);
+    return {
+      tick_id: tick.seq,
+      product_id: o.product_id,
+      margin: o.margin,
+      demand_gap: o.demand_gap,
+      price_trend: trend,
+      strategic_need: need,
+      competition: o.competition,
+      score: investmentScore({
+        profitMargin: o.margin, demandGap: o.demand_gap, priceTrend: trend,
+        strategicNeed: need, competition: o.competition,
+      }),
+      threshold: invest.threshold / lever(directives, o.product_id, 'INVESTMENT_BIAS'),
+      gap_per_tick: o.gap_per_tick,
+      pipeline_per_tick: o.pipeline_per_tick,
+    };
+  });
+  await sql`
+    INSERT INTO investment_opportunities ${sql(rows)}
+    ON CONFLICT (tick_id, product_id) DO NOTHING`;
 }
 
 /**

@@ -164,6 +164,32 @@ export function marginScore(markup: number): number {
   return Math.max(0, Math.min(1, (markup - min) / (max - min)));
 }
 
+/**
+ * Fiyat eğiliminin TAM sinyal saydığı günlük artış.
+ *
+ * ★ Ölçek tek kaynaktır. Önce ham kesir doğrudan `[0,1]`'e kırpılıyordu:
+ * bir günde %3 artan fiyat 0,03 puan veriyor, terimin bir şey ifade etmesi
+ * için fiyatın bir günde İKİYE KATLANMASI gerekiyordu. Ölçüldü (R61):
+ * eğilim teriminin skora katkısı 0,000–0,012 aralığında kaldı — ağırlığın
+ * %15'i ölü ağırlıktı, tıpkı R47'deki marj terimi gibi.
+ */
+export const PRICE_TREND_FULL_SIGNAL = 0.10;
+
+/**
+ * Günlük fiyat değişimini 0..1 fırsat puanına çevirir.
+ *
+ * ★ YÖNLÜdür. Önce (MAX − MIN) / MIN, yani ARALIK ölçülüyordu: %20 düşen
+ * fiyat da %20 çıkan fiyat kadar cazip görünüyordu. Simetrik bir ölçüyü
+ * yönlü bir soruya cevap diye kullanmak R59/R60'la aynı hataydı (R61).
+ *
+ * Düşen fiyat CEZA değil, yalnız ödülsüzdür: yatırımı caydırmak ayrı bir
+ * karar olurdu, burada yapılmıyor.
+ */
+export function priceTrendScore(changeRatio: number): number {
+  if (!(changeRatio > 0)) return 0;
+  return Math.min(1, changeRatio / PRICE_TREND_FULL_SIGNAL);
+}
+
 export function investmentScore(input: InvestmentScoreInput): number {
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
   return (
