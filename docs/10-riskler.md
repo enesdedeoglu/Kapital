@@ -1686,6 +1686,42 @@ NPC aynı turda daha iyi bir yere yatırım yapabilsin.
 
 ---
 
+## R59 — Kıtlık ölçüsü SİMETRİKti: dolu ambar en cazip yatırım görünüyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R58 sonrası kapı teşhisi · **Durum:** ✅ çözüldü
+
+R58'in çıkışı beklendiği kadar iş görmedi: kapı 7–10'dan 8–10'a daraldı ama
+seviye düştü (bir tohum 10 → 8). Teşhis iki kusur gösterdi, ikisi de önceki
+düzeltmelerimde.
+
+**(a) Çıkış kuralı neredeyse hiç tetiklenmiyordu.** `shouldDivest` kısma
+TABANINI (≤ 0,105) şart koşuyordu. Ama kısma kademelidir (≤%5/tur) ve orta
+düzey fazla arzda tesis 0,45 civarında dengelenip tabana hiç inmez. Ölçülen:
+26 buğday tarlası %45 kullanımda **31.756 kg** satılmamış stokla oturuyordu ve
+hiçbiri kapanmıyordu. Eşik gerçeğe uyduruldu (`idleBelow: 0,5`).
+
+**(b) `f_supply` simetrikti.** Formülü `1 − |oran−1|/0,5`. Oranı **2** olan
+FAZLA arzdaki ürünün f_supply'ı 0 çıkar — tıpkı oranı 0 olan kıt ürün gibi.
+Yatırım kararı bunu kıtlık sanıyordu:
+
+- `demand_gap = 1 − f_supply` → dolu ambara **maksimum açık**
+- R54'ün `strategicNeed`'i → fazla arzdaki hammaddeye **1,0**
+
+Yani zaten dolu olan yere yatırım en cazip seçenek gibi görünüyordu. Tohum 3'ün
+26 tarlası tam bu. `gap_per_tick` koruması fazla arzı yakalıyordu ama SKOR
+şişkin kaldığı için sıralama bozuluyordu.
+
+Yönlü ölçü kondu: **kıtlık yalnız oran 1'in ALTINDAYKEN vardır.**
+
+    kitlik = clamp01(1 − arz/talep)
+
+★ Bu, R54'ü de düzeltir: "değer katkısı" formülü doğruydu ama yanlış sinyalle
+besleniyordu. Sağlık skoru için simetri DOĞRUdur (hem kıtlık hem bolluk
+sağlıksızdır); yatırım kararı için değildir. Aynı sayıyı iki farklı soruya
+cevap diye kullanmak hatanın kaynağıydı.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1827,6 +1863,7 @@ kendi kendini yukarıda tutar.
 | R56 | Tur belirleyici değil: aynı tohum farklı dünya | 🔴 Kritik | ✅ F8 — döngü sorgularına `ORDER BY` |
 | R57 | Tur tohumu duvar saatinden türüyor | 🔴 Kritik | ✅ F8 — dünya tohumu + `seq` · sayısal kalıntı biliniyor |
 | R58 | NPC kötü yatırımdan çıkamıyor (tek yönlü cırcır) | 🔴 Kritik | ✅ F8 — `shouldDivest` |
+| R59 | Kıtlık ölçüsü simetrik: dolu ambar cazip görünüyor | 🔴 Kritik | ✅ F8 — yönlü `kitlik` + `idleBelow` |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

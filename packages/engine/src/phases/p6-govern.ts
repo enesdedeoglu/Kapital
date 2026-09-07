@@ -74,8 +74,8 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const throttleCfg = configValue<{ targetTicks: number; maxStepPerTick: number; floor: number }>(
     tick, 'npc.throttle', { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 },
   );
-  const divestCfg = configValue<{ minIdleTicks: number }>(
-    tick, 'npc.divest', { minIdleTicks: 96 },
+  const divestCfg = configValue<{ minIdleTicks: number; idleBelow: number }>(
+    tick, 'npc.divest', { minIdleTicks: 96, idleBelow: 0.5 },
   );
   const clearCfg = configValue<{ targetTicks: number; maxDiscount: number }>(
     tick, 'retail.clearance', { targetTicks: 8, maxDiscount: 0.25 },
@@ -261,7 +261,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
         }
         // Tabana inildiği tur damgalanır, tabandan çıkınca temizlenir (R58):
         // çıkış kararı "ne kadar süredir tabanda" sorusunu buradan okur.
-        const tabanda = capped <= throttleCfg.floor * 1.05;
+        const tabanda = capped <= divestCfg.idleBelow;
         await sql`
           UPDATE facilities
              SET idle_since_tick = ${tabanda ? sql`COALESCE(idle_since_tick, ${tick.seq})` : sql`NULL`}
@@ -362,7 +362,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
       out.strategicDecisions++;
       // Önce ÇIKIŞ, sonra giriş: kapanan tesis `maxFacilities` yuvasını
       // boşaltır ve NPC aynı turda daha iyi bir yere yatırım yapabilir.
-      out.divested += await divestIdle(sql, tick, npc.company_id, throttleCfg.floor, divestCfg);
+      out.divested += await divestIdle(sql, tick, npc.company_id, divestCfg);
       if (await maybeInvest(sql, tick, npc, directives, opportunities, invCfg, committed)) out.built++;
     }
   }
@@ -709,7 +709,19 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
   return sql<Opportunity[]>`
     WITH saglik AS (
       SELECT product_id, f_supply, f_sellers, f_stability,
-             (demand_units - supply_units) / 1000.0 / 96.0 AS gap_per_tick
+             (demand_units - supply_units) / 1000.0 / 96.0 AS gap_per_tick,
+             /*
+              * ★ YÖNLÜ kıtlık. f_supply SİMETRİKtir (1 - |oran-1|/0,5):
+              * oranı 2 olan FAZLA arzdaki ürünün f_supply'ı da 0 çıkar, tıpkı
+              * oranı 0 olan kıt ürün gibi. Yatırım kararı bunu kullanınca
+              * dolu ambara yatırım en cazip seçenek gibi görünüyordu — ölçüldü:
+              * 26 buğday tarlası %45 kullanımda 31.756 kg satılmamış stokla
+              * oturuyordu (R59).
+              *
+              * Kıtlık yalnız oran 1'in ALTINDAYKEN vardır.
+              */
+             GREATEST(0, LEAST(1, 1 - supply_units::float8 / NULLIF(demand_units, 0)))
+               AS kitlik
         FROM market_health
        WHERE city_id = 0
          AND tick_id = (SELECT MAX(tick_id) FROM market_health WHERE tick_id <= ${tick.seq})
@@ -736,15 +748,16 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
     SELECT r.output_product_id AS product_id, ft.id AS facility_type_id,
            ft.code AS facility_code, r.id AS recipe_id,
            ft.base_cost, ft.base_capacity, ft.construction_ticks AS build_ticks, ft.unlock_level,
-           -- Arz açığı: f_supply düştükçe fırsat büyür
-           GREATEST(0, 1 - COALESCE(s.f_supply, 1)) AS demand_gap,
+           -- Arz açığı YÖNLÜdür: fazla arz fırsat değildir (R59).
+           COALESCE(s.kitlik, 0)::float8 AS demand_gap,
            GREATEST(0, LEAST(1, COALESCE(f.trend, 0))) AS price_trend,
            COALESCE(s.f_sellers, 1) AS competition,
            COALESCE(s.gap_per_tick, 0)::float8 AS gap_per_tick,
            COALESCE(bh.units, 0)::float8 AS pipeline_per_tick,
            -- Hesap strategicNeed fonksiyonunda; SQL yalnız bileşeni taşır.
-           COALESCE(sn.girdi_arzi, 1)::float8 AS input_supply,
-           COALESCE(s.f_supply, 0.5)::float8 AS output_supply,
+           -- Bolluk = 1 − kıtlık; girdisi bol, çıktısı kıt olan yer değer katar.
+           (1 - COALESCE(sn.girdi_kitligi, 0))::float8 AS input_supply,
+           (1 - COALESCE(s.kitlik, 0.5))::float8 AS output_supply,
            /*
             * Marj: referans fiyat ÷ TAM birim maliyet (girdiler dahil).
             *
@@ -795,7 +808,7 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
        * çıktısı düzeldikçe kendiliğinden geri çekilir.
        */
       LEFT JOIN LATERAL (
-        SELECT MIN(COALESCE(s2.f_supply, 0))::float8 AS girdi_arzi
+        SELECT MAX(COALESCE(s2.kitlik, 1))::float8 AS girdi_kitligi
           FROM recipe_inputs ri2
           LEFT JOIN saglik s2 ON s2.product_id = ri2.product_id
          WHERE ri2.recipe_id = r.id
@@ -976,8 +989,8 @@ async function throttlePlayerFacilities(
  * durması ve `maxFacilities` yuvasının boşalmasıdır.
  */
 async function divestIdle(
-  sql: Sql, tick: EngineTick, companyId: string, floor: number,
-  cfg: { minIdleTicks: number },
+  sql: Sql, tick: EngineTick, companyId: string,
+  cfg: { minIdleTicks: number; idleBelow: number },
 ): Promise<number> {
   const adaylar = await sql<{
     id: string; utilization: number; idle_since_tick: bigint;
@@ -999,7 +1012,7 @@ async function divestIdle(
     const perTick = a.base_capacity;
     if (!(perTick > 0)) continue;
     if (!shouldDivest({
-      utilization: a.utilization, floor,
+      utilization: a.utilization, idleBelow: cfg.idleBelow,
       coverageTicks: Number(a.stock) / 1000 / perTick,
       idleTicks: Number(tick.seq - a.idle_since_tick),
       minIdleTicks: cfg.minIdleTicks,

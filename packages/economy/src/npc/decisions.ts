@@ -378,8 +378,15 @@ export function strategicNeed(inputSupply: number, outputSupply: number): number
 export interface DivestInput {
   /** Tesisin şu anki kapasite kullanımı. */
   readonly utilization: number;
-  /** Kısmanın taban değeri — bu seviyede tesis fiilen durmuştur. */
-  readonly floor: number;
+  /**
+   * Atıl sayılma eşiği.
+   *
+   * ★ Önce kısma TABANI (0,10) kullanılıyordu ve kural neredeyse hiç
+   * tetiklenmiyordu: kısma kademelidir (≤%5/tur) ve orta düzey fazla arzda
+   * tesis 0,45 civarında dengelenip tabana hiç inmez. Ölçüldü — 26 buğday
+   * tarlası %45 kullanımda 31.756 kg satılmamış stokla oturuyordu (R59).
+   */
+  readonly idleBelow: number;
   /** Eldeki çıktı stoğu kaç turluk üretime denk. */
   readonly coverageTicks: number;
   /** Bu tesis kaç turdur tabanda. */
@@ -389,9 +396,9 @@ export interface DivestInput {
 }
 
 export function shouldDivest(input: DivestInput): boolean {
-  const { utilization, floor, coverageTicks, idleTicks, minIdleTicks } = input;
-  // Tabanda mı — kısma daha fazlasını yapamıyor demektir.
-  if (utilization > floor * 1.05) return false;
+  const { utilization, idleBelow, coverageTicks, idleTicks, minIdleTicks } = input;
+  // Kısma bu tesisi belirgin biçimde geri çekmiş mi.
+  if (utilization > idleBelow) return false;
   // Yeterince uzun süredir mi: bir günlük durgunluk kapatma sebebi değil.
   if (idleTicks < minIdleTicks) return false;
   // Ve mal gerçekten satılmıyor mu: stok birikmediyse sorun talep değildir.

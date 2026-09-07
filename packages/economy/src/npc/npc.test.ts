@@ -388,7 +388,7 @@ describe('★ stratejik ihtiyaç: nerede değer katılır (R54)', () => {
 });
 
 describe('★ yatırımdan çıkış — cırcır kırılır (R58)', () => {
-  const temel = { floor: 0.10, minIdleTicks: 96 };
+  const temel = { idleBelow: 0.50, minIdleTicks: 96 };
 
   it('uzun süre tabanda ve stoğu birikmiş tesis kapanır', () => {
     expect(shouldDivest({ ...temel, utilization: 0.10, coverageTicks: 200, idleTicks: 150 }))
@@ -408,5 +408,12 @@ describe('★ yatırımdan çıkış — cırcır kırılır (R58)', () => {
   it('çalışan tesise dokunulmaz', () => {
     expect(shouldDivest({ ...temel, utilization: 0.8, coverageTicks: 300, idleTicks: 300 }))
       .toBe(false);
+  });
+
+  it('★ tabana inmemiş ama belirgin kısılmış tesis de kapanır', () => {
+    // Ölçülen gerçek durum: kısma kademeli olduğu için fazla arzdaki tesis
+    // 0,45'te dengeleniyor ve tabana (0,10) hiç inmiyordu.
+    expect(shouldDivest({ ...temel, utilization: 0.45, coverageTicks: 300, idleTicks: 200 }))
+      .toBe(true);
   });
 });

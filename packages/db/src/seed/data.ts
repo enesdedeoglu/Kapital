@@ -342,7 +342,7 @@ export const gameConfigs: { key: string; value: unknown }[] = [
    * çıktı stoğu bu kadar turluk üretime denk birikirse kapanır. 96 tur = 1 gün.
    * Katı tutulur: dalgalanmayla kapasite yok edilirse kıtlık derinleşir.
    */
-  { key: 'npc.divest',       value: { minIdleTicks: 96 } },
+  { key: 'npc.divest',       value: { minIdleTicks: 96, idleBelow: 0.5 } },
   // Seviye ilerleyişi — madde 11. Onboarding zinciri 7 adımda 700 XP verir
   // (Lv2 şartı); sürekli oyun da benzer büyüklükte olmalı.
   { key: 'progression.experience', value: { retailPerXp: 100, tradePerXp: 200,
