@@ -387,33 +387,36 @@ describe('★ stratejik ihtiyaç: nerede değer katılır (R54)', () => {
   });
 });
 
-describe('★ yatırımdan çıkış — cırcır kırılır (R58)', () => {
-  const temel = { idleBelow: 0.50, minIdleTicks: 96 };
+describe('★ yatırımdan çıkış — cırcır kırılır (R58, R60)', () => {
+  const temel = { minIdleTicks: 192, minCoverageTicks: 48 };
 
-  it('uzun süre tabanda ve stoğu birikmiş tesis kapanır', () => {
-    expect(shouldDivest({ ...temel, utilization: 0.10, coverageTicks: 200, idleTicks: 150 }))
-      .toBe(true);
+  it('uzun süredir stoğu erimeyen tesis kapanır', () => {
+    expect(shouldDivest({ ...temel, coverageTicks: 200, idleTicks: 250 })).toBe(true);
   });
 
   it('★ geçici durgunluk kapatma sebebi değildir', () => {
-    expect(shouldDivest({ ...temel, utilization: 0.10, coverageTicks: 200, idleTicks: 20 }))
-      .toBe(false);
+    expect(shouldDivest({ ...temel, coverageTicks: 200, idleTicks: 20 })).toBe(false);
   });
 
   it('★ stok birikmemişse sorun talep değildir — kapatma', () => {
-    expect(shouldDivest({ ...temel, utilization: 0.10, coverageTicks: 5, idleTicks: 300 }))
-      .toBe(false);
+    expect(shouldDivest({ ...temel, coverageTicks: 5, idleTicks: 300 })).toBe(false);
   });
 
-  it('çalışan tesise dokunulmaz', () => {
-    expect(shouldDivest({ ...temel, utilization: 0.8, coverageTicks: 300, idleTicks: 300 }))
-      .toBe(false);
+  it('★ kısmanın oturması beklenir: 2 günden kısa birikim yetmez', () => {
+    // Kısma ≤%5/tur ile ~20 turda oturur. Çıkış kararı ondan belirgin biçimde
+    // yavaş olmalı, yoksa kısmanın daha bitirmediği işi bozar.
+    expect(shouldDivest({ ...temel, coverageTicks: 300, idleTicks: 191 })).toBe(false);
+    expect(shouldDivest({ ...temel, coverageTicks: 300, idleTicks: 193 })).toBe(true);
   });
 
-  it('★ tabana inmemiş ama belirgin kısılmış tesis de kapanır', () => {
-    // Ölçülen gerçek durum: kısma kademeli olduğu için fazla arzdaki tesis
-    // 0,45'te dengeleniyor ve tabana (0,10) hiç inmiyordu.
-    expect(shouldDivest({ ...temel, utilization: 0.45, coverageTicks: 300, idleTicks: 200 }))
-      .toBe(true);
+  it('★ karar KISMA SEVİYESİNE bakmaz — aynı sinyale iki denetleyici asılmaz', () => {
+    // Kısma zaten fazla arza verilen cevaptır; tesisi "kısılmış olduğu için"
+    // kapatmak fazla arzı iki kez cezalandırır. Ölçüldü: kural kısmaya
+    // bağlıyken NPC üretim payı %81,5'ten %59,6'ya düştü (R60).
+    //
+    // Girdide kısma seviyesi diye bir alan YOKTUR; bu test onu korur.
+    const anahtarlar = Object.keys({ ...temel, coverageTicks: 0, idleTicks: 0 });
+    expect(anahtarlar).not.toContain('utilization');
+    expect(anahtarlar).not.toContain('idleBelow');
   });
 });

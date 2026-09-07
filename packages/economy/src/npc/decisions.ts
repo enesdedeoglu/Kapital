@@ -376,31 +376,48 @@ export function strategicNeed(inputSupply: number, outputSupply: number): number
  * kapasiteyi yok eder ve kıtlık derinleşir.
  */
 export interface DivestInput {
-  /** Tesisin şu anki kapasite kullanımı. */
-  readonly utilization: number;
   /**
-   * Atıl sayılma eşiği.
+   * Eldeki çıktı stoğu kaç turluk üretime denk.
    *
-   * ★ Önce kısma TABANI (0,10) kullanılıyordu ve kural neredeyse hiç
-   * tetiklenmiyordu: kısma kademelidir (≤%5/tur) ve orta düzey fazla arzda
-   * tesis 0,45 civarında dengelenip tabana hiç inmez. Ölçüldü — 26 buğday
-   * tarlası %45 kullanımda 31.756 kg satılmamış stokla oturuyordu (R59).
+   * ★ Çıkış kararı KISMA SEVİYESİNE bakmaz. Kısma zaten fazla arza verilen
+   * cevaptır; tesisi "kısılmış olduğu için" kapatmak aynı hata sinyaline
+   * ikinci bir denetleyici asmaktır ve fazla arzı iki kez cezalandırır.
+   * Ölçüldü (R60): kural kısma seviyesine bağlıyken NPC üretim payı %81,5'ten
+   * %59,6'ya düştü — bandın (%60–80) üstünden girip altından çıktı, üç tohum
+   * 59,3/59,4/59,6'da toplandı.
+   *
+   * Kısmanın DÜZELTEMEDİĞİ şey ölçülür: kısma üretimi geri çektiği hâlde stok
+   * hâlâ erimiyorsa sorun üretim hızı değil, malın alıcısının olmamasıdır.
    */
-  readonly idleBelow: number;
-  /** Eldeki çıktı stoğu kaç turluk üretime denk. */
   readonly coverageTicks: number;
-  /** Bu tesis kaç turdur tabanda. */
+  /** Stok kısmanın hedefinin üstünde kaç turdur duruyor. */
   readonly idleTicks: number;
-  /** Tabanda geçmesi gereken en az tur. */
+  /**
+   * Kapatmadan önce geçmesi gereken en az tur.
+   *
+   * Kısma ≤%5/tur ile ~20 turda oturur; çıkış kararı ondan belirgin biçimde
+   * YAVAŞ olmalı, yoksa kısmanın daha bitirmediği işi bozar.
+   */
   readonly minIdleTicks: number;
+  /**
+   * Kapatmayı hak eden stok eşiği — ayrı bir sayı.
+   *
+   * ★ Önce eşik olarak minIdleTicks kullanılıyordu: tek sayı iki ayrı soruya
+   * (ne kadar süredir? ne kadar stok?) cevap veriyordu.
+   */
+  readonly minCoverageTicks: number;
 }
 
+/**
+ * Tesis kalıcı olarak fazla mı — kapatılmalı mı.
+ *
+ * İki bağımsız şart: yeterince UZUN süredir stok erimiyor ve şu an elde
+ * gerçekten satılmamış mal var.
+ */
 export function shouldDivest(input: DivestInput): boolean {
-  const { utilization, idleBelow, coverageTicks, idleTicks, minIdleTicks } = input;
-  // Kısma bu tesisi belirgin biçimde geri çekmiş mi.
-  if (utilization > idleBelow) return false;
-  // Yeterince uzun süredir mi: bir günlük durgunluk kapatma sebebi değil.
+  const { coverageTicks, idleTicks, minIdleTicks, minCoverageTicks } = input;
+  // Bir günlük durgunluk kapatma sebebi değil: kısmanın işini bitirmesi beklenir.
   if (idleTicks < minIdleTicks) return false;
   // Ve mal gerçekten satılmıyor mu: stok birikmediyse sorun talep değildir.
-  return coverageTicks > minIdleTicks;
+  return coverageTicks > minCoverageTicks;
 }

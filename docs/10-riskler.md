@@ -1722,6 +1722,74 @@ cevap diye kullanmak hatanın kaynağıydı.
 
 ---
 
+## R60 — Aynı hata sinyaline iki denetleyici: kısma + kapatma
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R59 kapı teşhisi · **Durum:** ✅ çözüldü
+
+R59 kapıyı 8,10,8,8,8'den **7,9,9,9,7**'ye taşıdı: üç tohum yükseldi, iki tohum
+düştü. Yönlü kıtlık (R59b) tam istendiği gibi çalıştı — tohum 0'da sonradan
+yapılan sebze bahçesi yatırımı 26 → **0**, tütün çiftliği 10 → 4, tütün
+üretici stoğu 6.255 → 1.169, ekmeğin "girdi yetersiz" sayısı iki tohumda
+1296 → 164 ve 932 → 246. Dolu ambara sermaye akışı durdu.
+
+Ama birleşik etki bandı ıskaladı: **NPC üretim payı %81,5 → %59,6**. Hedef
+%60–80. Bandın üstünden girip altından çıktı, üstelik üç tohum 59,3 / 59,4 /
+59,6'da toplandı — bu dağılım değil, yapısal bir dip.
+
+### Sebep
+
+`shouldDivest`'in ilk şartı kısma seviyesine bakıyordu:
+
+```ts
+if (utilization > idleBelow) return false;   // utilization = KISMA seviyesi
+```
+
+Ve `idle_since_tick` damgası da aynı sayıya bağlıydı (`capped <= idleBelow`).
+
+Kısma zaten fazla arza verilen cevaptır. Tesisi "kısılmış olduğu için"
+kapatmak, **aynı hata sinyaline ikinci bir denetleyici asmaktır**: fazla arz
+önce üretim kısılarak, sonra tesis kapatılarak iki kez cezalandırılır. İki
+denetleyici birbirini görmediği için düzeltme toplanır ve hedefin öbür tarafına
+geçer — kontrol teorisindeki klasik aşırı düzeltme.
+
+Bu, R59'la **birebir aynı sınıfta** bir hata: bir sayıyı iki farklı sorunun
+cevabı diye kullanmak. Üçüncü tekrarı (R54 → R59 → R60).
+
+### Yanlış okuma — kayda geçsin
+
+İlk teşhisim "demir kıtlığı" idi: çelik iki tohumda 352 ve 353 kez girdisiz
+kaldı (önce sıfırdı) ve demir madeni sayısı 4 → 2 olmuştu. Yanlış. Teşhisteki
+`kullanim` sütunu `AVG(f.utilization)`, yani **kısma seviyesi** — gerçekleşen
+kullanım değil. Demir madenleri 1,00'da, hiç kısılmamış, ürettiğinin hepsini
+satıyor (stok 36 birim). Kıtlık yok: 6 çelik fabrikası zincirin nihai talebinin
+gerektirdiğinden fazla ve kısma onları ancak %53'e indirebiliyor. "Girdi
+yetersiz" orada kıtlığı değil, **fazla kapasitenin boşa dönmesini** ölçüyordu.
+
+Zincir talebinin kendisi sağlamdı: `city_demand.demand_units` İSTENEN talebi
+yazar (`fulfilled_units` ayrı sütundur), yani kıtlık ölçülen talebi bastırıp
+kendini besleyen bir döngü kurmuyor. Bu kontrol edildi ve temiz çıktı.
+
+### Düzeltme
+
+Çıkış kararı artık kısmanın **düzeltemediği** şeye bakar: kısma üretimi geri
+çektiği hâlde stok hâlâ erimiyorsa sorun üretim hızı değil, malın alıcısının
+olmamasıdır.
+
+- `idle_since_tick` damgası: `coverage > throttleCfg.targetTicks * bias`
+  (stok kısmanın hedefinin üstünde kaldığı sürece saat işler).
+- `shouldDivest` girdisinde kısma seviyesi diye bir alan **yoktur** — bir test
+  bunu koruyor.
+- Süre ve stok eşiği **ayrı iki sayı** oldu (`minIdleTicks`,
+  `minCoverageTicks`); önce tek sayı iki soruya cevap veriyordu.
+- Kapatma kısmadan belirgin biçimde yavaş: kısma ≤%5/tur ile ~20 turda oturur,
+  kapatma 192 tur (2 gün) ister.
+
+`npc.divest`: `{ minIdleTicks: 192, minCoverageTicks: 48 }`.
+
+Büyüklükler ampiriktir, kapı ölçer; düzeltilen şey yapıdır.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -1863,7 +1931,8 @@ kendi kendini yukarıda tutar.
 | R56 | Tur belirleyici değil: aynı tohum farklı dünya | 🔴 Kritik | ✅ F8 — döngü sorgularına `ORDER BY` |
 | R57 | Tur tohumu duvar saatinden türüyor | 🔴 Kritik | ✅ F8 — dünya tohumu + `seq` · sayısal kalıntı biliniyor |
 | R58 | NPC kötü yatırımdan çıkamıyor (tek yönlü cırcır) | 🔴 Kritik | ✅ F8 — `shouldDivest` |
-| R59 | Kıtlık ölçüsü simetrik: dolu ambar cazip görünüyor | 🔴 Kritik | ✅ F8 — yönlü `kitlik` + `idleBelow` |
+| R59 | Kıtlık ölçüsü simetrik: dolu ambar cazip görünüyor | 🔴 Kritik | ✅ F8 — yönlü `kitlik` |
+| R60 | Aynı sinyale iki denetleyici: kısma + kapatma | 🔴 Kritik | ✅ F8 — çıkış kısmadan ayrıldı |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

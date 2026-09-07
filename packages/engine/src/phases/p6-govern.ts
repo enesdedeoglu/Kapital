@@ -74,8 +74,8 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const throttleCfg = configValue<{ targetTicks: number; maxStepPerTick: number; floor: number }>(
     tick, 'npc.throttle', { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 },
   );
-  const divestCfg = configValue<{ minIdleTicks: number; idleBelow: number }>(
-    tick, 'npc.divest', { minIdleTicks: 96, idleBelow: 0.5 },
+  const divestCfg = configValue<{ minIdleTicks: number; minCoverageTicks: number }>(
+    tick, 'npc.divest', { minIdleTicks: 192, minCoverageTicks: 48 },
   );
   const clearCfg = configValue<{ targetTicks: number; maxDiscount: number }>(
     tick, 'retail.clearance', { targetTicks: 8, maxDiscount: 0.25 },
@@ -259,9 +259,17 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
                      WHERE id = ${facility.facility_id}::uuid`;
           out.throttled++;
         }
-        // Tabana inildiği tur damgalanır, tabandan çıkınca temizlenir (R58):
-        // çıkış kararı "ne kadar süredir tabanda" sorusunu buradan okur.
-        const tabanda = capped <= divestCfg.idleBelow;
+        /*
+         * Çıkış saati: stok kısmanın HEDEFİNİN üstünde kaldığı sürece işler,
+         * hedefin altına inince sıfırlanır.
+         *
+         * ★ Önce KISMA SEVİYESİ damgalıyordu (capped <= idleBelow). Kısma
+         * zaten fazla arza verilen cevaptır; onu kapatma gerekçesi saymak aynı
+         * hata sinyaline ikinci denetleyici asmaktı (R60). Burada kısmanın
+         * BAŞARAMADIĞI şey ölçülür: üretim geri çekildiği hâlde stok hâlâ
+         * erimiyorsa malın alıcısı yoktur.
+         */
+        const tabanda = coverage > throttleCfg.targetTicks * bias;
         await sql`
           UPDATE facilities
              SET idle_since_tick = ${tabanda ? sql`COALESCE(idle_since_tick, ${tick.seq})` : sql`NULL`}
@@ -990,13 +998,13 @@ async function throttlePlayerFacilities(
  */
 async function divestIdle(
   sql: Sql, tick: EngineTick, companyId: string,
-  cfg: { minIdleTicks: number; idleBelow: number },
+  cfg: { minIdleTicks: number; minCoverageTicks: number },
 ): Promise<number> {
   const adaylar = await sql<{
-    id: string; utilization: number; idle_since_tick: bigint;
+    id: string; idle_since_tick: bigint;
     base_capacity: number; stock: bigint;
   }[]>`
-    SELECT f.id, f.utilization, f.idle_since_tick, ft.base_capacity,
+    SELECT f.id, f.idle_since_tick, ft.base_capacity,
            COALESCE((SELECT SUM(b.quantity) FROM inventory_batches b
                       JOIN inventories i ON i.id = b.inventory_id
                      WHERE i.facility_id = f.id AND b.product_id = r.output_product_id), 0) AS stock
@@ -1012,10 +1020,10 @@ async function divestIdle(
     const perTick = a.base_capacity;
     if (!(perTick > 0)) continue;
     if (!shouldDivest({
-      utilization: a.utilization, idleBelow: cfg.idleBelow,
       coverageTicks: Number(a.stock) / 1000 / perTick,
       idleTicks: Number(tick.seq - a.idle_since_tick),
       minIdleTicks: cfg.minIdleTicks,
+      minCoverageTicks: cfg.minCoverageTicks,
     })) continue;
 
     await sql`
