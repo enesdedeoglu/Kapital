@@ -2034,6 +2034,72 @@ ilerleyiş tasarımını değiştireceği için reddedildi.
 
 ---
 
+## R64/R65 — `week1_value` döngüsel kilitte; ve raf doluluğu yanlış teoriydi
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R63 sonrası kapı koşumu · **Durum:** ⏳ ölçülüyor
+
+R63'ün ölçüt taşıması kapıyı **8,11,11,12,11**'e çıkardı (bir tohum 12/13).
+Kalan iki gerçek arıza: `volatility` (2/5) ve `week1_value` (0/5).
+
+★ Bu koşumda simülasyon kodu DEĞİŞMEDİ, yalnız ölçüt değişti. Her tohumdaki
++1 ölçüt takasından geliyor. `supply_demand`'in 2/5 → 3/5 çıkıp medyanının
+✓'ye dönmesi **gürültüdür** (R57'nin artık UUID belirsizliği); rapor da
+`⚠ KARARSIZ` diye işaretliyor. Kazanç sayılmadı.
+
+### Ölçüldü: çeşitlilik tek başına açıklıyor
+
+| | oyuncu | NPC |
+|---|---|---|
+| dükkân | 182 | 27 |
+| raf doluluğu | %18,1 | %3,9 |
+| **teklif çeşitliliği** | **1,93** | **4,00** |
+| dükkân başına satış | 7,0 kg/tur | 14,1 kg/tur |
+
+```
+1,93 / 4,00 × 14,1 = 6,80 kg/tur   (tahmin)
+                      7,00 kg/tur   (ölçülen)
+```
+
+Oyuncu hacmin %77'sini taşıyıp cironun %52'sini alıyor: kg başına NPC 3 kat
+kazanıyor, çünkü sigara satabiliyor.
+
+### Döngüsel kilit
+
+| | gereken şirket değeri |
+|---|---|
+| Sigara satmak (Lv4) | 140.000 ₺ |
+| Oyuncuların hafta sonu değeri | **56.718 ₺** |
+| Kapının `week1_value` hedefi | 100.000–250.000 ₺ |
+
+100.000 ₺'ye ulaşmak için sigara, sigara için 140.000 ₺. R50'nin Lv2'de bulup
+kırdığı kilidin aynısı — ve R50'nin notu sonraki basamaklar için **"merdiven
+kendi kendini toparlar"** demişti. **Ölçüm bu tahmini çürüttü**: oyuncular
+1,95'te takılı.
+
+Düzeltme (oyuncunun kararı): Lv3 değer şartı 80.000 → 45.000 ₺, Lv4
+140.000 → 75.000 ₺. Kilit seviyeleri ve ürün sırası aynı kaldı.
+
+★ XP ve hacim şartlarına DOKUNULMADI. Merdivende dört şart var ve hepsi
+birden tutmalı; yanlış olanı indirmek hiçbir şey açmaz. Hangisinin bağladığı
+`teshis.sql`'in R65 bloğuyla ÖLÇÜLECEK — her oyuncunun bir sonraki seviyesi
+için dört şartın da karşılanma oranı.
+
+### Gönderilmeden geri alınan düzeltme — kayda geçsin
+
+Önce şöyle teşhis etmiştim: oyuncular sermayeyi dükkânlara yayıp rafları boş
+bırakıyor; `canInvest`'in `stockedRatio` kapısı da "dükkânda tek kalem varsa
+dolu sayar" diye bozuk. Vekilin bozuk olduğu DOĞRUydu.
+
+Ama düzeltmeyi yazdıktan sonra sayılar teoriyi çürüttü: **NPC dükkânları
+%3,9 dolulukla iki kat satıyor.** Yüksek doluluk başarı işareti değil, tersi.
+Gerçek doluluğa 0,6 eşiği koymak, kâr edecekleri dükkânı açmalarını
+engelleyecekti. Geri alındı.
+
+**Ders:** vekilin bozuk olduğunu görmek, yerine koyacağın şeyin doğru
+olduğunu göstermez.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2180,6 +2246,7 @@ kendi kendini yukarıda tutar.
 | R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim + açık düzeltildi · zincir/rekabet ölçülüyor |
 | R62 | "Oyuncuya yer bırak" yalnız dünya kurulumunda | 🔴 Kritik | ✅ F8 — `NPC_CAPACITY_SHARE` tek kaynak |
 | R63 | Kapı uzun vade hedefini 7 günde ölçüyordu | 🔴 Kritik | ✅ F8 — `player_retail_share` · üretim payı F11'e |
+| R65 | `week1_value` döngüsel kilitte: çeşitlilik seviyeye bağlı | 🔴 Kritik | ⏳ Lv3/Lv4 değer şartı indi · bağlayan şart ölçülüyor |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

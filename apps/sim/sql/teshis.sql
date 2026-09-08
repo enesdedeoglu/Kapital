@@ -175,3 +175,38 @@ SELECT p.code,
   FROM investment_opportunities o JOIN products p ON p.id = o.product_id
  WHERE o.tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
  GROUP BY 1 ORDER BY yatirilabilir DESC;
+
+\echo '=== R65 — SEVİYE MERDİVENİ: hangi şart bağlıyor? ==='
+-- ★ Merdivende DÖRT şart var (XP, değer, hacim, ürün) ve hepsi birden
+-- tutmalı. Yanlış olanı indirmek hiçbir şey açmaz; hangisinin bağladığı
+-- tahmin edilmeyecek, ölçülecek.
+--
+-- Her oyuncunun BİR SONRAKİ seviyesi için her şartın karşılanma oranı.
+-- Oran < 1 olan şart bağlayandır; en küçüğü asıl darboğazdır.
+WITH oyuncu AS (
+  SELECT c.id, c.level, c.experience,
+         GREATEST(cs.peak_company_value, COALESCE(cf.company_value, 0)) AS deger,
+         cs.total_trade_volume AS hacim,
+         cs.total_units_produced AS uretim,
+         cs.distinct_products_produced AS urun
+    FROM companies c
+    JOIN company_stats cs ON cs.company_id = c.id
+    LEFT JOIN LATERAL (
+      SELECT company_value FROM company_financials
+       WHERE company_id = c.id ORDER BY tick_id DESC LIMIT 1
+    ) cf ON TRUE
+   WHERE c.kind = 'PLAYER'
+),
+hedef AS (
+  SELECT o.*, l.required_xp, l.required_company_value,
+         l.required_trade_volume, l.required_units_produced,
+         l.required_distinct_products, l.title
+    FROM oyuncu o JOIN company_levels l ON l.level = o.level + 1
+)
+SELECT level AS su_anki, title AS sonraki, COUNT(*) AS oyuncu,
+       ROUND(AVG(LEAST(1, experience::numeric / NULLIF(required_xp,0))), 2)          AS xp,
+       ROUND(AVG(LEAST(1, deger::numeric  / NULLIF(required_company_value,0))), 2)   AS deger,
+       ROUND(AVG(LEAST(1, hacim::numeric  / NULLIF(required_trade_volume,0))), 2)    AS hacim,
+       ROUND(AVG(LEAST(1, uretim::numeric / NULLIF(required_units_produced,0))), 2)  AS uretim,
+       ROUND(AVG(LEAST(1, urun::numeric   / NULLIF(required_distinct_products,0))),2) AS urun
+  FROM hedef GROUP BY 1,2 ORDER BY 1;

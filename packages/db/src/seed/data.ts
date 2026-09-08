@@ -242,9 +242,29 @@ export const companyLevels = [
    * kendi kendini toparlar.
    */
   { level: 2,  xp: 200,     value: 34_000,    volume: 6_000,    units: 0,     products: 0, title: 'Dükkân Sahibi' },
-  { level: 3,  xp: 2_000,   value: 80_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
+  /*
+   * ★ Lv3/Lv4 DEĞER şartı indirildi (R65) — döngüsel kilit.
+   *
+   * Ölçüldü: oyuncu dükkânı 1,93 ürün satıyor, NPC dükkânı 4,00. Dükkân
+   * başına satışı tek başına bu açıklıyor (1,93/4,00 × 14,1 = 6,80 tahmin,
+   * 7,00 ölçülen). Sigara Lv4'te ve yüksek değerli: oyuncu hacmin %77'sini
+   * taşıyıp cironun %52'sini alıyor, kg başına NPC 3 kat kazanıyor.
+   *
+   * Döngü: 100.000 ₺ değere ulaşmak için sigara satmak gerekiyordu, sigara
+   * satmak için 140.000 ₺ değer. Oyuncular hafta sonunda 56.718 ₺'de takılı
+   * kalıyor (seviye 1,95) ve kapının week1_value hedefi hiç geçmiyordu.
+   *
+   * Bu, R50'nin Lv2'de bulup kırdığı kilidin aynısı. R50'nin notu sonraki
+   * basamaklar için "merdiven kendi kendini toparlar" demişti; ÖLÇÜM BU
+   * TAHMİNİ ÇÜRÜTTÜ — toparlanma olmadı.
+   *
+   * Kilit seviyeleri ve ürün sırası AYNI kaldı; yalnız basamak alçaldı.
+   * XP ve hacim şartlarına DOKUNULMADI: hangisinin bağladığı ölçülecek
+   * (teshis.sql R65 bloğu), tahminle indirilmeyecek.
+   */
+  { level: 3,  xp: 2_000,   value: 45_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
   // Sebze Bahçesi artık Lv2'de açılıyor (R33); başlık Lv2'ye taşındı.
-  { level: 4,  xp: 4_500,   value: 140_000,   volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },
+  { level: 4,  xp: 4_500,   value: 75_000,    volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },
   // Lv4'te Sebze Bahçesi açıldı: artık üretim şartı konabilir.
   { level: 5,  xp: 9_000,   value: 240_000,   volume: 320_000,  units: 500,   products: 1, title: 'Çiftçi' },
   { level: 6,  xp: 17_000,  value: 400_000,   volume: 620_000,  units: 2_000, products: 2, title: 'Değirmenci' },
