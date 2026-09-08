@@ -1,7 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
   clearanceFactor, decidePrice, demandGapScore, inputBid, investmentScore, leverMultiplier,
-  outputThrottle, priceTrendScore,
+  NPC_CAPACITY_SHARE, outputThrottle, priceTrendScore,
   shouldDivest,
   strategicNeed,
   PRICE_MARKUP_BAND,
@@ -730,7 +730,15 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
   return sql<Opportunity[]>`
     WITH saglik AS (
       SELECT product_id, f_supply, f_sellers, f_stability,
-             (demand_units - supply_units) / 1000.0 / 96.0 AS gap_per_tick,
+             /*
+              * ★ Açığın YALNIZ NPC payı. Kalanı oyuncuya bırakılır (madde 31).
+              * Bu kural önce yalnız dünya kurulumunda vardı; çalışma anında
+              * NPC'ler açığın %100'ünü kovalıyordu ve kurulum niyeti yedi gün
+              * içinde eziliyordu. Ölçüldü (R62): NPC üretim payı %78,6'dan
+              * %98,6'ya fırladı, oyunculara üretimin %1,4'ü kaldı.
+              */
+             (demand_units - supply_units) / 1000.0 / 96.0
+               * ${NPC_CAPACITY_SHARE} AS gap_per_tick,
              /*
               * ★ YÖNLÜ kıtlık. f_supply SİMETRİKtir (1 - |oran-1|/0,5):
               * oranı 2 olan FAZLA arzdaki ürünün f_supply'ı da 0 çıkar, tıpkı

@@ -1912,6 +1912,56 @@ iki AŞAMASINI karşılaştırır, o göreli bir sorudur ve orada kitlik kalıyo
 
 ---
 
+## R62 — "Oyuncuya yer bırak" kuralı yalnız dünya kurulumunda vardı
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R61 sonrası kapı koşumu · **Durum:** ✅ çözüldü
+
+R61'in açık düzeltmesi çalıştı ve **tahmin sınandı**:
+
+| ürün | R61 öncesi açık/tur | R61 sonrası |
+|---|---|---|
+| BREAD | **+140,9** (yolda 0) | **−68,4** |
+| FLOUR | +31,8 | −21,1 |
+| FURNITURE | 0,3 · sıralamada **1.** | 0,5 · sıralamada **4.** |
+
+Ekmeğin 140 birimlik boşluğu kapandı, mobilya birincilikten düştü — mekanizma
+tuttu. En sağlam kanıt: `retail_fulfilment` ilk kez geçti, **mal bulunamayan
+0/4**. Kapı 9,9,10,10,9'dan **7,10,8,11,10**'a geçti; bir tohum 11/13 ile
+rekor kırdı.
+
+Ama `npc_share` **%78,6 → %98,6** ile çöktü (4/5 → 0/5). Oyuncular üretimin
+%1,4'ünü yapıyor.
+
+### Sebep
+
+`capacityGaps(..., npcShare = 0.7)` — "dünyanın %70'ini NPC karşılar, kalanı
+oyuncuya kalır" (madde 31) — yalnızca dünya KURULUMUNDA uygulanıyordu.
+Çalışma anındaki NPC yatırım yolunda (`loadOpportunities`) bu kural hiç yoktu:
+`gap_per_tick` açığın TAMAMIydı ve NPC'ler %100'ünü kovalıyordu. Kurulumun
+niyeti yedi gün içinde eziliyordu.
+
+★ Bunun yedi faz boyunca görünmemesinin sebebi bir **KAZA**ydı: NPC'ler açık
+kovalamakta zaten beceriksizdi — yatırım skoru eşiği hiç geçmiyordu (R61).
+Oyuncuya yer kalması bir tasarım değil, bir kusurun yan etkisiydi. Skor
+düzeltilip NPC'ler etkili olunca kaza bitti.
+
+**Ders:** bir kuralın tuttuğunu görmek, o kuralın YAZILDIĞI anlamına gelmiyor.
+Doğru sonuç yanlış sebepten de gelebilir ve o sebep düzeltildiğinde kaybolur.
+
+### Düzeltme
+
+`NPC_CAPACITY_SHARE = 0.7` tek kaynak oldu; hem `capacityGaps` varsayılanı hem
+çalışma anındaki `gap_per_tick` onu kullanıyor. NPC'ler açığın %70'ini
+kovalıyor, %30 oyuncuya kalıyor — kapının %60–80 bandının tam ortası.
+
+★ Ürün başına `products.npc_target_market_share` sütunu BİLEREK kullanılmadı:
+adı "npc" diyor ama `health.ts` onu OYUNCU hedef payı olarak okuyor
+(varsayılan 0,5) ve kapının kendi bandıyla da çelişiyor. Anlamı bulanık bir
+sayıyı üçüncü bir soruya cevap yapmak bu fazın tekrar eden hatasıydı
+(R54/R59/R60/R61). Önce o sütunun anlamı netleşmeli — ayrı iş.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2056,6 +2106,7 @@ kendi kendini yukarıda tutar.
 | R59 | Kıtlık ölçüsü simetrik: dolu ambar cazip görünüyor | 🔴 Kritik | ✅ F8 — yönlü `kitlik` |
 | R60 | Aynı sinyale iki denetleyici: kısma + kapatma | 🔴 Kritik | ✅ F8 — çıkış kısmadan ayrıldı · şiddet R61'de geri geldi |
 | R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim + açık düzeltildi · zincir/rekabet ölçülüyor |
+| R62 | "Oyuncuya yer bırak" yalnız dünya kurulumunda | 🔴 Kritik | ✅ F8 — `NPC_CAPACITY_SHARE` tek kaynak |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

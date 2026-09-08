@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { capacityGaps, chainRequirements, type ChainRecipe } from './chain.js';
+import {
+  capacityGaps, chainRequirements, NPC_CAPACITY_SHARE, type ChainRecipe,
+} from './chain.js';
 
 /** Tohumdaki ekmek zinciri: 4 buğday → 3 un · 1 un → 4 ekmek. */
 const RECIPES: ChainRecipe[] = [
@@ -101,5 +103,23 @@ describe('kapasite açığı', () => {
   it('kapasite hiç yoksa açık sonsuzdur', () => {
     const gaps = capacityGaps(req, new Map(), 0.7);
     expect(find(gaps, 'BREAD').shortfall).toBe(Infinity);
+  });
+});
+
+describe('★ NPC payı tek kaynaktır (R62)', () => {
+  it('dünyanın tamamı NPC\'lere bırakılmaz — oyuncuya yer kalır', () => {
+    expect(NPC_CAPACITY_SHARE).toBeGreaterThan(0);
+    expect(NPC_CAPACITY_SHARE).toBeLessThan(1);
+  });
+
+  it('★ capacityGaps varsayılanı aynı sabiti kullanır', () => {
+    // Kural önce yalnız dünya kurulumunda vardı; çalışma anındaki NPC yatırımı
+    // açığın %100'ünü kovalıyordu ve kurulum niyeti yedi günde eziliyordu.
+    const req = [{ productCode: 'BREAD', units: 100, depth: 0 }];
+    const bos = new Map<string, number>();
+    const [varsayilan] = capacityGaps(req, bos);
+    const [acik] = capacityGaps(req, bos, NPC_CAPACITY_SHARE);
+    expect(varsayilan!.requiredPerTick).toBe(acik!.requiredPerTick);
+    expect(varsayilan!.requiredPerTick).toBe(100 * NPC_CAPACITY_SHARE);
   });
 });

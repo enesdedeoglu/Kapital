@@ -92,16 +92,36 @@ export interface CapacityGap {
 }
 
 /**
+ * Dünyanın ne kadarını NPC'lerin karşılaması beklenir; kalanı oyunculara
+ * kalır (madde 31). NPC dünyası %100 karşılarsa oyuncuya yatırım yapacak yer
+ * kalmaz.
+ *
+ * ★ TEK KAYNAK. Bu kural önce yalnız dünya KURULUMUNDA uygulanıyordu; çalışma
+ * anındaki NPC yatırım yolunda hiç yoktu ve NPC'ler açığın %100'ünü
+ * kovalıyordu. Kurulum niyeti yedi gün içinde eziliyordu.
+ *
+ * Görünmemesinin sebebi bir KAZAydı: NPC'ler açık kovalamakta zaten
+ * beceriksizdi (yatırım skoru eşiği hiç geçmiyordu, R61). Skor düzeltilip
+ * NPC'ler etkili olunca kaza bitti ve NPC üretim payı %78,6'dan %98,6'ya
+ * fırladı — oyunculara üretimin %1,4'ü kaldı.
+ *
+ * ★ Ürün başına `products.npc_target_market_share` sütunu BİLEREK
+ * kullanılmıyor: adı "npc" diyor ama `health.ts` onu OYUNCU hedef payı olarak
+ * okuyor (varsayılan 0,5). Anlamı bulanık bir sayıyı üçüncü bir soruya cevap
+ * yapmak, bu fazın tekrar eden hatasıydı (R54/R59/R60/R61). Önce o sütunun
+ * anlamı netleşmeli.
+ */
+export const NPC_CAPACITY_SHARE = 0.7;
+
+/**
  * Gereksinimi mevcut kapasiteyle karşılaştırır.
  *
- * `npcShare`: dünyanın ne kadarını NPC'lerin karşılaması beklenir. Kalanı
- * oyuncular kurar (madde 31) — NPC dünyası %100 karşılarsa oyuncuya yatırım
- * yapacak yer kalmaz.
+ * `npcShare`: bkz. `NPC_CAPACITY_SHARE`.
  */
 export function capacityGaps(
   requirements: readonly ChainRequirement[],
   availablePerTick: ReadonlyMap<string, number>,
-  npcShare = 0.7,
+  npcShare = NPC_CAPACITY_SHARE,
 ): CapacityGap[] {
   return requirements.map((req) => {
     const target = req.units * npcShare;
