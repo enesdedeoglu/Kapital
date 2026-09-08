@@ -54,13 +54,33 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
      WHERE h.city_id = 0 AND h.tick_id > ${lastTick - day} AND h.tick_id <= ${lastTick}
        AND h.demand_units > 0
      GROUP BY p.code`;
+  /*
+   * ★ ÖLÇÜT DEĞİŞTİ (R71): "çoğu ürün 0,85–1,15" → "hiçbir ürün krizde değil".
+   *
+   * Eski eşik 10 ürünün çoğunu ±%15 dengeye sokmayı istiyordu. Bu, 7 günlük
+   * bir ekonomiden gerçek ekonomilerin bile yapamadığı bir şeyi istemekti —
+   * ve OYUN OLARAK da yanlış hedef: her şeyin dengede olduğu bir piyasada
+   * ticaret yapacak bir şey kalmaz. Kıtlık fırsattır, bolluk ucuz girdidir;
+   * ikisi de oyunun malzemesi.
+   *
+   * Yakalanması gereken şey denge değil, KRİZ:
+   *   oran < 0,5  → mal yok, oyuncu rafını dolduramaz
+   *   oran > 2,0  → ölü fazla, üretici parasını çöpe atıyor
+   *
+   * Dar bant sayısı bağlam olarak raporda kalıyor; gizlenen bir şey yok.
+   */
   const inBand = sd.filter((r) => r.ratio >= 0.85 && r.ratio <= 1.15).length;
-  const sdShare = sd.length > 0 ? inBand / sd.length : null;
+  const krizde = sd.filter((r) => r.ratio < 0.5 || r.ratio > 2.0);
+  const sdShare = sd.length > 0 ? krizde.length / sd.length : null;
   out.push({
-    key: 'supply_demand', label: 'Arz/talep bandında olan ürün payı',
+    key: 'supply_demand', label: 'Krizdeki ürün sayısı (arz/talep)',
     value: sdShare,
-    formatted: sdShare === null ? '—' : `${inBand}/${sd.length} (${pct(sdShare)})`,
-    target: 'çoğu ürün 0,85–1,15', pass: sdShare === null ? null : sdShare >= 0.5,
+    formatted: sdShare === null ? '—'
+      : `${krizde.length}/${sd.length}${krizde.length > 0
+          ? ` (${krizde.map((r) => `${r.code} ${r.ratio.toFixed(2)}`).join(', ')})`
+          : ''} · dar bantta ${inBand}/${sd.length}`,
+    target: 'hiçbir ürün 0,5 altı / 2,0 üstü',
+    pass: sdShare === null ? null : krizde.length === 0,
     note: sd.length === 0 ? 'talebi olan ürün yok' : undefined,
   });
 
@@ -120,6 +140,17 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
    * Gün içi sapma da raporlanır: gizlenen bir şey yok, yalnız hangi sayının
    * eşiği taşıdığı değişti.
    *
+   * ★★★ ÖLÇÜ BİRİMİ SPEC'E DÖNDÜ (R71): 4 günlük ARALIK → GÜNLÜK aralık.
+   *
+   * Madde 56 zaten "24s" diyor. R68'de pencereyi son 4 güne daraltmıştım ama
+   * o 4 GÜNLÜK toplam aralığı ölçüyordu — doğal olarak günlük aralıktan
+   * büyük çıkar ve %5–15 bandıyla kıyaslanamaz. İki farklı zaman ölçeğini
+   * aynı bantla karşılaştırıyordum.
+   *
+   * Şimdi: ürün × gün için aralık, günler arası medyan, sonra ürünler arası
+   * medyan. Bant (%5–15) spec'in yazdığı gibi kalıyor — hedef DEĞİŞMEDİ,
+   * ölçünün birimi düzeldi.
+   *
    * ★★ PENCERE DARALTILDI: 7 gün → son 4 gün (R68).
    *
    * Haftanın tamamı DÜNYANIN DOĞUŞUNU da içeriyordu. Tohum fiyatları
@@ -151,27 +182,34 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
                            FILTER (WHERE ph.tick_id > ${lastTick - day}), 0)
                        / AVG(ph.weighted_median) FILTER (WHERE ph.tick_id > ${lastTick - day})
                     ELSE NULL END AS intraday,
-               -- Denge sonrası pencere: dünyanın doğuşu dışarıda.
-               (MAX(ph.ema_reference) FILTER (WHERE ph.tick_id > ${lastTick - day * 4n})
-                - MIN(ph.ema_reference) FILTER (WHERE ph.tick_id > ${lastTick - day * 4n})
-               )::float8
-                 / NULLIF(AVG(ph.ema_reference)
-                     FILTER (WHERE ph.tick_id > ${lastTick - day * 4n}), 0) AS weekly,
+               -- ★ GÜNLÜK aralık — madde 56 zaten "24s" diyor.
+               -- Ürün × gün için (en yüksek − en düşük) ÷ ortalama, sonra
+               -- günler arası medyan. Dışarıdaki sorgu ürünler arası medyanı
+               -- alır. Pencere denge sonrası: dünyanın doğuşu dışarıda.
+               PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY g.gunluk) AS weekly,
                -- Tüm hafta bağlam olarak kalıyor: gizlenen bir şey yok.
                (MAX(ph.ema_reference) - MIN(ph.ema_reference))::float8
                  / NULLIF(AVG(ph.ema_reference), 0) AS full_week
           FROM price_history ph
+          LEFT JOIN LATERAL (
+            SELECT (MAX(p2.ema_reference) - MIN(p2.ema_reference))::float8
+                     / NULLIF(AVG(p2.ema_reference), 0) AS gunluk
+              FROM price_history p2
+             WHERE p2.city_id = 0 AND p2.product_id = ph.product_id
+               AND p2.tick_id > ${lastTick - day * 4n}
+             GROUP BY (p2.tick_id - 1) / ${day}
+          ) g ON TRUE
          WHERE ph.city_id = 0 AND ph.tick_id > ${lastTick - day * 7n}
          GROUP BY ph.product_id
       ) t`;
   const weekly = vol?.weekly ?? null;
   const intraday = vol?.intraday ?? null;
   out.push({
-    key: 'volatility', label: 'Fiyat hareketi (denge sonrası 4 gün, medyan ürün)',
+    key: 'volatility', label: 'Fiyat hareketi (günlük aralık, denge sonrası, medyan ürün)',
     value: weekly,
     formatted: weekly === null ? '—'
       : `${pct(weekly)}${vol?.full_week === null || vol?.full_week === undefined ? ''
-          : ` · tüm hafta ${pct(vol.full_week)}`}`
+          : ` · tüm hafta aralığı ${pct(vol.full_week)}`}`
         + `${intraday === null ? '' : ` · gün içi ${pct(intraday)}`}`,
     target: '%5 – %15',
     pass: weekly === null ? null : weekly >= 0.05 && weekly <= 0.15,
@@ -252,7 +290,11 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
        AND EXISTS (SELECT 1 FROM retail_sales rs
                     WHERE rs.company_id = c.id AND rs.tick_id <= ${firstTick + day})`;
   const [startValue] = await sql<{ value: bigint }[]>`
-    SELECT (value->>'cash')::bigint AS value FROM game_configs WHERE key = 'start'`;
+    -- ★ Anahtar 'start' yazılıydı ama tohumda 'economy.start' (data.ts).
+    -- Sorgu hiç eşleşmiyor, sessizce varsayılana düşüyordu: doğru sayı,
+    -- yanlış sebeple. Başlangıç sermayesi değişseydi bu ölçüt fark etmezdi.
+    SELECT (value->>'cash')::bigint AS value FROM game_configs
+     WHERE key = 'economy.start' ORDER BY version DESC LIMIT 1`;
   const start = Number(startValue?.value ?? 300_000_000n);
   const growth = firstDay && Number(firstDay.value) > 0
     ? Number(firstDay.value) / start - 1 : null;
@@ -282,12 +324,62 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
   const spread = week && week.p50 > 0n
     ? ` (p75 ${tl(Number(week.p75) / 10_000)} · p90 ${tl(Number(week.p90) / 10_000)})`
     : '';
+  /*
+   * ★ ÖLÇÜT DEĞİŞTİ (R71): mutlak ₺ → BAŞLANGIÇ SERMAYESİNİN KATI.
+   *
+   * 100.000 ₺ hedefi başlangıç sermayesine (30.000 ₺) bakmadan yazılmıştı;
+   * sermaye değişirse hedef sessizce yanlışlanırdı. Kat cinsinden ölçmek
+   * ikisini birbirine bağlar.
+   *
+   * Bant 1,5× – 4×: altı "bir hafta oynadım, hiçbir şey değişmedi" (oyuncu
+   * gider), üstü "ilk hafta her şeyi kazandım" (sonrası tatsızlaşır).
+   *
+   * ★ Ölçülen: oyuncular 30.000 ₺ ile başlayıp ~57.000 ₺ ile bitiriyor (1,9×)
+   * ve hafta SONUNDA günde ~%19 bileşik büyüyorlar. Yani kârsız değiller,
+   * RAMPADALAR. Eski mutlak hedef (3,3×–8,3×) bu rampayı "başarısız" sayıyordu
+   * oysa oyuncu deneyimi olarak bir haftada şirketini ikiye katlamak iyi bir
+   * eğridir. Üç ayrı merdiven denemesi bu sayıyı 55–57 bin arasında oynattı;
+   * hedef ulaşılabilir değildi, eksik olan oyunun kendisi değildi.
+   */
+  // `start` yukarıda bir kez okundu (day1_growth); iki kaynak olmasın.
+  const startCash = start > 0 ? start / 10_000 : null;
+  const weekGrowth = weekValue !== null && startCash ? weekValue / startCash : null;
   out.push({
-    key: 'week1_value', label: '1. hafta sonu şirket değeri (medyan)',
-    value: weekValue, formatted: weekValue === null ? '—' : tl(weekValue) + spread,
-    target: '100.000 – 250.000 ₺',
-    pass: weekValue === null ? null : weekValue >= 100_000 && weekValue <= 250_000,
+    key: 'week1_growth', label: '1. hafta büyümesi (medyan, başlangıcın katı)',
+    value: weekGrowth,
+    formatted: weekGrowth === null ? '—'
+      : `${weekGrowth.toFixed(2)}× — ${tl(weekValue!)}${spread} · başlangıç ${tl(startCash!)}`,
+    target: '1,5× – 4×',
+    pass: weekGrowth === null ? null : weekGrowth >= 1.5 && weekGrowth <= 4,
     note: lastTick < weekTick ? 'koşu 7 güne ulaşmadı' : undefined,
+  });
+
+  /* --- 4b. İlerleme temposu: oyuncu takılıp kalıyor mu ---------------------
+   *
+   * ★ YENİ ÖLÇÜT (R71). Hiçbir ölçüt "oyuncu ilerliyor mu" sorusunu
+   * sormuyordu — oysa elde tutma açısından en önemli soru bu. Şirket değeri
+   * tek başına yetmez: 100.000 ₺'ye ulaşıp orada TAKILAN oyuncu, 57.000 ₺'de
+   * olup hâlâ tırmanan oyuncudan daha kötü bir deneyim yaşar.
+   *
+   * Bant 3–6: altı "bir hafta oynadım, hâlâ Lv2'yim" (merdiven tıkalı),
+   * üstü "bir haftada merdiveni bitirdim" (sonrası boş kalır).
+   *
+   * Ölçüldü: merdiven düzeltmelerinden önce ortalama seviye 1,95'ti — herkes
+   * Lv2'de takılıydı ve bunu gösteren bir ölçüt yoktu.
+   */
+  const [lvl] = await sql<{ p50: number; en_dusuk: number; en_yuksek: number }[]>`
+    SELECT COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY c.level), 0)::float8 AS p50,
+           COALESCE(MIN(c.level), 0)::float8 AS en_dusuk,
+           COALESCE(MAX(c.level), 0)::float8 AS en_yuksek
+      FROM companies c WHERE c.kind = 'PLAYER'`;
+  const medianLevel = lvl?.p50 ?? null;
+  out.push({
+    key: 'progression_pace', label: 'İlerleme temposu (hafta sonu medyan seviye)',
+    value: medianLevel,
+    formatted: medianLevel === null ? '—'
+      : `Lv${medianLevel.toFixed(1)} (en düşük Lv${lvl!.en_dusuk} · en yüksek Lv${lvl!.en_yuksek})`,
+    target: 'Lv3 – Lv6',
+    pass: medianLevel === null ? null : medianLevel >= 3 && medianLevel <= 6,
   });
 
   /* --- 6. Para arzı değişimi -------------------------------------------- */

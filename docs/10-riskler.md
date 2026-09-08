@@ -2247,6 +2247,74 @@ Lv3'teki ~3.555'te.
 
 ---
 
+## R71 — Kapı ölçütleri oyunun hedefine göre yeniden yazıldı
+
+**Şiddet:** 🔴 Kritik · **Karar:** oyuncunun · **Durum:** ⏳ sınanıyor
+
+Oyuncu yetki verdi: ölçütler ve hedefler değiştirilebilir, amaç oyuncuyu
+oyunda tutan bir ilerleme ve düzgün işleyen bir ekonomi. Sınır: ölçütler
+GEÇSİN diye değil, DOĞRU ŞEYİ ÖLÇSÜN diye değişir — hepsi gevşetilirse elde
+yeşil ama anlamsız bir kapı kalır.
+
+### 1. `week1_value` → `week1_growth` · GEVŞETME (açıkça)
+
+Mutlak 100.000 ₺ hedefi, başlangıç sermayesine (30.000 ₺) bakmadan yazılmıştı;
+sermaye değişse hedef sessizce yanlışlanırdı. Kat cinsinden ölçmek ikisini
+bağlar. Bant **1,5× – 4×**.
+
+Ölçülen: oyuncular 1,9×'te ve hafta SONUNDA günde ~%19 bileşik büyüyorlar.
+Üç ayrı merdiven denemesi (kilit sırası, değer şartı, XP şartı) bu sayıyı
+55–57 bin arasında oynattı. Eksik olan oyunun kendisi değil, ulaşılamaz bir
+hedefti. Bu bir gevşetmedir ve öyle kaydedilmiştir.
+
+### 2. YENİ `progression_pace` · SIKILAŞTIRMA
+
+Hiçbir ölçüt "oyuncu ilerliyor mu" diye sormuyordu. Şirket değeri tek başına
+yetmez: 100.000 ₺'ye ulaşıp orada TAKILAN oyuncu, 57.000 ₺'de olup hâlâ
+tırmanandan daha kötü bir deneyim yaşar — elde tutma açısından asıl soru bu.
+
+Hafta sonu medyan seviye, bant **Lv3 – Lv6**. Altı "bir hafta oynadım, hâlâ
+Lv2'yim", üstü "bir haftada merdiveni bitirdim, sonrası boş".
+
+Merdiven düzeltmelerinden önce ortalama seviye 1,95'ti ve bunu gösteren hiçbir
+ölçüt yoktu.
+
+### 3. `supply_demand` → krizdeki ürün sayısı · ODAK DEĞİŞİMİ
+
+Eski eşik 10 ürünün çoğunu ±%15 dengeye sokmayı istiyordu. Bu hem 7 günlük bir
+ekonomiden gerçek ekonomilerin bile yapamadığını istemek, hem de OYUN OLARAK
+yanlış hedef: her şeyin dengede olduğu piyasada ticaret yapacak bir şey kalmaz.
+Kıtlık fırsattır, bolluk ucuz girdidir; ikisi de oyunun malzemesi.
+
+Yeni ölçüt krizi arıyor — oran < 0,5 (mal yok) veya > 2,0 (ölü fazla). Dar bant
+sayısı bağlam olarak raporda kalıyor.
+
+Yerelde ölçüldü: krizde 0/10 ama dar bantta yalnız 1/10. Yani dünya dengeden
+uzak AMA hiçbir yeri kırık değil — eski ölçütün ayıramadığı ayrım tam olarak bu.
+
+### 4. `volatility` günlük aralığa döndü · GEVŞETME DEĞİL, BİRİM DÜZELTMESİ
+
+Madde 56 zaten **"24s"** diyor. R68'de pencereyi son 4 güne daraltmıştım ama
+4 GÜNLÜK toplam aralığı ölçüyor ve onu günlük bant olan %5–15 ile
+kıyaslıyordum — iki farklı zaman ölçeği.
+
+Ölçüldü (aynı dünya): günlük aralık **%2,3**, 4 günlük aralık **%11,4**. Aynı
+bantla karşılaştırılamayacakları buradan görünüyor.
+
+Bant DEĞİŞMEDİ (%5–15, spec'in yazdığı gibi) ve düzeltilmiş ölçüt GEÇMİYOR:
+piyasa günlük ölçekte gerçekten donuk. Tasarım gün içi hareketi kasıtla
+sönümlüyor (EMA α=0,25, %15 devre kesici, NPC ±%3 bandı) ama spec günlük
+%5–15 istiyor. İkisi çelişiyor; çelişki artık görünür ve kayıtlı.
+
+### Yan bulgu: `day1_growth` yanlış config anahtarı okuyordu
+
+Sorgu `key = 'start'` arıyordu, tohumdaki anahtar ise `economy.start`
+(data.ts). Hiç eşleşmiyor, sessizce varsayılana (30.000 ₺) düşüyordu — doğru
+sayı, yanlış sebeple. Başlangıç sermayesi değişseydi ölçüt fark etmezdi.
+Düzeltildi; `week1_growth` ile aynı kaynaktan okuyor.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2396,7 +2464,8 @@ kendi kendini yukarıda tutar.
 | R65 | `week1_value` döngüsel kilitte: çeşitlilik seviyeye bağlı | 🔴 Kritik | ⏳ bağlayan şart XP çıktı · değer şartı indi |
 | R68 | Oynaklık ölçütü dünyanın doğuşunu sayıyordu | 🟠 Yüksek | ✅ F8 — pencere son 4 güne daraldı |
 | R69 | Oyuncu marjı NPC'nin altında; kârlılık değil RAMPA sorunu | 🔴 Kritik | ✅ ölçüldü — hafta sonu günde ~%19 büyüme |
-| R70 | Merdivenin darboğazı XP · 200'den 2.000'e on katlık uçurum | 🔴 Kritik | ⏳ Lv3 1.000, Lv4 2.500 |
+| R70 | Merdivenin darboğazı XP · 200'den 2.000'e on katlık uçurum | 🔴 Kritik | ✅ Lv3 1.000, Lv4 2.500 |
+| R71 | Kapı ölçütleri oyunun hedefine göre yeniden yazıldı | 🔴 Kritik | ⏳ 4 ölçüt · gerekçeleri ayrı ayrı kayıtlı |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |
