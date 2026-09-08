@@ -15,6 +15,11 @@ export interface PriceDecisionInput {
   readonly normalBand: number;
   readonly emergencyBand: number;
   readonly emergencyHealthBelow: number;
+  /**
+   * Satıcının kendi stok durumundan gelen fiyat eğimi (`scarcityPremium`).
+   * Verilmezse 1 — davranış değişmez.
+   */
+  readonly scarcityPremium?: number;
 }
 
 export interface PriceDecision {
@@ -37,12 +42,49 @@ export interface PriceDecision {
  * toplayıp geri satar (risksiz arbitraj). Market health düşük VE sapma
  * büyükse bant tek seferliğine genişler.
  */
+/**
+ * Stok kapsamına göre fiyat eğimi — satıcının deposu eriyorsa yukarı, birikiyorsa aşağı.
+ *
+ * ★ Ölçülen boşluk (R73): fiyat formülünde TALEP TERİMİ YOKTU.
+ *   desired = maliyet×(1+marj)×(1−w) + referans×w
+ * Referans fiyatın kendi geçmişinin EMA'sıdır; yani fiyat "maliyet artı kendi
+ * geçmişi"ne çıpalanmış, kapalı bir döngüydü. `marketHealth` yalnız ACİL
+ * durumda bandı genişletiyor, fiyatı hareket ettirmiyordu.
+ *
+ * Sonuç ölçümle sabit: beş dünyada GÜNLÜK fiyat aralığı %0,4–3,0 iken tüm
+ * hafta aralığı %10,5–20,5. Haftalık hareket maliyet değişiminden ve EMA
+ * sürüklenmesinden geliyor; günlük ölçekte fiyatı iten hiçbir şey yok.
+ *
+ * Önce talep tarafına günlük ritim eklendi (R72) ve HİÇBİR ŞEY değişmedi
+ * (%1,6 → %1,7): fiyat talebi okumadığı için okuyamayacağı bir sinyal
+ * eklenmişti. Eksik olan, satıcının kendi durumuna tepki vermesiydi.
+ *
+ * Kapsam, kısmanın zaten hesapladığı sayıdır (stok ÷ tur başına üretim).
+ * Hedefin altına inince fiyat yukarı, üstüne çıkınca aşağı eğilir. Bu
+ * perakendedeki `clearanceFactor`ün (R51) toptan karşılığıdır ve gerçek
+ * satıcı davranışıdır.
+ *
+ * ★ Bu bir DENGELEYİCİ döngüdür: fiyat artar → talep düşer → stok birikir →
+ * fiyat düşer. Fiyatın sürüklenmesini değil, TEPKİ VERMESİNİ sağlar.
+ */
+export function scarcityPremium(
+  coverageTicks: number, targetTicks: number, maxSwing: number,
+): number {
+  if (!(targetTicks > 0) || !(maxSwing > 0)) return 1;
+  if (!Number.isFinite(coverageTicks) || coverageTicks < 0) return 1;
+  // Hedefe göre bağıl sapma, ±1 ile sınırlı: boş depo +1, iki katı dolu −1.
+  const sapma = Math.max(-1, Math.min(1, (targetTicks - coverageTicks) / targetTicks));
+  return 1 + maxSwing * sapma;
+}
+
 export function decidePrice(input: PriceDecisionInput): PriceDecision {
   const target = mulMoney(input.unitCost, 1 + Math.max(0, input.targetMargin)).value;
   const weight = Math.max(0, Math.min(1, input.priceAggressiveness));
 
   const desiredRaw =
-    Number(target) * (1 - weight) + Number(input.reference) * weight;
+    (Number(target) * (1 - weight) + Number(input.reference) * weight)
+    // ★ Kıtlık primi: fiyatın talebe tepki verdiği TEK yer (R73).
+    * (input.scarcityPremium ?? 1);
   const desired = BigInt(Math.max(1, Math.round(desiredRaw))) as Money;
 
   if (input.currentPrice === null || input.currentPrice <= 0n) {

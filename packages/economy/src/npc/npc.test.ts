@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { money, mulberry32, mulMoney, qty, type Money } from '@kapital/shared';
 import { productionCapacity } from '../production/capacity.js';
-import {
+import { scarcityPremium,
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
   planInventory, representativeDistance, clearanceFactor, shouldDivest, strategicNeed,
   priceTrendScore, PRICE_TREND_FULL_SIGNAL, demandGapScore,
@@ -484,5 +484,35 @@ describe('★ talep açığı BÜYÜKLÜKÇE ölçülür (R61)', () => {
 
   it('kapasitesi bilinmeyen tesis puan almaz', () => {
     expect(demandGapScore(100, 0)).toBe(0);
+  });
+});
+
+describe('★ kıtlık primi — fiyatın talebe tepki verdiği tek yer (R73)', () => {
+  it('kapalı: davranış değişmez', () => {
+    expect(scarcityPremium(5, 8, 0)).toBe(1);
+    expect(scarcityPremium(5, 0, 0.15)).toBe(1);
+  });
+
+  it('hedefteyken nötrdür', () => {
+    expect(scarcityPremium(8, 8, 0.15)).toBeCloseTo(1, 10);
+  });
+
+  it('★ deposu eriyen satıcı fiyatı YUKARI çeker', () => {
+    expect(scarcityPremium(2, 8, 0.15)).toBeGreaterThan(1);
+    expect(scarcityPremium(0, 8, 0.15)).toBeCloseTo(1.15, 10);
+  });
+
+  it('★ deposu biriken satıcı fiyatı AŞAĞI çeker', () => {
+    expect(scarcityPremium(20, 8, 0.15)).toBeLessThan(1);
+  });
+
+  it('salınmasın diye sınırlıdır: iki katı dolu depo tabanı bulur', () => {
+    expect(scarcityPremium(16, 8, 0.15)).toBeCloseTo(0.85, 10);
+    expect(scarcityPremium(1000, 8, 0.15)).toBeCloseTo(0.85, 10);
+  });
+
+  it('bozuk girdi davranışı değiştirmez', () => {
+    expect(scarcityPremium(Number.NaN, 8, 0.15)).toBe(1);
+    expect(scarcityPremium(-3, 8, 0.15)).toBe(1);
   });
 });

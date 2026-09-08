@@ -358,7 +358,10 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'director.bands',   value: { healthy: 75, watch: 55, adjust: 35, stimulate: 20, hysteresisTicks: 6, directiveTtlTicks: 96 } },
   { key: 'director.levers',  value: { INVENTORY_TARGET: 0.40, PRODUCTION_BIAS: 0.30, BUY_BIAS: 0.35, INVESTMENT_BIAS: 0.50, CAPACITY_CAP: 1.0, IMPORT_QUOTA: 3.0 } },
   { key: 'health.weights',   value: { supply: 0.30, sellers: 0.15, buyers: 0.10, depth: 0.15, stability: 0.15, playerShare: 0.15 } },
-  { key: 'npc.population',   value: { perProductPerCity: 1.2, priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35 } },
+  { key: 'npc.population',   value: { perProductPerCity: 1.2, priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35,
+                                     // ★ Kıtlık primi (R73): fiyatın talebe tepki verdiği tek yer.
+                                     // Deposu eriyen satıcı fiyatı yukarı, biriken aşağı eğer.
+                                     scarcitySwing: 0.15 } },
   { key: 'npc.inventory',    value: { minTicks: 4, targetTicks: 12, maxTicks: 24 } },
   { key: 'npc.throttle',     value: { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 } },
   /*

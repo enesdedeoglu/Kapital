@@ -2369,6 +2369,60 @@ günde ortalaması alınıp kaybolur, ritim gün boyunca kalıcıdır ve fiyata 
 
 ---
 
+## R73 — Fiyat formülünde TALEP TERİMİ yoktu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R72'nin başarısızlığı · **Durum:** ⏳ sınanıyor
+
+R72 (günlük talep ritmi) hiçbir şey değiştirmedi: oynaklık medyanı **%1,6 →
+%1,7**. Kapı 10,13,12,13,13 ve birleşik kapıda hâlâ tek eksik `volatility`.
+
+Sebebini formülde buldum:
+
+```
+arzu = maliyet × (1 + marj) × (1 − agresiflik) + referans × agresiflik
+```
+
+`referans` fiyatın kendi geçmişinin EMA'sı. Yani fiyat **maliyet artı kendi
+geçmişi** — kapalı bir döngü. `marketHealth` yalnız ACİL durumda bandı
+genişletiyor, fiyatı hareket ettirmiyor. **Formülde talep hiç yok.**
+
+Bu yüzden R72 işe yaramadı: fiyatın okumadığı bir yere sinyal eklemiştim.
+Yanlış katmana müdahale.
+
+★ Bu, haftalık hareketin nereden geldiğini de açıklıyor: maliyet değişimi
+(girdi fiyatları zincirde yukarı yayılır) ve EMA sürüklenmesi. İkisi de yavaş;
+günlük ölçekte fiyatı iten hiçbir şey yok.
+
+### Elenen hipotezler (ölçüldü, tutmadı)
+
+1. **"Ölçüt yumuşatılmış seriyi okuyor."** `ema_reference` ile
+   `weighted_median` yan yana ölçüldü: WHEAT %7,67 vs %7,72, IRON %0,12 vs
+   %0,12. Neredeyse birebir aynı — yumuşatma suçlu değil.
+2. **"Derin stoklar talep dalgasını yutuyor."** Kısmen doğru ama açıklamıyor:
+   FLOUR'da 0,7 turluk, FURNITURE'da 0,75 turluk stok var ve onlar da
+   oynamıyor.
+
+### Düzeltme: `scarcityPremium`
+
+Satıcının kendi stok kapsamı (stok ÷ tur başına üretim — kısmanın zaten
+hesapladığı sayı) fiyatı eğer: hedefin altına inince yukarı, üstüne çıkınca
+aşağı. Genlik ±%15, ±1 sapmayla sınırlı.
+
+Bu perakendedeki `clearanceFactor`ün (R51) toptan karşılığıdır ve gerçek
+satıcı davranışıdır: deposu boşalan fiyat artırır.
+
+★ **Dengeleyici** bir döngüdür: fiyat artar → talep düşer → stok birikir →
+fiyat düşer. Fiyatın sürüklenmesini değil, TEPKİ VERMESİNİ sağlar.
+
+★ Perakende tarafına verilmedi: orada aynı işi `clearanceFactor` yapıyor.
+İkisini birden uygulamak fazla arzı iki kez cezalandırmak olurdu — R60'ta
+yaşanan hatanın aynısı.
+
+R72 geri alınmadı: günlük talep ritmi kendi başına doğru (satılan MİKTAR
+günden güne değişmeli), yalnız fiyatı tek başına hareket ettiremezdi.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2520,7 +2574,8 @@ kendi kendini yukarıda tutar.
 | R69 | Oyuncu marjı NPC'nin altında; kârlılık değil RAMPA sorunu | 🔴 Kritik | ✅ ölçüldü — hafta sonu günde ~%19 büyüme |
 | R70 | Merdivenin darboğazı XP · 200'den 2.000'e on katlık uçurum | 🔴 Kritik | ✅ Lv3 1.000, Lv4 2.500 |
 | R71 | Kapı ölçütleri oyunun hedefine göre yeniden yazıldı | 🔴 Kritik | ✅ 4 ölçüt · birleşik kapıda tek ölçüt kaldı |
-| R72 | Ekonomide günlük ölçek yok: piyasa günden güne donuk | 🔴 Kritik | ⏳ `dailyRhythm` |
+| R72 | Ekonomide günlük ölçek yok: piyasa günden güne donuk | 🔴 Kritik | ⏳ `dailyRhythm` · tek başına yetmedi |
+| R73 | Fiyat formülünde talep terimi yok: maliyet + kendi geçmişi | 🔴 Kritik | ⏳ `scarcityPremium` |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

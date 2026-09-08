@@ -1,7 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
   clearanceFactor, decidePrice, demandGapScore, inputBid, investmentScore, leverMultiplier,
-  NPC_CAPACITY_SHARE, outputThrottle, priceTrendScore,
+  NPC_CAPACITY_SHARE, outputThrottle, priceTrendScore, scarcityPremium,
   shouldDivest,
   strategicNeed,
   PRICE_MARKUP_BAND,
@@ -65,9 +65,13 @@ const RETAIL_BUFFER_TICKS = 2;
  * gecikme kasıtlıdır: aynı tur içinde geri besleme döngüsü oluşmasını engeller.
  */
 export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<GovernPhaseResult> {
-  const npcCfg = configValue<{ priceBandPerTick: number; emergencyBandPerTick: number; emergencyHealthBelow: number }>(
+  const npcCfg = configValue<{
+    priceBandPerTick: number; emergencyBandPerTick: number;
+    emergencyHealthBelow: number; scarcitySwing?: number;
+  }>(
     tick, 'npc.population',
-    { priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35 },
+    { priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35,
+      scarcitySwing: 0.15 },
   );
   const invCfg = configValue<{ minTicks: number; targetTicks: number; maxTicks: number }>(
     tick, 'npc.inventory', { minTicks: 4, targetTicks: 12, maxTicks: 24 },
@@ -217,7 +221,13 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
         // Çıktının tamamı satılıktır; üretim zaten her tur devam eder
         const output = stockOf(stock, facility.inventory_id, facility.output_product_id);
         if (output.available > 0n) {
-          const decision = priceFor(npc, output.unit_cost, facility.output_product_id, references, health, npcCfg);
+          // Kapsam kısmanın kullandığı sayının aynısı: stok ÷ tur başına üretim.
+          const kapsam = perTick > 0 ? Number(output.available) / 1000 / perTick : 0;
+          const decision = priceFor(
+            npc, output.unit_cost, facility.output_product_id, references, health, npcCfg,
+            { coverageTicks: kapsam, targetTicks: throttleCfg.targetTicks,
+              maxSwing: npcCfg.scarcitySwing ?? 0 },
+          );
           if (decision) {
             await upsertOrder(sql, tick, openOrders, {
               companyId: npc.company_id, facilityId: facility.facility_id,
@@ -335,7 +345,10 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
                 retailCfg.retailMarkup * clearance * 1000,
               ))) / 1000n,
             ));
-            const decision = priceFor(npc, held.unit_cost, product.id, retailAnchor, health, npcCfg, facility.facility_id);
+            // ★ Kıtlık primi BURADA verilmez: perakende tarafında aynı işi
+            // `clearanceFactor` yapıyor (R51). İkisini birden uygulamak fazla
+            // arzı iki kez cezalandırmak olurdu — R60'ta yaşanan hata.
+            const decision = priceFor(npc, held.unit_cost, product.id, retailAnchor, health, npcCfg);
             if (decision) {
               await sql`
                 INSERT INTO retail_offers (facility_id, product_id, selling_price, enabled)
@@ -397,11 +410,15 @@ function priceFor(
   npc: NpcRow, unitCost: bigint, productId: number,
   references: ReferencePrices, health: Map<number, number>,
   cfg: { priceBandPerTick: number; emergencyBandPerTick: number; emergencyHealthBelow: number },
-  _facilityId?: string,
+  /** Satıcının kendi stok kapsamı (tur). Verilirse fiyat buna tepki verir (R73). */
+  scarcity?: { coverageTicks: number; targetTicks: number; maxSwing: number },
 ): PriceDecision | null {
   const reference = references.get(productId);
   if (!reference) return null;
   return decidePrice({
+    scarcityPremium: scarcity
+      ? scarcityPremium(scarcity.coverageTicks, scarcity.targetTicks, scarcity.maxSwing)
+      : 1,
     unitCost: asMoney(unitCost > 0n ? unitCost : reference / 2n),
     reference,
     currentPrice: null, // bant, upsertOrder içinde önceki fiyata göre uygulanır
