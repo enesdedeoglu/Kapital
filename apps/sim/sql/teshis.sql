@@ -210,3 +210,42 @@ SELECT level AS su_anki, title AS sonraki, COUNT(*) AS oyuncu,
        ROUND(AVG(LEAST(1, uretim::numeric / NULLIF(required_units_produced,0))), 2)  AS uretim,
        ROUND(AVG(LEAST(1, urun::numeric   / NULLIF(required_distinct_products,0))),2) AS urun
   FROM hedef GROUP BY 1,2 ORDER BY 1;
+
+\echo '=== R66 — OYNAKLIK: yakınsama mı, gerçek hareket mi? ==='
+-- ★ `volatility` ölçütü HAFTANIN TAMAMINDAKİ en yüksek−en düşük aralığını
+-- alıyor. Dünya tohum fiyatlarından başlayıp ilk günlerde dengesini buluyorsa
+-- o tek seferlik YAKINSAMA da oynaklık sayılır. İkisi ayrı şeydir:
+-- yakınsama bir kez olur ve biter, oynaklık sürer.
+--
+-- Bu tablo uçların NE ZAMAN oluştuğunu gösterir. Tahmin edilmeyecek.
+WITH sinir AS (
+  SELECT MAX(seq) AS son, MAX(seq) - 672 AS hafta_basi, MAX(seq) - 480 AS gun3
+    FROM economic_ticks
+),
+hafta AS (
+  SELECT ph.product_id,
+         (MAX(ph.ema_reference) - MIN(ph.ema_reference))::numeric
+           / NULLIF(AVG(ph.ema_reference), 0) AS aralik_tam,
+         -- Uç noktaların turu: erkense yakınsama, geçse gerçek hareket.
+         (ARRAY_AGG(ph.tick_id ORDER BY ph.ema_reference DESC))[1] AS en_yuksek_tur,
+         (ARRAY_AGG(ph.tick_id ORDER BY ph.ema_reference))[1]      AS en_dusuk_tur
+    FROM price_history ph, sinir s
+   WHERE ph.city_id = 0 AND ph.tick_id > s.hafta_basi
+   GROUP BY ph.product_id
+),
+son4gun AS (
+  SELECT ph.product_id,
+         (MAX(ph.ema_reference) - MIN(ph.ema_reference))::numeric
+           / NULLIF(AVG(ph.ema_reference), 0) AS aralik_son
+    FROM price_history ph, sinir s
+   WHERE ph.city_id = 0 AND ph.tick_id > s.gun3
+   GROUP BY ph.product_id
+)
+SELECT p.code,
+       ROUND(h.aralik_tam * 100, 1)  AS tum_hafta_yuzde,
+       ROUND(x.aralik_son * 100, 1)  AS son_4_gun_yuzde,
+       ROUND((h.en_yuksek_tur - s.hafta_basi) / 96.0, 1) AS zirve_gun,
+       ROUND((h.en_dusuk_tur  - s.hafta_basi) / 96.0, 1) AS dip_gun
+  FROM hafta h JOIN son4gun x ON x.product_id = h.product_id
+  JOIN products p ON p.id = h.product_id, sinir s
+ ORDER BY h.aralik_tam DESC;
