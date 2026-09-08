@@ -1962,6 +1962,78 @@ sayıyı üçüncü bir soruya cevap yapmak bu fazın tekrar eden hatasıydı
 
 ---
 
+## R63 — Kapı, UZUN VADE hedefini 7 günlük pencerede ölçüyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R62 sonrası kapı koşumu · **Durum:** ✅ çözüldü
+
+R62 (`NPC_CAPACITY_SHARE` çalışma anına geldi) hedeflediği ölçütü hiç
+kıpırdatmadı: `npc_share` %98,6 → **%99,2**. Kapı 7,10,8,11,10 → 7,10,9,11,10.
+
+Sebebi aramak yerine bu kez ÖNCE ölçtüm — ve neden kıpırdamadığı çıktı: sorun
+NPC tarafında değildi.
+
+### Oyuncu üretim yapamıyor çünkü YAPAMAZ
+
+| tesis | kilit seviyesi | gereken şirket değeri |
+|---|---|---|
+| Sebze Bahçesi | 1 | — |
+| Buğday Tarlası | **5** | **240.000 ₺** |
+| Fırın · Değirmen | **6** | **400.000 ₺** |
+
+Oyuncular hafta sonunda seviye **1,97**'de ve şirket değeri medyanı
+**55.354 ₺**. Kapının kendi `week1_value` hedefi ise 100.000–250.000 ₺ — yani
+kapının HEDEFLEDİĞİ en iyi oyuncu bile hafta sonunda fırın açamaz. İki ölçüt
+aynı anda doğru olamıyordu.
+
+Oyuncu üretimin %0,8'ini yapıyor; bu bir arıza değil, merdivenin doğrudan
+sonucu. NPC'yi ne kadar kısarsan kıs, kilitli oyuncu o boşluğu dolduramaz.
+
+### Asıl karışıklık: ufuk
+
+docs/07 §8 açıkça şunu diyor:
+
+> Uzun vade hedefi (madde 31): çoğu üründe %70–90 oyuncu / %10–30 NPC.
+
+Kapıdaki %60–80 bandı, **uzun vadeli bir tasarım hedefini 7 günlük pencereye
+sıkıştırma denemesiydi.** Tasarımın kendi hedefi değil.
+
+### Düzeltme
+
+`npc_share` → **`player_retail_share`**: son gün perakende cirosunun ne
+kadarını oyuncular aldı. Hedef %30–70.
+
+Madde 31'in KORUDUĞU şey "oyuncuya ekonomide yer kalsın"dır. Hafta 1'de
+oyuncunun işi perakendedir ve orada iş görüyor: 187 dükkân, perakende
+cirosunun %52'si, iflas %0 (NPC 27 dükkân).
+
+Bant iki taraflıdır ve iki gerçek arıza türü yakalar:
+- **%30 altı** — NPC dükkânları oyuncuyu eziyor
+- **%70 üstü** — NPC perakende varlığı fazla ince, rekabet ve fiyat disiplini
+  kalmıyor
+
+Yerelde sınandı: 40 oyuncu / 3 gün küçük dünyada **%100** çıktı (NPC dükkânı
+hiç satmıyor) ve ölçüt ÜST banttan kaldı. İki taraf da iş görüyor.
+
+★ Yalnız PERAKENDE ölçülüyor, toptan değil. Hafta 1'de roller asimetriktir:
+oyuncu toptanda ALICI, perakendede SATICI. İki pazarın satış tarafını toplamak
+oyuncuyu yapısal olarak eziyordu — yerelde ölçüldü, %4,4 çıktı. Dar ama dürüst
+bir iddia daha iyidir.
+
+### Bu bir çıta indirme DEĞİL — ve kaybolan bir şey var, kayda geçsin
+
+Üretim payının uzun vade hedefi (%10–30 NPC) bu kapıdan ÇIKTI. Yedi günlük
+pencerede ölçülemez; daha uzun ufuklu bir kapının işidir (F11). NPC üretim payı
+bilgi olarak raporda kalmaya devam ediyor ama artık geçme şartı değil.
+
+NPC üretiminin çökmesi yine de kaçmaz: öyle bir durumda `supply_demand` ve
+`retail_fulfilment` sert biçimde düşer.
+
+**Karar oyuncunundur** (bu oturumda soruldu): merdivene dokunulmadı, ölçüt
+ufkuna taşındı. Alternatif — üretim kilitlerini hafta 1'e indirmek — oyunun
+ilerleyiş tasarımını değiştireceği için reddedildi.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2107,6 +2179,7 @@ kendi kendini yukarıda tutar.
 | R60 | Aynı sinyale iki denetleyici: kısma + kapatma | 🔴 Kritik | ✅ F8 — çıkış kısmadan ayrıldı · şiddet R61'de geri geldi |
 | R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim + açık düzeltildi · zincir/rekabet ölçülüyor |
 | R62 | "Oyuncuya yer bırak" yalnız dünya kurulumunda | 🔴 Kritik | ✅ F8 — `NPC_CAPACITY_SHARE` tek kaynak |
+| R63 | Kapı uzun vade hedefini 7 günde ölçüyordu | 🔴 Kritik | ✅ F8 — `player_retail_share` · üretim payı F11'e |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

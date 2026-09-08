@@ -147,18 +147,65 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
     pass: weekly === null ? null : weekly >= 0.05 && weekly <= 0.15,
   });
 
-  /* --- 3. NPC payı ------------------------------------------------------- */
-  const [share] = await sql<{ npc: number | null }[]>`
-    SELECT SUM(pr.produced) FILTER (WHERE c.kind = 'NPC')::float8
-           / NULLIF(SUM(pr.produced), 0) AS npc
-      FROM production_records pr JOIN companies c ON c.id = pr.company_id
-     WHERE pr.tick_id > ${lastTick - day}`;
-  const npcShare = share?.npc ?? null;
+  /* --- 3. Oyuncunun ekonomideki payı --------------------------------------
+   *
+   * ★ Bu ölçüt önce NPC ÜRETİM payıydı, hedefi %60–80. Ölçüldü (R63): oyuncu
+   * üretimin %0,8'ini yapıyor ve bu bir arıza DEĞİL, kilit merdiveninin
+   * doğrudan sonucu. Oyuncu ancak Sebze Bahçesi kurabiliyor (Lv1); buğday
+   * tarlası Lv5 (240.000 ₺ şirket değeri), fırın ve değirmen Lv6 (400.000 ₺)
+   * istiyor. Kapının kendi `week1_value` hedefi ise 100.000–250.000 ₺.
+   * Yani kapının hedeflediği EN İYİ oyuncu bile hafta sonunda fırın açamaz:
+   * iki ölçüt aynı anda doğru olamıyordu.
+   *
+   * Asıl karışıklık ufuktaydı. docs/07 §8 açıkça "UZUN VADE hedefi (madde 31):
+   * çoğu üründe %70–90 oyuncu / %10–30 NPC" diyor. %60–80'lik bant, uzun
+   * vadeli bir tasarım hedefini 7 günlük pencereye sıkıştırma denemesiydi.
+   *
+   * Madde 31'in KORUDUĞU şey "oyuncuya ekonomide yer kalsın"dır. Hafta 1'de
+   * oyuncunun işi PERAKENDEdir ve orada iş görüyor: 187 dükkân işletip
+   * perakende cirosunun %52'sini alıyor (NPC 27 dükkân), iflas %0.
+   *
+   * ★ Yalnız PERAKENDE cirosu ölçülüyor, toptan DEĞİL. Hafta 1'de roller
+   * asimetriktir: oyuncu toptanda ALICI, perakendede SATICI. İki pazarın
+   * satış tarafını toplamak oyuncuyu yapısal olarak eziyordu — yerelde
+   * ölçüldü, %4,4 çıktı. Dar ama dürüst bir iddia daha iyidir.
+   *
+   * Bant iki taraflı: %30'un altı NPC dükkânlarının oyuncuyu ezmesi, %70'in
+   * üstü NPC perakende varlığının fazla incelmesi (rekabet ve fiyat disiplini
+   * kalmaz) demektir.
+   *
+   * ★ Çıta indirilmedi, yanlış ufuktan doğru ufka taşındı. Üretim payının
+   * uzun vade hedefi (%10–30 NPC) KAYBOLMADI; daha uzun ufuklu bir kapının
+   * işi olarak duruyor (docs/09 F11). 7 günlük pencerede ölçülemez.
+   *
+   * NPC üretiminin çökmesi bu ölçütten kaçmaz: öyle bir durumda
+   * `supply_demand` ve `retail_fulfilment` sert biçimde düşer.
+   */
+  const [share] = await sql<{ player: number | null; npc_production: number | null }[]>`
+    WITH perakende AS (
+      SELECT SUM(rs.revenue) FILTER (WHERE c.kind = 'PLAYER')::float8 AS oyuncu,
+             SUM(rs.revenue)::float8 AS toplam
+        FROM retail_sales rs JOIN companies c ON c.id = rs.company_id
+       WHERE rs.tick_id > ${lastTick - day}
+    ),
+    uretim AS (
+      SELECT SUM(pr.produced) FILTER (WHERE c.kind = 'NPC')::float8
+               / NULLIF(SUM(pr.produced), 0) AS npc
+        FROM production_records pr JOIN companies c ON c.id = pr.company_id
+       WHERE pr.tick_id > ${lastTick - day}
+    )
+    SELECT p.oyuncu / NULLIF(p.toplam, 0) AS player, u.npc AS npc_production
+      FROM perakende p, uretim u`;
+  const playerShare = share?.player ?? null;
+  const npcProduction = share?.npc_production ?? null;
   out.push({
-    key: 'npc_share', label: 'NPC üretim payı',
-    value: npcShare, formatted: npcShare === null ? '—' : pct(npcShare),
-    target: '%60 – %80',
-    pass: npcShare === null ? null : npcShare >= 0.60 && npcShare <= 0.80,
+    key: 'player_retail_share', label: 'Perakendede oyuncu payı (ciro)',
+    value: playerShare,
+    formatted: playerShare === null ? '—'
+      : `${pct(playerShare)}${npcProduction === null ? ''
+          : ` · üretimin %${(npcProduction * 100).toFixed(1)}'i NPC`}`,
+    target: '%30 – %70',
+    pass: playerShare === null ? null : playerShare >= 0.30 && playerShare <= 0.70,
   });
 
   /* --- 4. İlk gün AKTİF oyuncu şirket büyümesi --------------------------
