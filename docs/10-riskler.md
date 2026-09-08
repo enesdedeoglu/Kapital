@@ -2138,6 +2138,64 @@ olduğunu göstermez.
 
 ---
 
+## R68 — Oynaklık ölçütü dünyanın DOĞUŞUNU sayıyordu
+
+**Şiddet:** 🟠 Yüksek · **Bulunma:** R66 teşhisi · **Durum:** ✅ ölçüt düzeltildi
+
+`volatility` haftanın TAMAMINDAKİ en yüksek−en düşük aralığını alıyordu. Tohum
+fiyatları dengelerini ilk günlerde buluyor ve o tek seferlik YAKINSAMA da
+oynaklık diye sayılıyordu. R66 bloğu uçların hangi güne düştüğünü ölçtü:
+
+| | tüm hafta | son 4 gün | zirve günü |
+|---|---|---|---|
+| **durgun tohum** — buğday | %26,5 | **%5,4** | 2,8 |
+| durgun tohum — un | %16,3 | %4,3 | 2,9 |
+| **oynak tohum** — buğday | %54,3 | **%41,7** | **5,9** |
+| oynak tohum — un | %42,8 | %31,7 | **7,0** |
+
+Durgun dünyada hareket 3. günde bitiyor; oynak dünyada son 4 günde hâlâ %41,7
+ve zirve haftanın SONUNDA. Aynı sayı iki bambaşka şeyi ölçüyordu.
+
+Pencere son 4 güne daraltıldı. Tüm hafta değeri bağlam olarak raporda kalıyor.
+
+### ★ Bu kapıyı KOLAYLAŞTIRMIYOR, zorlaştırıyor
+
+Durgun tohum tüm hafta ölçüsüyle %11,1 alıp bandın (%5–15) İÇİNDE görünüyordu.
+Son 4 günde ~%3,9 ile bandın ALTINA düşüyor: piyasa yakınsadıktan sonra
+donuyor. Yani ölçüt yanlış GEÇME üretiyordu ve donmuş piyasayı gizliyordu.
+
+Ortaya çıkan asıl bulgu: **ekonominin kararlı bir ortası yok.** Bazı dünyalar
+donuyor (%3,9), bazıları salınıyor (%21). Band "canlı ama kaotik değil" istiyor
+ve hiçbir dünya orada oturmuyor.
+
+---
+
+## R69 — Oyuncu marjı NPC'nin altında; ve gider sorgum yanlış tarafa bakıyordu
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R67 teşhisi · **Durum:** ⏳ ölçülüyor
+
+`week1_value` hiçbir koşumda geçmedi. R67 brüt marjı ölçtü:
+
+| tohum | oyuncu marjı | NPC marjı |
+|---|---|---|
+| 0 | **%14,2** | %21,2 |
+| 1 | **%20,7** | %22,1 |
+| 3 | **%12,7** | %20,5 |
+
+Oyuncular sistematik olarak NPC'lerin altında marjla çalışıyor.
+
+Ama sayı tek başına yetmiyor: tohum 1'de oyuncuların günlük brüt kârı
+671.421 ₺, yani haftada ~4,7M ₺. Hedef (medyan 100.000 ₺ × 60 oyuncu = 6,0M ₺,
+başlangıç 1,8M ₺ düşülünce +4,2M) bu brüt kârla KARŞILANABİLİR. Demek ki brütle
+net arasında eriyor.
+
+★ İlk sorgum bunu göremedi: `direction = 'CREDIT'` süzüyordum, oysa defterde
+ÖDEYEN taraf DEBIT alır (transfer.ts), CREDIT alan taraftır. Oyuncu giderleri
+sıfır görünüyordu. Düzeltildi; CAPEX de ayrı sütun olarak eklendi (nakdi tesise
+çevirmek serveti azaltmaz, o yüzden net kârdan düşülmüyor).
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2284,7 +2342,9 @@ kendi kendini yukarıda tutar.
 | R61 | Yatırım skorunun 5 teriminden 3'ü bilgi taşımıyor | 🟠 Yüksek | ⏳ eğilim + açık düzeltildi · zincir/rekabet ölçülüyor |
 | R62 | "Oyuncuya yer bırak" yalnız dünya kurulumunda | 🔴 Kritik | ✅ F8 — `NPC_CAPACITY_SHARE` tek kaynak |
 | R63 | Kapı uzun vade hedefini 7 günde ölçüyordu | 🔴 Kritik | ✅ F8 — `player_retail_share` · üretim payı F11'e |
-| R65 | `week1_value` döngüsel kilitte: çeşitlilik seviyeye bağlı | 🔴 Kritik | ⏳ Lv3/Lv4 değer şartı indi · bağlayan şart ölçülüyor |
+| R65 | `week1_value` döngüsel kilitte: çeşitlilik seviyeye bağlı | 🔴 Kritik | ⏳ bağlayan şart XP çıktı · değer şartı indi |
+| R68 | Oynaklık ölçütü dünyanın doğuşunu sayıyordu | 🟠 Yüksek | ✅ F8 — pencere son 4 güne daraldı |
+| R69 | Oyuncu marjı NPC'nin altında | 🔴 Kritik | ⏳ brütten nete giden yol ölçülüyor |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

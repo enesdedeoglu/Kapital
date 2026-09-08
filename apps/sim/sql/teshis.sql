@@ -271,8 +271,11 @@ gider AS (
     FROM ledger_entries le
     JOIN companies c ON c.id = le.company_id
    WHERE le.tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
-     AND le.direction = 'CREDIT'
-     AND le.account IN ('SALARY','MAINTENANCE','SHIPPING')
+     -- ★ Defterde ÖDEYEN taraf DEBIT alır, alan taraf CREDIT (transfer.ts).
+     -- Önce CREDIT süzülüyordu; o SYS_SINK'in tarafıdır ve oyuncu giderleri
+     -- sıfır görünüyordu.
+     AND le.direction = 'DEBIT'
+     AND le.account IN ('SALARY','MAINTENANCE','SHIPPING','CAPEX')
    GROUP BY 1,2
 )
 SELECT s.kind,
@@ -282,6 +285,9 @@ SELECT s.kind,
        ROUND(COALESCE(SUM(g.tutar) FILTER (WHERE g.account='SALARY'),0)/10000.0)      AS maas,
        ROUND(COALESCE(SUM(g.tutar) FILTER (WHERE g.account='MAINTENANCE'),0)/10000.0) AS bakim,
        ROUND(COALESCE(SUM(g.tutar) FILTER (WHERE g.account='SHIPPING'),0)/10000.0)    AS navlun,
-       ROUND(((s.ciro - s.maliyet) - COALESCE(SUM(g.tutar),0))/10000.0)               AS net_kar
+       ROUND(COALESCE(SUM(g.tutar) FILTER (WHERE g.account='CAPEX'),0)/10000.0)       AS tesis_alimi,
+       -- CAPEX net kârdan DÜŞÜLMEZ: nakdi tesise çevirmek serveti azaltmaz.
+       ROUND(((s.ciro - s.maliyet)
+              - COALESCE(SUM(g.tutar) FILTER (WHERE g.account <> 'CAPEX'),0))/10000.0) AS net_kar
   FROM satis s LEFT JOIN gider g ON g.kind = s.kind
  GROUP BY s.kind, s.ciro, s.maliyet ORDER BY 1;

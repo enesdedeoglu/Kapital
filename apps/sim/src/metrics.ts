@@ -119,10 +119,31 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
    *
    * Gün içi sapma da raporlanır: gizlenen bir şey yok, yalnız hangi sayının
    * eşiği taşıdığı değişti.
+   *
+   * ★★ PENCERE DARALTILDI: 7 gün → son 4 gün (R68).
+   *
+   * Haftanın tamamı DÜNYANIN DOĞUŞUNU da içeriyordu. Tohum fiyatları
+   * dengelerini ilk günlerde buluyor ve o tek seferlik YAKINSAMA oynaklık
+   * diye sayılıyordu. Ölçüldü — aynı koşum, iki dünya:
+   *
+   *   durgun tohum: buğday tüm hafta %26,5 · son 4 gün %5,4 · zirve 2,8. gün
+   *   oynak tohum : buğday tüm hafta %54,3 · son 4 gün %41,7 · zirve 5,9. gün
+   *
+   * Durgun dünyada hareket 3. günde bitiyor (yakınsama); oynak dünyada son 4
+   * günde hâlâ %41,7 ve zirve haftanın sonunda (gerçek istikrarsızlık). Tüm
+   * hafta ölçüsü ikisini ayıramıyordu.
+   *
+   * ★ Bu değişiklik kapıyı KOLAYLAŞTIRMIYOR, zorlaştırıyor. Durgun tohum tüm
+   * hafta ölçüsüyle %11,1 alıp bandın içinde görünüyordu; son 4 günde ~%3,9
+   * ile bandın ALTINA düşüyor — yani piyasa yakınsadıktan sonra donuyor.
+   * Yanlış GEÇME, kalmaktan kötüdür: donmuş piyasayı gizliyordu.
    */
-  const [vol] = await sql<{ intraday: number | null; weekly: number | null }[]>`
+  const [vol] = await sql<{
+    intraday: number | null; weekly: number | null; full_week: number | null;
+  }[]>`
     SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY intraday) AS intraday,
-           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY weekly) AS weekly
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY weekly) AS weekly,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY full_week) AS full_week
       FROM (
         SELECT ph.product_id,
                CASE WHEN AVG(ph.weighted_median) FILTER (WHERE ph.tick_id > ${lastTick - day}) > 0
@@ -130,8 +151,15 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
                            FILTER (WHERE ph.tick_id > ${lastTick - day}), 0)
                        / AVG(ph.weighted_median) FILTER (WHERE ph.tick_id > ${lastTick - day})
                     ELSE NULL END AS intraday,
+               -- Denge sonrası pencere: dünyanın doğuşu dışarıda.
+               (MAX(ph.ema_reference) FILTER (WHERE ph.tick_id > ${lastTick - day * 4n})
+                - MIN(ph.ema_reference) FILTER (WHERE ph.tick_id > ${lastTick - day * 4n})
+               )::float8
+                 / NULLIF(AVG(ph.ema_reference)
+                     FILTER (WHERE ph.tick_id > ${lastTick - day * 4n}), 0) AS weekly,
+               -- Tüm hafta bağlam olarak kalıyor: gizlenen bir şey yok.
                (MAX(ph.ema_reference) - MIN(ph.ema_reference))::float8
-                 / NULLIF(AVG(ph.ema_reference), 0) AS weekly
+                 / NULLIF(AVG(ph.ema_reference), 0) AS full_week
           FROM price_history ph
          WHERE ph.city_id = 0 AND ph.tick_id > ${lastTick - day * 7n}
          GROUP BY ph.product_id
@@ -139,10 +167,12 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
   const weekly = vol?.weekly ?? null;
   const intraday = vol?.intraday ?? null;
   out.push({
-    key: 'volatility', label: 'Fiyat hareketi (haftalık aralık, medyan ürün)',
+    key: 'volatility', label: 'Fiyat hareketi (denge sonrası 4 gün, medyan ürün)',
     value: weekly,
     formatted: weekly === null ? '—'
-      : `${pct(weekly)}${intraday === null ? '' : ` (gün içi ${pct(intraday)})`}`,
+      : `${pct(weekly)}${vol?.full_week === null || vol?.full_week === undefined ? ''
+          : ` · tüm hafta ${pct(vol.full_week)}`}`
+        + `${intraday === null ? '' : ` · gün içi ${pct(intraday)}`}`,
     target: '%5 – %15',
     pass: weekly === null ? null : weekly >= 0.05 && weekly <= 0.15,
   });
