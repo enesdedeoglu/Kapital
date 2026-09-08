@@ -2315,6 +2315,60 @@ Düzeltildi; `week1_growth` ile aynı kaynaktan okuyor.
 
 ---
 
+## R72 — Ekonomide GÜNLÜK ölçek yoktu: piyasa günden güne kıpırdamıyor
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R71 ölçüt düzeltmesi · **Durum:** ⏳ sınanıyor
+
+R71'den sonra birleşik kapıda TEK ölçüt kaldı: `volatility`. Üç tohum 13/14.
+
+Günlük fiyat aralığı beş dünyada: **%0,4 · 0,8 · 1,6 · 2,0 · 3,0** — hepsi
+%5 tabanının çok altında. Ama aynı dünyaların TÜM HAFTA aralıkları %10,5–20,5.
+Fiyatlar hafta içinde hareket ediyor, günden güne neredeyse hiç.
+
+### Önce yanlış bir hipotezi eledim
+
+Ölçüt `ema_reference` üzerinden hesaplanıyor ve o yumuşatılmış bir seri; belki
+gerçek piyasa fiyatı daha çok oynuyordur diye düşündüm. Yerelde ikisini yan
+yana ölçtüm:
+
+| ürün | `ema_reference` | `weighted_median` |
+|---|---|---|
+| WHEAT | %7,67 | %7,72 |
+| FLOUR | %4,00 | %3,89 |
+| IRON | %0,12 | %0,12 |
+
+Neredeyse birebir aynı. Yumuşatma suçlu değil; piyasa fiyatı da kıpırdamıyor.
+Değiştirmeden önce baktığım iyi oldu.
+
+### Gerçek sebep: eksik zaman ölçeği
+
+Ekonomide iki değişim kaynağı vardı:
+
+- **YAVAŞ** — iş çevrimi, periyot 1 oyun yılı (2688 tur)
+- **HIZLI** — `demandNoise`, tur başına BAĞIMSIZ ±%3
+
+Bağımsız gürültü 96 turluk bir günde ortalaması alınınca **±%0,3'e** iner:
+günlük ölçekte tanımı gereği görünmez. Yani ekonomide günlük ölçek YOKTU.
+
+Ölçüm bunu birebir doğruluyor: haftalık aralık büyük (çevrimden), günlük
+aralık sıfıra yakın (gürültü kendini yok ediyor).
+
+Oyuncu her gün girip aynı fiyatları görüyor ve piyasaya bakmanın bir sebebi
+kalmıyor. Bu, `volatility` ölçütünün değil, OYUNUN sorunu.
+
+### Düzeltme: `dailyRhythm`
+
+Periyot 1 gün, genlik %10, faz ürüne göre kaydırılmış (altın orana göre) —
+hepsi aynı anda zirve yapmasın, günün her saatinde hareket eden bir şey olsun.
+
+Deterministik ve **öğrenilebilir**; iş çevrimi gibi bu kasıtlıdır: ritmi çözen
+oyuncu ucuza alıp pahalıya satar. Oyunun ödüllendirmesi gereken şey budur.
+
+★ Gürültü KALDIRILMADI. İkisi farklı ölçekte çalışır: gürültü tur başınadır ve
+günde ortalaması alınıp kaybolur, ritim gün boyunca kalıcıdır ve fiyata geçer.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2465,7 +2519,8 @@ kendi kendini yukarıda tutar.
 | R68 | Oynaklık ölçütü dünyanın doğuşunu sayıyordu | 🟠 Yüksek | ✅ F8 — pencere son 4 güne daraldı |
 | R69 | Oyuncu marjı NPC'nin altında; kârlılık değil RAMPA sorunu | 🔴 Kritik | ✅ ölçüldü — hafta sonu günde ~%19 büyüme |
 | R70 | Merdivenin darboğazı XP · 200'den 2.000'e on katlık uçurum | 🔴 Kritik | ✅ Lv3 1.000, Lv4 2.500 |
-| R71 | Kapı ölçütleri oyunun hedefine göre yeniden yazıldı | 🔴 Kritik | ⏳ 4 ölçüt · gerekçeleri ayrı ayrı kayıtlı |
+| R71 | Kapı ölçütleri oyunun hedefine göre yeniden yazıldı | 🔴 Kritik | ✅ 4 ölçüt · birleşik kapıda tek ölçüt kaldı |
+| R72 | Ekonomide günlük ölçek yok: piyasa günden güne donuk | 🔴 Kritik | ⏳ `dailyRhythm` |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

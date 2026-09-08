@@ -1,6 +1,6 @@
 import { consumeFefo, transfer, type Sql } from '@kapital/db';
 import {
-  allocateRetail, cityDemand, demandNoise, economicCycle, scoreOffer, seasonMultiplier,
+  allocateRetail, cityDemand, dailyRhythm, demandNoise, economicCycle, scoreOffer, seasonMultiplier,
   type CategoryWeights, type CityDemandParams, type ProductDemandParams, type RetailOffer,
   worldDemandScale, DEFAULT_DEMAND_SCALE, type DemandScaleConfig,
   eventMultipliersFor,
@@ -41,8 +41,14 @@ export interface RetailPhaseResult {
 export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<RetailPhaseResult> {
   const references = await loadReferencePrices(sql, tick.seq);
 
-  const retailCfg = configValue<{ redistributionRounds: number; noiseMin: number; noiseMax: number; cycleAmplitude: number }>(
-    tick, 'economy.retail', { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12 },
+  const retailCfg = configValue<{
+    redistributionRounds: number; noiseMin: number; noiseMax: number;
+    cycleAmplitude: number; dailyRhythmAmplitude?: number;
+  }>(
+    tick, 'economy.retail', {
+      redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03,
+      cycleAmplitude: 0.12, dailyRhythmAmplitude: 0.10,
+    },
   );
   const budgetSlack = configValue<{ budgetSlack?: number }>(tick, 'economy.retail', {}).budgetSlack ?? 1.15;
   const seasonTable = configValue<Record<string, number[]> | undefined>(tick, 'economy.season', undefined);
@@ -139,7 +145,11 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
         eventMultiplier: demandScale * eventMultipliersFor(events, {
           productId: product.id, cityId: city.id,
         }).demand,
-        noise: demandNoise(rng, retailCfg.noiseMin, retailCfg.noiseMax),
+        // ★ Günlük ritim × tur gürültüsü. İkisi FARKLI ölçekte çalışır:
+        // gürültü tur başına bağımsızdır ve günde ortalaması alınıp kaybolur,
+        // ritim ise gün boyunca kalıcıdır ve fiyata geçer (R72).
+        noise: demandNoise(rng, retailCfg.noiseMin, retailCfg.noiseMax)
+          * dailyRhythm(tick.seq, product.id, retailCfg.dailyRhythmAmplitude ?? 0),
         budgetSlack,
       });
       if (demand.units <= 0n) continue;

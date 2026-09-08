@@ -3,7 +3,7 @@ import { money, mulberry32, qty, type Money } from '@kapital/shared';
 import type { CategoryWeights, ProductDemandParams, RetailOffer } from '../types.js';
 import { affordableUnits, allocateRetail } from './allocation.js';
 import { reservationCeiling, scoreOffer } from './attractiveness.js';
-import { demandNoise, economicCycle, seasonMultiplier } from './cycle.js';
+import { demandNoise, dailyRhythm, economicCycle, seasonMultiplier } from './cycle.js';
 import { decayBatch, expiryTick } from './decay.js';
 import { cityDemand, worldDemandScale,
 } from './demand.js';
@@ -289,5 +289,39 @@ describe('dünya talep ölçeği (F8)', () => {
     const yuksek = { ...cfg, baseMultiplier: 3 };
     expect(worldDemandScale(65, yuksek)).toBeCloseTo(3, 6);
     expect(worldDemandScale(260, yuksek)).toBeCloseTo(3 * worldDemandScale(260, cfg), 6);
+  });
+});
+
+describe('★ günlük talep ritmi (R72)', () => {
+  it('genlik 0 ise etkisizdir', () => {
+    expect(dailyRhythm(500n, 3, 0)).toBe(1);
+  });
+
+  it('bir gün sonra aynı değere döner — periyot 1 gündür', () => {
+    expect(dailyRhythm(1234n + 96n, 3, 0.1)).toBeCloseTo(dailyRhythm(1234n, 3, 0.1), 10);
+  });
+
+  it('★ gün İÇİNDE gerçekten hareket eder — ölçütün aradığı budur', () => {
+    // Tur başına bağımsız gürültü 96 turluk günde ortalaması alınıp ±%0,3'e
+    // iner. Ölçüldü: tüm hafta fiyat aralığı %10,5–20,5 iken GÜNLÜK %0,4–3,0
+    // (R72). Günlük ölçekte hiçbir şey olmuyordu.
+    const gun = Array.from({ length: 96 }, (_, i) => dailyRhythm(BigInt(i), 3, 0.1));
+    expect(Math.max(...gun) - Math.min(...gun)).toBeGreaterThan(0.15);
+  });
+
+  it('★ ürünler aynı anda zirve yapmaz — günün her saatinde bir şey hareket eder', () => {
+    const zirve = (id: number) => {
+      let best = -Infinity; let at = 0;
+      for (let i = 0; i < 96; i++) {
+        const v = dailyRhythm(BigInt(i), id, 0.1);
+        if (v > best) { best = v; at = i; }
+      }
+      return at;
+    };
+    expect(new Set([3, 4, 6].map(zirve)).size).toBe(3);
+  });
+
+  it('deterministiktir: aynı tur aynı değeri verir (ADR-0003)', () => {
+    expect(dailyRhythm(777n, 5, 0.1)).toBe(dailyRhythm(777n, 5, 0.1));
   });
 });

@@ -332,7 +332,10 @@ export const gameConfigs: { key: string; value: unknown }[] = [
    */
   { key: 'world.rng',        value: { seed: 20260101 } },
   { key: 'world.events',     value: { chancePerTick: 0.012, maxConcurrent: 3, cooldownTicks: 288 } },
-  { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12, retailMarkup: 1.35 } },
+  { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12, retailMarkup: 1.35,
+                                     // ★ Günlük talep ritmi (R72): piyasa günden güne kıpırdasın.
+                                     // Tur gürültüsü günde ortalaması alınıp kaybolur, bu kalır.
+                                     dailyRhythmAmplitude: 0.10 } },
   { key: 'economy.pricing',  value: { emaAlpha: 0.25, trimLowPct: 0.10, trimHighPct: 0.90, shockClampPct: 0.15, referenceWindowTicks: 96 } },
   // Kıtlık tayını (F8): arz talebi karşılamıyorsa alıcı başına tur tavanı
   // konur. `minLot` payın anlamsız küçüklüğe inmesini engeller — 50 alıcıya
