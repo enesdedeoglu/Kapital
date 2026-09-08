@@ -79,6 +79,19 @@ for (let i = 0; i < seedCount; i++) {
 
   const passed = metrics.filter((m) => m.pass === true).length;
   const measured = metrics.filter((m) => m.pass !== null).length;
+  /*
+   * ★ Oyuncu eylemleri ve REDDEDİLEN denemeler. `behaviour.ts` şunu diyor:
+   * "yutulan hata ölçülemez, ölçülemeyen davranış da ayarlanamaz" — ama
+   * sayaçlar yalnız `run-sim` yolunda basılıyordu, kapıda değil. Kapı
+   * koşumları bu yüzden kör kalıyordu: oyuncunun neyi denediğini ve neden
+   * reddedildiğini göremiyordum (örn. seviye kilidi).
+   */
+  const c = result.counters;
+  const redler = [...c.errorsByCode].sort((a, b) => b[1] - a[1])
+    .map(([kod, adet]) => `${kod}×${adet}`).join(' · ');
+  console.log(`  oyuncu: ${c.builds} tesis · ${c.standingRules} kalıcı emir · ` +
+    `${c.buyOrders} alış · ${c.sellOrders} satış · ${c.errors} reddedildi` +
+    `${redler ? ` (${redler})` : ''}`);
   console.log(`${passed}/${metrics.length} geçti · ${events?.count ?? 0n} dünya olayı` +
     (measured < metrics.length ? ` · ${metrics.length - measured} ölçülemedi` : ''));
 
