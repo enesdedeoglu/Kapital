@@ -249,3 +249,39 @@ SELECT p.code,
   FROM hafta h JOIN son4gun x ON x.product_id = h.product_id
   JOIN products p ON p.id = h.product_id, sinir s
  ORDER BY h.aralik_tam DESC;
+
+\echo '=== R67 — OYUNCU MARJI: ciro var, servet yok. Fark nereye gidiyor? ==='
+-- ★ Ölçüldü: oyuncular haftada ~18,5 milyon ₺ perakende cirosu döndürüp
+-- 3,9 milyon ₺ servetle bitiriyor. week1_value hiçbir koşumda geçmedi.
+-- Sorun ÖLÇEK değil (ciro fazlasıyla var), ne kadarının elde kaldığı.
+--
+-- Brüt marj `cogs` ile doğrudan ölçülür; brütten net'e giden yol da
+-- (maaş, bakım, navlun) yanına konur ki hangisinin yediği görülsün.
+WITH satis AS (
+  SELECT c.kind,
+         SUM(rs.revenue)::numeric AS ciro,
+         SUM(rs.cogs)::numeric    AS maliyet
+    FROM retail_sales rs
+    JOIN companies c ON c.id = rs.company_id
+   WHERE rs.tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
+   GROUP BY 1
+),
+gider AS (
+  SELECT c.kind, le.account, SUM(le.amount)::numeric AS tutar
+    FROM ledger_entries le
+    JOIN companies c ON c.id = le.company_id
+   WHERE le.tick_id > (SELECT MAX(seq) - 96 FROM economic_ticks)
+     AND le.direction = 'CREDIT'
+     AND le.account IN ('SALARY','MAINTENANCE','SHIPPING')
+   GROUP BY 1,2
+)
+SELECT s.kind,
+       ROUND(s.ciro/10000.0)                                   AS ciro,
+       ROUND((s.ciro - s.maliyet)/10000.0)                     AS brut_kar,
+       ROUND((s.ciro - s.maliyet) / NULLIF(s.ciro,0) * 100, 1) AS brut_marj_yuzde,
+       ROUND(COALESCE(SUM(g.tutar) FILTER (WHERE g.account='SALARY'),0)/10000.0)      AS maas,
+       ROUND(COALESCE(SUM(g.tutar) FILTER (WHERE g.account='MAINTENANCE'),0)/10000.0) AS bakim,
+       ROUND(COALESCE(SUM(g.tutar) FILTER (WHERE g.account='SHIPPING'),0)/10000.0)    AS navlun,
+       ROUND(((s.ciro - s.maliyet) - COALESCE(SUM(g.tutar),0))/10000.0)               AS net_kar
+  FROM satis s LEFT JOIN gider g ON g.kind = s.kind
+ GROUP BY s.kind, s.ciro, s.maliyet ORDER BY 1;

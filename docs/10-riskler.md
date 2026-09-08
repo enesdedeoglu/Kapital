@@ -2079,6 +2079,44 @@ kendi kendini toparlar"** demişti. **Ölçüm bu tahmini çürüttü**: oyuncul
 Düzeltme (oyuncunun kararı): Lv3 değer şartı 80.000 → 45.000 ₺, Lv4
 140.000 → 75.000 ₺. Kilit seviyeleri ve ürün sırası aynı kaldı.
 
+### ÖLÇÜLDÜ: bağlayan şart XP'ymiş, değer değil
+
+R65 bloğu tahmini gereksiz kıldı. Tohum 0, bir sonraki seviye için şartların
+karşılanma oranı (1 = tutuyor):
+
+| geçiş | xp | değer | hacim |
+|---|---|---|---|
+| Lv2 → Tüccar | **0,42** | 0,90 | 0,95 |
+| Lv3 → Toptancı | **0,76** | 0,87 | 1,00 |
+
+Değer şartı zaten %87–90 karşılanıyordu; onu indirmek doğru koşulu açmadı.
+XP = perakende cirosu ÷ 100 ve oyuncu haftada ~840 XP topluyor; Lv3 için 2.000
+gerekiyor, yani mevcut hızda **~2,4 hafta**.
+
+Değişiklik yine de iş gördü — ama hedeflediği yerde değil:
+
+| | önce | sonra |
+|---|---|---|
+| ortalama seviye | 1,95 | **2,75** |
+| dükkân çeşitliliği | 1,80 | 2,09 |
+| `player_retail_share` | %51,8 | %62,9 (5/5 → 4/5) |
+| **`week1_value`** | 56.718 ₺ | **55.084 ₺** (0/5) |
+
+Kapı tohum skorları birebir aynı kaldı: 8,11,11,12,11.
+
+### Ve bir hesap hatam — kayda geçsin
+
+`week1_value` hedefinin aritmetik olarak ulaşılamaz olduğunu düşündüm: haftalık
+net para üretimi 3,81M ₺, oyuncu başlangıç sermayesi toplamı 1,8M ₺, kapının
+istediği ise 6,0M ₺ — yani yeni paranın %110'u. **Bu hesap yanlıştı: serveti
+parayla eşitledim.** Tesis ve stok da servettir; oyuncu nakdi tesise
+çevirdiğinde para arzından çıkar ama servet durur.
+
+Doğru sayı şu: oyuncular haftada **~18,5 milyon ₺** perakende cirosu döndürüp
+3,9 milyon ₺ servetle bitiriyor. Ölçek fazlasıyla var. Soru cironun ne kadarının
+ELDE KALDIĞI — yani marj. `teshis.sql` R67 bloğu bunu ölçecek: brüt marj
+(`cogs` üzerinden) ve brütten nete giden yol (maaş, bakım, navlun).
+
 ★ XP ve hacim şartlarına DOKUNULMADI. Merdivende dört şart var ve hepsi
 birden tutmalı; yanlış olanı indirmek hiçbir şey açmaz. Hangisinin bağladığı
 `teshis.sql`'in R65 bloğuyla ÖLÇÜLECEK — her oyuncunun bir sonraki seviyesi
