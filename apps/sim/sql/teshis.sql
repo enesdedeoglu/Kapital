@@ -257,6 +257,14 @@ SELECT p.code,
 --
 -- Brüt marj `cogs` ile doğrudan ölçülür; brütten net'e giden yol da
 -- (maaş, bakım, navlun) yanına konur ki hangisinin yediği görülsün.
+--
+-- ★ NPC satırındaki net_kar YANILTICIdır, kıyas için kullanılmaz: burada
+-- yalnız PERAKENDE cirosu sayılıyor, oysa NPC'ler üretimlerinin çoğunu
+-- TOPTAN satar. Giderlerinin tamamı (özellikle üretim işçiliği) görünür
+-- ama gelirlerinin çoğu görünmez. Oyuncu satırı sağlamdır: oyuncular
+-- neredeyse yalnız perakendeden gelir elde eder.
+-- Brüt marj sütunu ise iki taraf için de geçerlidir — o sadece perakende
+-- işleminin kendisini ölçer.
 WITH satis AS (
   SELECT c.kind,
          SUM(rs.revenue)::numeric AS ciro,

@@ -2194,6 +2194,57 @@ net arasında eriyor.
 sıfır görünüyordu. Düzeltildi; CAPEX de ayrı sütun olarak eklendi (nakdi tesise
 çevirmek serveti azaltmaz, o yüzden net kârdan düşülmüyor).
 
+### Düzeltilmiş ölçüm: kârlılık sorun değil, RAMPA sorun
+
+Son günün oyuncu tablosu (₺/gün, 60 oyuncu):
+
+| tohum | ciro | brüt marj | maaş | net kâr | oyuncu başına |
+|---|---|---|---|---|---|
+| 0 | 2.638.968 | **%11,1** | **198.009** | 28.129 | 469 |
+| 1 | 3.324.155 | %21,7 | 29.473 | 626.451 | **10.441** |
+| 2 | 2.071.689 | %18,7 | 26.851 | 311.599 | 5.193 |
+| 4 | 2.622.613 | %26,3 | 45.284 | 577.506 | 9.625 |
+
+Tohum 1'de oyuncu başına günlük net kâr 10.441 ₺ ve şirket değeri 53.631 ₺ —
+yani hafta sonunda **günde ~%19 bileşik** büyüyorlar. Kârlılık sorun değil;
+oyuncular haftanın SONUNDA hızlanıyor, başında yavaş. `week1_value` rampayı
+ölçüyor, denge hâlini değil.
+
+Tohum 0 ayrı bir vaka: brüt marj %11,1 ve maaş 198.009 ₺ (ötekiler ~30-45 bin).
+Oradaki oyuncular zarar eden ÜRETİM işletiyor — oynak tohumun aşırı kapasite
+sorunu oyuncuya da vurmuş.
+
+★ NPC satırındaki `net_kar` kıyas için KULLANILAMAZ: sorgu yalnız perakende
+cirosunu sayıyor, oysa NPC'ler üretimlerinin çoğunu toptan satar. Giderleri
+tam, gelirleri eksik görünüyor. Brüt marj sütunu ise iki taraf için de
+geçerlidir — o sadece perakende işleminin kendisini ölçer. Teşhise not düşüldü.
+
+---
+
+## R70 — Merdivenin darboğazı XP'ymiş
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R65 ölçümü, iki koşum üst üste · **Durum:** ⏳ sınanıyor
+
+R65 bloğu her basamakta aynı şeyi söyledi (tohum 1 / tohum 4):
+
+| geçiş | xp | değer |
+|---|---|---|
+| Lv1 → Lv2 | **0,49 / 0,62** | 0,97 / 1,00 |
+| Lv2 → Lv3 | **0,57 / 0,58** | 0,88 / 0,94 |
+| Lv3 → Lv4 | **0,79 / 0,70** | 0,92 / 0,92 |
+
+Değer şartı her yerde %88+ karşılanıyordu. İlk denemem (değer şartını indirmek)
+oyuncuları bir basamak yukarı taşıdı ama `week1_value`'yu kıpırdatmadı —
+doğru koşulu açmamıştım.
+
+200'den 2.000'e **on katlık** bir uçurum vardı: R50 ilk basamağı 700 → 200'e
+indirip sonrakilere dokunmamış ve "merdiven kendi kendini toparlar" demişti.
+Toparlamadı.
+
+Yeni şekil: Lv3 XP 2.000 → 1.000, Lv4 4.500 → 2.500 (200 → 1.000 → 2.500).
+Ölçülen birikimle uyumlu: Lv2'deki oyuncu hafta sonunda ~1.140 XP'de,
+Lv3'teki ~3.555'te.
+
 ---
 
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
@@ -2344,7 +2395,8 @@ kendi kendini yukarıda tutar.
 | R63 | Kapı uzun vade hedefini 7 günde ölçüyordu | 🔴 Kritik | ✅ F8 — `player_retail_share` · üretim payı F11'e |
 | R65 | `week1_value` döngüsel kilitte: çeşitlilik seviyeye bağlı | 🔴 Kritik | ⏳ bağlayan şart XP çıktı · değer şartı indi |
 | R68 | Oynaklık ölçütü dünyanın doğuşunu sayıyordu | 🟠 Yüksek | ✅ F8 — pencere son 4 güne daraldı |
-| R69 | Oyuncu marjı NPC'nin altında | 🔴 Kritik | ⏳ brütten nete giden yol ölçülüyor |
+| R69 | Oyuncu marjı NPC'nin altında; kârlılık değil RAMPA sorunu | 🔴 Kritik | ✅ ölçüldü — hafta sonu günde ~%19 büyüme |
+| R70 | Merdivenin darboğazı XP · 200'den 2.000'e on katlık uçurum | 🔴 Kritik | ⏳ Lv3 1.000, Lv4 2.500 |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

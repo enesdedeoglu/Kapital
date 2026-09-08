@@ -262,9 +262,28 @@ export const companyLevels = [
    * XP ve hacim şartlarına DOKUNULMADI: hangisinin bağladığı ölçülecek
    * (teshis.sql R65 bloğu), tahminle indirilmeyecek.
    */
-  { level: 3,  xp: 2_000,   value: 45_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
+  /*
+   * ★★ XP şartı da indirildi (R70) — ÖLÇÜLEN darboğaz buymuş.
+   *
+   * R65 bloğu her basamakta aynı şeyi söyledi (tohum 1 / tohum 4):
+   *   Lv1 → Lv2 : xp 0,49 / 0,62  ·  değer 0,97 / 1,00
+   *   Lv2 → Lv3 : xp 0,57 / 0,58  ·  değer 0,88 / 0,94
+   *   Lv3 → Lv4 : xp 0,79 / 0,70  ·  değer 0,92 / 0,92
+   *
+   * Değer şartı her yerde %88+ karşılanıyordu; onu indirmek (ilk denemem)
+   * oyuncuları merdivende bir basamak yukarı taşıdı ama week1_value'yu
+   * kıpırdatmadı. Bağlayan hep XP'ydi.
+   *
+   * 200'den 2.000'e ON KATLIK bir uçurum vardı: R50 ilk basamağı 700'den
+   * 200'e indirip sonrakilere dokunmamış ve "merdiven kendi kendini
+   * toparlar" demişti. Toparlamadı.
+   *
+   * Yeni şekil 200 → 1.000 → 2.500 (5× ve 2,5×). Ölçülen XP birikimiyle
+   * uyumlu: Lv2'deki oyuncu hafta sonunda ~1.140 XP'de, Lv3'teki ~3.555'te.
+   */
+  { level: 3,  xp: 1_000,   value: 45_000,    volume: 60_000,   units: 0,     products: 0, title: 'Tüccar' },
   // Sebze Bahçesi artık Lv2'de açılıyor (R33); başlık Lv2'ye taşındı.
-  { level: 4,  xp: 4_500,   value: 75_000,    volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },
+  { level: 4,  xp: 2_500,   value: 75_000,    volume: 150_000,  units: 0,     products: 0, title: 'Toptancı' },
   // Lv4'te Sebze Bahçesi açıldı: artık üretim şartı konabilir.
   { level: 5,  xp: 9_000,   value: 240_000,   volume: 320_000,  units: 500,   products: 1, title: 'Çiftçi' },
   { level: 6,  xp: 17_000,  value: 400_000,   volume: 620_000,  units: 2_000, products: 2, title: 'Değirmenci' },
