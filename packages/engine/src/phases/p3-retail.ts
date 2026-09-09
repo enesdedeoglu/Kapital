@@ -11,6 +11,16 @@ import { PHASE } from '../phases.js';
 import { loadReferencePrices } from '../reference-prices.js';
 import { loadActiveEvents } from './world-events.js';
 
+/**
+ * Tüketici bütçesinin fiyat seviyesini ne kadar takip ettiği.
+ *
+ * ★ Ücret endekslemesiyle AYNI olmalı (`WAGE_INDEXATION`, p1-produce): musluk
+ * ve gider farklı hızda endekslenirse aradaki fark yapısal enflasyon üretir.
+ * 1 olursa fiyat seviyesinin çıpası kalmaz; 0 olursa fiyat artışı talebi
+ * tamamen ezer.
+ */
+const BUDGET_INDEXATION = 0.5;
+
 interface OfferRow {
   facility_id: string; company_id: string; city_id: number; product_id: number;
   facility_level: number; selling_price: bigint; reputation: string;
@@ -19,6 +29,7 @@ interface OfferRow {
 
 interface ProductRow {
   id: number; code: string; base_demand: number; price_sensitivity: number;
+  base_reference_price: bigint;
   reservation_price_mult: number;
   price_weight: number; quality_weight: number; brand_weight: number;
 }
@@ -80,6 +91,7 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
      ORDER BY id`;
   const products = await sql<ProductRow[]>`
     SELECT p.id, p.code, p.base_demand, p.price_sensitivity, p.reservation_price_mult,
+           p.base_reference_price,
            pc.price_weight, pc.quality_weight, pc.brand_weight
     FROM products p JOIN product_categories pc ON pc.id = p.category_id
     WHERE p.is_active AND p.is_retail_product AND p.base_demand > 0
@@ -125,10 +137,39 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
       const reference = references.get(product.id);
       if (!reference) continue;
 
+      /*
+       * ★ NOMİNAL ÇIPA (R82) — bütçe fiyat seviyesini YARIM takip eder.
+       *
+       * Tüketici bütçesi `adet × REFERANS FİYAT × slack` idi, yani musluk
+       * fiyat seviyesine TAM endeksliydi. Ücret ise R76'da yarım endekslenmişti
+       * (sarmalı kırmak için). Sonuç yapısal enflasyon: fiyat artınca musluk
+       * tam, gider yarım büyüyor ve fark her gün para arzına ekleniyor.
+       *
+       * Ölçüldü (R82): para arzı beş dünyada %30–54 arasında, hep pozitif;
+       * iki dünyada ±%40 eşiğini aşıyor. Kötü dünyada üretim düşerken
+       * (237K → 195K adet) musluk sabit ~5,5M kalıyor, gider küçülüyor ve
+       * günde +2,4M birikiyor.
+       *
+       * ★ Asıl sorun ekonominin NOMİNAL ÇIPASI olmaması: fiyat maliyetten,
+       * maliyet fiyattan türüyor; hiçbir şey seviyeyi tutmuyor. Bütçeyi taban
+       * fiyata kısmen bağlamak o çıpayı kurar — fiyat artarsa tüketici daha
+       * az alabilir, talep düşer, fiyat geri gelir (reel bakiye etkisi).
+       *
+       * Endeksleme oranı ÜCRETLE AYNI (0,5): musluk ve gider aynı hızda
+       * hareket eder. Simetri gerekçedir, ayar değil.
+       */
+      const taban = asMoney(BigInt(product.base_reference_price));
+      const butceCipasi = taban > 0n
+        ? asMoney(BigInt(Math.round(
+            Number(taban) * (1 - BUDGET_INDEXATION)
+            + Number(reference) * BUDGET_INDEXATION,
+          )))
+        : reference;
+
       const productParams: ProductDemandParams = {
         productId: product.id,
         baseDemand: product.base_demand,
-        referencePrice: reference,
+        referencePrice: butceCipasi,
         reservationPriceMult: product.reservation_price_mult,
         priceSensitivity: product.price_sensitivity,
       };
