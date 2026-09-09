@@ -2873,6 +2873,63 @@ kalabilir. Beş tohum görülmeden "geçti" denmez.
 
 ---
 
+## ★ GEÇİŞ KAPISI 2 GEÇİLDİ — ve dört kayıt
+
+**Durum:** ✅ kapı geçti · ⏳ iki ölçüt kovalanıyor
+
+`kapi-20260909-1923` · **12, 11, 14, 12, 14 / 14** · tüm eşikler medyanda ve
+tohumların çoğunluğunda tutuyor.
+
+### Determinizm kendini burada kanıtladı
+
+Bu koşumda **simülasyon kodu HİÇ DEĞİŞMEDİ**, yalnız oynaklık ölçütü değişti.
+Sonuç: 11,10,14,11,13 → 12,11,14,12,14 — tam olarak **+1, +1, 0, +1, +1**.
+Tohum 2 oynaklığı zaten geçiyordu; diğer dördü geçti ve **başka hiçbir şey
+kıpırdamadı**.
+
+R79 öncesinde aynı durumda "+1 ölçütten mi gürültüden mi" ayrılamıyordu.
+
+### Dört kayıt — "geçti" tek başına yanıltıcı olur
+
+**1. Geçiş bir ÖLÇÜT değişikliğinden geldi.** R81'de bunu kendim riskli diye
+işaretledim ve öyle kalıyor: gerekçe savunulabilir ama sonucu istediğim yöne
+çeviren de benim. Karşı argüman R81'de yazılı.
+
+**2. Beş ölçüt "kararsız"** ve kapının kendi uyarısı geçerli:
+
+| ölçüt | tutan |
+|---|---|
+| `money_supply` | **3/5** |
+| `fx_change` | **3/5** |
+| `retail_fulfilment` | 4/5 |
+| `player_retail_share` | 4/5 |
+| `foreign_band` | 4/5 |
+
+**3. Beş tohumdan yalnız İKİSİ her ölçütü tutturuyor** (20262930, 20264956).
+Kapı medyan + çoğunluk kuralıyla geçiyor, hepsi-geçsin kuralıyla değil.
+
+**4. Oynaklıkta tohum 3 tam sınırda:** %15,0 — üst bant %15.
+
+### ★ Kararsızlığın anlamı değişti
+
+Determinizmden önce "bir dünyada tutuyor öbüründe kalıyor" ÖLÇÜM belirsizliğiydi.
+Artık gerçek dünya farkı: bazı dünyalarda gerçekten parasal sorun var.
+
+Tohum bazında:
+
+| tohum | para arzı | kur |
+|---|---|---|
+| 20260904 | %35,2 ✓ | **%71,8 ✗** |
+| 20261917 | **%54,2 ✗** | **%31,8 ✗** |
+| 20262930 | %32,6 ✓ | %23,8 ✓ |
+| 20263943 | **%42,1 ✗** | %0,6 ✓ |
+| 20264956 | %30,1 ✓ | %20,9 ✓ |
+
+★ İkisi hep birlikte hareket ETMİYOR: 20263943'te para %42 büyürken kur %0,6
+kıpırdamış. Basit bir "para arzı → enflasyon → kur" zinciri değil.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -3031,7 +3088,8 @@ kendi kendini yukarıda tutar.
 | R78 | Kısmi endeksleme tuttu: bir tohum 14/14 | — | ✅ tek eksik `volatility`, tabana 0,1 puan |
 | R79 | Determinizm: 11 kaynak · kök `weightedMedian` beraberliği | 🔴 Kritik | ✅ BİREBİR aynı · `query-order.test` bekçi |
 | R80 | Temiz zeminde ilk kapı: 13/14 · bir tohum tam | — | ✅ tek eksik `volatility` · dağılım %2,3–5,6 |
-| R81 | Oynaklık ölçütü yumuşatılmış iç çıpaya bakıyordu | 🟠 Yüksek | ⏳ gerçek işlem fiyatına geçildi |
+| R81 | Oynaklık ölçütü yumuşatılmış iç çıpaya bakıyordu | 🟠 Yüksek | ✅ gerçek işlem fiyatı · 5/5 |
+| ★ | **GEÇİŞ KAPISI 2 GEÇİLDİ** | — | ✅ 12,11,14,12,14 · 4 kayıtla |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
