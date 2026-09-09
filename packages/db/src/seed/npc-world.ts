@@ -1,5 +1,7 @@
 import { ARCHETYPES, varyTemplate, type NpcArchetype } from '@kapital/economy';
-import { asMoney, money, mulberry32, mulMoney } from '@kapital/shared';
+import {
+  asMoney, deterministicUuid, money, mulberry32, mulMoney,
+} from '@kapital/shared';
 import type { Sql } from '../client.js';
 import { transfer } from '../finance/transfer.js';
 
@@ -194,9 +196,22 @@ export async function seedNpcWorld(sql: Sql, opts: { seed?: number } = {}): Prom
         SELECT id FROM companies WHERE name = ${name} AND kind = 'NPC'`;
       if (existing) continue;
 
+      /*
+       * ★ Kimlik DETERMİNİSTİK (R79). Varsayılan `gen_random_uuid()` idi ve
+       * R56'nın `ORDER BY id`'si sırayı koşu İÇİNDE sabitliyor, koşular
+       * ARASINDA sabitlemiyordu: her koşuda farklı bir sıra, dolayısıyla kıt
+       * malı farklı tesisler kapıyor.
+       *
+       * Ölçülen bedeli: aynı kodla koşulan iki kapı arasında tohum skoru 2
+       * puan geziyordu ve `volatility` ±1,5 puan oynuyordu — eşiğe olan
+       * mesafeden (0,1–0,3) büyük. Yani ölçüm, düzeltmeyi ayırt edemiyordu.
+       *
+       * `name` bu döngüde zaten benzersiz (mükerrer kontrolü onunla yapılıyor).
+       */
       const [company] = await sql<{ id: string }[]>`
-        INSERT INTO companies (kind, name, home_city_id, cash, level, reputation)
-        VALUES ('NPC', ${name}, ${city.id}, 0, 15, ${(45 + rng() * 30).toFixed(2)})
+        INSERT INTO companies (id, kind, name, home_city_id, cash, level, reputation)
+        VALUES (${deterministicUuid('company', name)}::uuid,
+                'NPC', ${name}, ${city.id}, 0, 15, ${(45 + rng() * 30).toFixed(2)})
         RETURNING id`;
       await sql`INSERT INTO company_stats (company_id) VALUES (${company!.id}::uuid)
                 ON CONFLICT DO NOTHING`;
@@ -240,11 +255,13 @@ export async function seedNpcWorld(sql: Sql, opts: { seed?: number } = {}): Prom
         const cost = mulMoney(asMoney(type.base_cost), city.land_cost_index).value;
         const recipeId = productCode === null ? null : recipes.get(`${facilityCode}:${productCode}`) ?? null;
 
+        // Sıra numarası şart: aynı şirket aynı tipten birden fazla kurabilir.
         const [facility] = await sql<{ id: string }[]>`
-          INSERT INTO facilities (company_id, facility_type_id, city_id, name,
+          INSERT INTO facilities (id, company_id, facility_type_id, city_id, name,
                                   storage_capacity, construction_complete_at_tick,
                                   active_recipe_id)
-          VALUES (${company!.id}::uuid, ${type.id}, ${city.id},
+          VALUES (${deterministicUuid('facility', company!.id, facilityCode, facilityCount)}::uuid,
+                  ${company!.id}::uuid, ${type.id}, ${city.id},
                   ${`${name} — ${facilityCode}`}, ${type.storage_capacity}, 0, ${recipeId})
           RETURNING id`;
         facilityCount++;

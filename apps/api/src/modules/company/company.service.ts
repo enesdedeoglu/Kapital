@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { CONFIG_KEYS, getConfig, loadConfigSnapshot, type StartConfig } from '@kapital/config';
 import { currentTickSeq, runInTransaction, transfer, type Sql } from '@kapital/db';
-import { asMoney, Conflict, DomainError, formatMoney, NotFound } from '@kapital/shared';
+import {
+  asMoney, Conflict, deterministicUuid, DomainError, formatMoney, NotFound,
+} from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import type { CreateCompanyDto } from './company.dto.js';
 
@@ -44,9 +46,11 @@ export class CompanyService {
     const startingCash = asMoney(BigInt(start.cash));
 
     const companyId = await runInTransaction(this.sql, async (tx) => {
+      // ★ Kimlik deterministik (R79): bir kullanıcının bir şirketi var.
       const [company] = await tx<{ id: string }[]>`
-        INSERT INTO companies (user_id, kind, name, home_city_id, cash)
-        VALUES (${userId}::uuid, 'PLAYER', ${dto.name}, ${city.id}, 0)
+        INSERT INTO companies (id, user_id, kind, name, home_city_id, cash)
+        VALUES (${deterministicUuid('company', userId)}::uuid,
+                ${userId}::uuid, 'PLAYER', ${dto.name}, ${city.id}, 0)
         RETURNING id`;
       await tx`INSERT INTO company_stats (company_id) VALUES (${company!.id}::uuid)`;
 
@@ -84,9 +88,10 @@ export class CompanyService {
       if (!type) throw new NotFound('Tesis türü', dto.facilityTypeCode);
 
       await tx`
-        INSERT INTO facilities (company_id, facility_type_id, city_id, name,
+        INSERT INTO facilities (id, company_id, facility_type_id, city_id, name,
                                 storage_capacity, construction_complete_at_tick)
-        VALUES (${company!.id}::uuid, ${type.id}, ${city.id}, ${type.name},
+        VALUES (${deterministicUuid('facility', company!.id, 'baslangic')}::uuid,
+                ${company!.id}::uuid, ${type.id}, ${city.id}, ${type.name},
                 ${type.storage_capacity}, ${tickSeq})`;
       await tx`UPDATE company_stats SET facilities_built = 1
                 WHERE company_id = ${company!.id}::uuid`;

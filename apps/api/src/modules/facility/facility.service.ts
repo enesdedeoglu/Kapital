@@ -5,7 +5,7 @@ import {
 } from '@kapital/db';
 import { cityBonusFor, productionCapacity, upgradeCost, type FacilityCategory } from '@kapital/economy';
 import {
-  asMoney, asQty, DomainError, formatMoney, formatQty, InsufficientFunds,
+  asMoney, asQty, deterministicUuid, DomainError, formatMoney, formatQty, InsufficientFunds,
   mulMoney, NotFound, type Money,
 } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
@@ -77,10 +77,17 @@ export class FacilityService {
       const [sink] = await tx<{ id: string }[]>`
         SELECT id FROM companies WHERE system_code = 'SYS_SINK'`;
 
+      /*
+       * ★ Kimlik deterministik (R79). Sıra numarası şart: bir oyuncu aynı
+       * turda aynı şehirde aynı tipten iki tesis kurabilir.
+       */
+      const [sayi] = await tx<{ n: string }[]>`
+        SELECT COUNT(*)::text AS n FROM facilities WHERE company_id = ${company.id}::uuid`;
       const [facility] = await tx<{ id: string }[]>`
-        INSERT INTO facilities (company_id, facility_type_id, city_id, name,
+        INSERT INTO facilities (id, company_id, facility_type_id, city_id, name,
                                 storage_capacity, construction_complete_at_tick)
-        VALUES (${company.id}::uuid, ${type.id}, ${city.id},
+        VALUES (${deterministicUuid('facility', company.id, tickSeq, type.id, sayi!.n)}::uuid,
+                ${company.id}::uuid, ${type.id}, ${city.id},
                 ${dto.name ?? type.name}, ${type.storage_capacity},
                 ${tickSeq + BigInt(type.construction_ticks)})
         RETURNING id`;

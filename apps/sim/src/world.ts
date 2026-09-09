@@ -7,7 +7,7 @@
  */
 import { CompanyService, FacilityService } from '@kapital/api/services';
 import type { Sql } from '@kapital/db';
-import { mulberry32 } from '@kapital/shared';
+import { deterministicUuid, mulberry32 } from '@kapital/shared';
 import { allocatePopulation, PLAYER_PROFILES, type PlayerProfile } from './profiles.js';
 
 export interface SimPlayer {
@@ -70,9 +70,13 @@ export async function buildSimWorld(
     const cityCode = cities[index % cities.length]!.code;
     const name = `${FIRST_NAMES[index % FIRST_NAMES.length]} ${SUFFIXES[(index / FIRST_NAMES.length | 0) % SUFFIXES.length]} ${index}`;
 
+    // ★ Kimlik deterministik (R79): e-posta zaten benzersiz ve bu döngüde
+    // tohum + sıra'dan türüyor. Rastgele UUID, koşular arasında farklı bir
+    // işlem sırası demekti ve kıt malı her koşuda başka oyuncu kapıyordu.
+    const email = `sim-${opts.seed}-${index}@kapital.sim`;
     const [user] = await sql<{ id: string }[]>`
-      INSERT INTO users (email, password_hash, display_name)
-      VALUES (${`sim-${opts.seed}-${index}@kapital.sim`}, 'x', ${name})
+      INSERT INTO users (id, email, password_hash, display_name)
+      VALUES (${deterministicUuid('user', email)}::uuid, ${email}, 'x', ${name})
       ON CONFLICT (email) DO NOTHING
       RETURNING id`;
     if (!user) continue; // aynı tohumla ikinci kez kurulmuş

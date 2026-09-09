@@ -44,7 +44,8 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
   const liq = { threshold: liquidity.liquidityDiscountThreshold, discount: liquidity.liquidityDiscountPct };
 
   const products = await sql<{ id: number; base: bigint }[]>`
-    SELECT id, base_reference_price AS base FROM products WHERE is_active`;
+    SELECT id, base_reference_price AS base FROM products WHERE is_active
+     ORDER BY id`;
 
   let shocked = 0;
   for (const product of products) {

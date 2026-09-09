@@ -1,6 +1,6 @@
 import { validateProductGraph } from '@kapital/economy';
 import {
-  asMoney, divRoundHalfEven, InvariantViolation, money, qty,
+  asMoney, deterministicUuid, divRoundHalfEven, InvariantViolation, money, qty,
   SYSTEM_COMPANIES, SYSTEM_COMPANY_CODES,
 } from '@kapital/shared';
 import { createSql, type Sql } from '../client.js';
@@ -174,8 +174,10 @@ export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<vo
 
     // 7) Sistem şirketleri — para arzının kaynağı ve hedefi (docs/02 §3.1) ------
     for (const code of SYSTEM_COMPANY_CODES) {
-      await tx`INSERT INTO companies (kind, system_code, name, home_city_id, cash, usd_balance)
-               VALUES ('SYSTEM', ${code}, ${SYSTEM_COMPANIES[code]}, 1, 0, 0)
+      // ★ Kimlik deterministik (R79): `system_code` zaten benzersiz anahtar.
+      await tx`INSERT INTO companies (id, kind, system_code, name, home_city_id, cash, usd_balance)
+               VALUES (${deterministicUuid('company', code)}::uuid,
+                       'SYSTEM', ${code}, ${SYSTEM_COMPANIES[code]}, 1, 0, 0)
                ON CONFLICT (system_code) DO NOTHING`;
     }
     log(`${SYSTEM_COMPANY_CODES.length} sistem şirketi`);
@@ -184,17 +186,35 @@ export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<vo
     for (const npc of d.simpleNpcSellers) {
       const city = d.cities.find((c) => c.code === npc.cityCode)!;
       // companies_npc_name_unique (0006) sayesinde tekrar koşu kopya yaratmaz
-      await tx`INSERT INTO companies (kind, name, home_city_id, cash)
-               VALUES ('NPC', ${npc.name}, ${city.id}, 0)
+      await tx`INSERT INTO companies (id, kind, name, home_city_id, cash)
+               VALUES (${deterministicUuid('company', npc.name)}::uuid,
+                       'NPC', ${npc.name}, ${city.id}, 0)
                ON CONFLICT (name) WHERE kind = 'NPC' DO NOTHING`;
     }
     const npcRows = await tx<{ count: bigint }[]>`
       SELECT COUNT(*) AS count FROM companies WHERE kind = 'NPC'`;
     log(`${npcRows[0]?.count ?? 0n} NPC satıcı`);
 
-    // 8) Genesis tur — tick 0. Zaman kaynağı NOW() değil, tick.seq'tir. --------
+    /*
+     * 8) Genesis tur — tick 0.
+     *
+     * ★ `rng_seed` DUVAR SAATİNDEN türüyordu (`Date.now()`) — hem de "zaman
+     * kaynağı NOW() değil, tick.seq'tir" yazan yorumun altında. R57 turun
+     * tohumunu duvar saatinden kurtarmıştı ama SIFIRINCI turu atlamıştı.
+     *
+     * Ölçülen bedeli (R79): kimlikler deterministik yapıldıktan sonra bile
+     * aynı tohumla iki koşum farklı sonuç veriyordu — oynaklık %9,9 vs %9,5,
+     * oyuncu payı %44,4 vs %41,9. Kalan kaynak buydu.
+     *
+     * Artık dünya tohumundan türüyor: `world.rng` yapılandırması kapı
+     * koşumunda tohuma göre yazılır, yoksa sabit bir varsayılan kullanılır.
+     */
+    const [rng] = await tx<{ seed: string | null }[]>`
+      SELECT (value->>'seed') AS seed FROM game_configs
+       WHERE key = 'world.rng' ORDER BY version DESC LIMIT 1`;
+    const genesisSeed = BigInt(rng?.seed ?? '20260101');
     await tx`INSERT INTO economic_ticks (seq, scheduled_at, started_at, completed_at, status, rng_seed, season)
-             VALUES (0, NOW(), NOW(), NOW(), 'COMPLETED', ${BigInt(Date.now())}, 0)
+             VALUES (0, NOW(), NOW(), NOW(), 'COMPLETED', ${genesisSeed}, 0)
              ON CONFLICT (seq) DO NOTHING`;
   });
 }

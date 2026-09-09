@@ -99,7 +99,10 @@ export async function runProducePhase(sql: Sql, tick: EngineTick): Promise<Produ
   if (recipeIds.length > 0) {
     const rows = await sql<RecipeInputRow[]>`
       SELECT recipe_id, product_id, quantity, min_quality::text
-      FROM recipe_inputs WHERE recipe_id = ANY(${recipeIds.map(String)}::int[])`;
+      FROM recipe_inputs WHERE recipe_id = ANY(${recipeIds.map(String)}::int[])
+      -- ★ Sira GARANTILI olmali (R79): girdiler bu sirayla TUKETILIR ve
+      -- stok yetmediginde hangisinin once cekildigi sonucu degistirir.
+      ORDER BY recipe_id, product_id`;
     for (const row of rows) {
       (inputsByRecipe.get(row.recipe_id) ?? inputsByRecipe.set(row.recipe_id, []).get(row.recipe_id)!).push(row);
     }

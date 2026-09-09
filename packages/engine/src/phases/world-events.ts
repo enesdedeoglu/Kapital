@@ -36,7 +36,8 @@ export async function runWorldEvents(sql: Sql, tick: EngineTick): Promise<WorldE
 
   // Biten olaylar duyurulur: oyuncu kuraklığın bittiğini de görmeli.
   const finished = await sql<{ id: bigint; name: string; code: string }[]>`
-    SELECT id, name, code FROM world_events WHERE end_tick = ${tick.seq}`;
+    SELECT id, name, code FROM world_events WHERE end_tick = ${tick.seq}
+     ORDER BY id`;
   for (const event of finished) {
     await notice(sql, tick, {
       kind: 'WORLD_EVENT_ENDED', severity: 'INFO',

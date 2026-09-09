@@ -400,7 +400,21 @@ async function loadOrders(sql: Sql, productId: number, side: 'BUY' | 'SELL'): Pr
   return sql<OrderRow[]>`
     SELECT o.id, o.company_id, o.facility_id, o.city_id, o.remaining_quantity,
            o.price_per_unit, o.min_quality::text, o.quality::text, o.max_delivery_distance,
-           EXTRACT(EPOCH FROM o.created_at)::double precision AS created_epoch,
+           -- ★ Zaman önceliği EMİR SIRASINDAN okunur, DUVAR SAATİNDEN değil.
+           --
+           -- Once EXTRACT(EPOCH FROM o.created_at) idi ve ADR-0003'u ihlal
+           -- ediyordu: iki kosum emirleri farkli milisaniyelerde yazinca
+           -- beraberlik farkli bozuluyor, farkli satici eslesiyordu.
+           --
+           -- Olculdu (R79): tuketici talebi ve uretim kayitlari iki kosumda
+           -- BIREBIR ayniyken toptan islemler 21. turda ayrisiyordu. Piyasaya
+           -- giren her sey ayni, ayrisan tek sey eslestirmenin kendisiydi.
+           --
+           -- id BIGSERIAL'dir ve olusturma sirasiyla artar: fiyat-zaman
+           -- onceligini birebir korur. market.test zaten boyle varsayiyordu
+           -- (createdAt: Number(o.orderId)) — uretim kodu testten ayri
+           -- dusmustu.
+           o.id::double precision AS created_epoch,
            c.logistics_modifier
     FROM market_orders o
     JOIN companies c ON c.id = o.company_id AND c.status = 'ACTIVE'

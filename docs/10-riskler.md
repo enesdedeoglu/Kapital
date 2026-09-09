@@ -2654,6 +2654,64 @@ Bu yüzden genlik büyük bir sıçramayla değil, ölçülen açık kadar artı
 
 ---
 
+## R79 — Determinizm avı: on kaynak, hepsi gerçek, iş henüz bitmedi
+
+**Şiddet:** 🔴 Kritik · **Durum:** ⏳ kısmi
+
+### Neden başladı
+
+`scarcitySwing` 0,15 → 0,18 yapıldı (mekanizmanın genliği %20 arttı) ve oynaklık
+medyanı **%4,9 → %4,7'ye DÜŞTÜ**. Yani ölçüt, düzeltmenin yönünü bile
+gösteremiyordu: koşumdan koşuma ±1,5 puan oynuyor, eşiğe olan mesafe ise 0,1–0,3.
+
+**Ayar yapmak anlamsız hale gelmişti.** R57'de "kabul edilmiş sınır" diye
+bıraktığım artık belirsizlik, artık ilerlemenin önündeki asıl engeldi.
+
+### Yöntem
+
+Aynı tohumla iki koşum, çıktıları `diff`. Fark varsa determinizm yok —
+tartışmaya kapalı. Sonra ikili bölme: hangi tablo ilk sapıyor, girdiler mi
+sonuçlar mı, kurulum mu çalışma anı mı.
+
+### Bulunan kaynaklar
+
+| # | kaynak | sınıf |
+|---|---|---|
+| 1 | `companies.id` / `facilities.id` rastgele UUID | sıra |
+| 2 | Genesis turun `Date.now()` tohumu | **ADR-0003 ihlali** |
+| 3 | `inventories.id` rastgele UUID (tetikleyici) | sıra |
+| 4 | Sistem şirketi kimlikleri rastgele | sıra |
+| 5 | Eşleştirmede `EXTRACT(EPOCH FROM created_at)` | **ADR-0003 ihlali** |
+| 6 | `loadOpportunities` — `ORDER BY` yok | **R56 eksik kalmış** |
+| 7 | `loadFacilities` — `ORDER BY` yok | **R56 eksik kalmış** |
+| 8 | `loadStock` — `ORDER BY` yok | sıra |
+| 9 | `recipe_inputs` — `ORDER BY` yok (girdiler bu sırayla TÜKETİLİR) | sıra |
+| 10 | `p5-settle` ürünleri, `p0-open` tesisleri, `world-events` | sıra |
+
+★ 5 numara özellikle öğretici: `market.test` doğrusunu zaten varsayıyordu
+(`createdAt: Number(o.orderId)`) — üretim kodu duvar saatini okuyor, test emir
+sırasını. İkisi ayrı düşmüş ve test bu yüzden hatayı yakalayamamış.
+
+★ 6 ve 7 aynı dosyada, aynı sınıftan. R56'da "döngü sorgularına ORDER BY ekle"
+işini bitirdiğimi sanıyordum; ikisini atlamışım. **Ders: teker teker düzeltmek
+yerine sınıfı tara.** İlk altısını tek tek buldum, 6–10'u bir taramayla.
+
+### Kanıtlanan kazanç
+
+- Kurulum sonrası dünya **birebir aynı**: NPC profilleri, tesisler, fiyat geçmişi
+- Tüketici talebi ve üretim kayıtları **birebir aynı**
+- Sapma yalnız toptan piyasa / NPC karar yolunda kaldı
+
+### Açık kalan
+
+Determinizm **oturmadı**. On kaynak sonrası toptan işlemler hâlâ ayrışıyor.
+Kalan tarama listesi (45 sorgudan 35'i) elde duruyor.
+
+★ Dürüst kayıt: bu avın ne kadar süreceği ÖLÇÜLEMEDİ. Her adım daralttı ama
+bitiş noktası görünmüyor. Kapı bu sırada tek eksikle bekliyor.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2810,6 +2868,7 @@ kendi kendini yukarıda tutar.
 | R75 | Para arzı sızıntısı: bütçeli musluk, adede bağlı gider | 🔴 Kritik | ✅ ücret endeksi · para arzı %40,7→%37,9 |
 | R76 | Tam endeksleme ücret-fiyat sarmalı yarattı | 🔴 Kritik | ✅ kısmi endeksleme · kur %50→%15 |
 | R78 | Kısmi endeksleme tuttu: bir tohum 14/14 | — | ✅ tek eksik `volatility`, tabana 0,1 puan |
+| R79 | Determinizm: on kaynak kapandı, iş bitmedi | 🔴 Kritik | ⏳ kurulum kanıtlı aynı · toptan yol açık |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |

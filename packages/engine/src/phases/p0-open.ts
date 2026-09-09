@@ -39,7 +39,8 @@ export async function runOpenPhase(sql: Sql, tick: EngineTick): Promise<OpenPhas
   // hale gelir; burada yalnız bildirim için sayılır.
   const completed = await sql`
     SELECT id FROM facilities
-    WHERE closed_at IS NULL AND construction_complete_at_tick = ${tick.seq}`;
+    WHERE closed_at IS NULL AND construction_complete_at_tick = ${tick.seq}
+    ORDER BY id`;
 
   const npcOffersRefreshed = await refreshNpcSupply(sql, tick);
 

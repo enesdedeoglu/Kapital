@@ -8,7 +8,9 @@ import {
   planInventory, representativeDistance, shippingPerUnit, softFloor,
   type DirectiveLever, type PriceDecision,
 } from '@kapital/economy';
-import { asMoney, asQty, TICKS_PER_DAY, type Money } from '@kapital/shared';
+import {
+  asMoney, asQty, deterministicUuid, TICKS_PER_DAY, type Money,
+} from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices, type ReferencePrices } from '../reference-prices.js';
 import { runDirector, type DirectorResult } from './director.js';
@@ -520,7 +522,12 @@ async function loadFacilities(sql: Sql, tick: EngineTick, companyIds: string[]):
     LEFT JOIN facility_level_curve lc ON lc.level = f.level
     LEFT JOIN production_recipes r ON r.id = f.active_recipe_id
     WHERE f.company_id = ANY(${companyIds}::uuid[])
-      AND f.closed_at IS NULL AND f.construction_complete_at_tick <= ${tick.seq}`;
+      AND f.closed_at IS NULL AND f.construction_complete_at_tick <= ${tick.seq}
+    -- ★ Sira GARANTILI olmali (R79). Bu satirlar byCompany'ye gruplanip NPC
+    -- dongusune besleniyor ve o dongu ALIS/SATIS EMIRLERINI yaziyor. Tesis
+    -- sirasi emir yazilma sirasini, o da emir id'lerini, o da eslestirmedeki
+    -- zaman onceligini belirliyor. ORDER BY yoktu.
+    ORDER BY f.company_id, f.id`;
 }
 
 async function loadStock(sql: Sql, inventoryIds: string[]): Promise<StockRow[]> {
@@ -533,7 +540,9 @@ async function loadStock(sql: Sql, inventoryIds: string[]): Promise<StockRow[]> 
     FROM inventory_batches b
     WHERE b.inventory_id = ANY(${inventoryIds}::uuid[])
     GROUP BY b.inventory_id, b.product_id
-    HAVING SUM(b.quantity - b.reserved_quantity) > 0`;
+    HAVING SUM(b.quantity - b.reserved_quantity) > 0
+    -- Anahtar benzersiz oldugu icin arama etkilenmez; yine de sira sabit olsun.
+    ORDER BY b.inventory_id, b.product_id`;
 }
 
 async function loadRecipeInputs(
@@ -870,7 +879,20 @@ async function loadOpportunities(sql: Sql, tick: EngineTick): Promise<Opportunit
           LEFT JOIN saglik s2 ON s2.product_id = ri2.product_id
          WHERE ri2.recipe_id = r.id
       ) sn ON TRUE
-     WHERE r.is_active`;
+     WHERE r.is_active
+     -- ★ Sira GARANTILI olmali (R79). ORDER BY yoktu ve maybeInvest kazanani
+     -- kati '>' ile seciyor: beraberlikte ILK SIRADAKI kazanir. Postgres
+     -- ORDER BY olmadan satir sirasini garanti etmez, dolayisiyla ayni
+     -- tohumla iki kosumda farkli urune yatirim yapilabiliyordu.
+     --
+     -- R48 bu secimin ne kadar hassas oldugunu zaten olcmustu: firin 0,36 -
+     -- degirmen 0,36, aradaki fark 0,01 ve 28 yatirimin HEPSI firina gitti.
+     -- Beraberlik burada sik ve sonuc belirleyici.
+     --
+     -- Olculdu: tuketici talebi, uretim, NPC profilleri, tesisler ve fiyat
+     -- gecmisi iki kosumda BIREBIR ayniyken toptan islemler 21. turda
+     -- ayrisiyordu.
+     ORDER BY r.output_product_id`;
 }
 
 /**
@@ -948,10 +970,13 @@ async function maybeInvest(
   const [type] = await sql<{ storage_capacity: bigint }[]>`
     SELECT storage_capacity FROM facility_types WHERE id = ${best.opportunity.facility_type_id}`;
 
+  // ★ Kimlik deterministik (R79): tur + şirket + ürün üçlüsü bir turda
+  // benzersizdir — aynı NPC aynı turda tek yatırım yapar.
   const [facility] = await sql<{ id: string }[]>`
-    INSERT INTO facilities (company_id, facility_type_id, city_id, name, storage_capacity,
+    INSERT INTO facilities (id, company_id, facility_type_id, city_id, name, storage_capacity,
                             construction_complete_at_tick, active_recipe_id)
-    VALUES (${npc.company_id}::uuid, ${best.opportunity.facility_type_id}, ${city.id},
+    VALUES (${deterministicUuid('facility', npc.company_id, tick.seq, best.opportunity.product_id)}::uuid,
+            ${npc.company_id}::uuid, ${best.opportunity.facility_type_id}, ${city.id},
             ${`${npc.name} — ${best.opportunity.facility_code}`}, ${type!.storage_capacity},
             ${tick.seq + BigInt(best.opportunity.build_ticks)}, ${best.opportunity.recipe_id})
     RETURNING id`;
