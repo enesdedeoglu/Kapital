@@ -2421,6 +2421,42 @@ yaşanan hatanın aynısı.
 R72 geri alınmadı: günlük talep ritmi kendi başına doğru (satılan MİKTAR
 günden güne değişmeli), yalnız fiyatı tek başına hareket ettiremezdi.
 
+### Ölçüldü: çalıştı, ama bir ölçütü diğeriyle takas etti
+
+| | R72 | R73 |
+|---|---|---|
+| oynaklık (günlük) | %1,7 · 0/5 | **%4,6 · 2/5** |
+| tüm hafta aralığı | %16,9 | %35,6 |
+| **para arzı** | %22,5 · 5/5 | **%40,7 · 1/5** |
+| tohum skorları | 10,13,12,13,13 | 11,12,12,12,13 |
+
+Kıtlık primi fiyatı gerçekten hareket ettirdi (taban %5'in hemen altı) ama
+para arzı ±%40 eşiğini aştı. Net skor biraz düştü.
+
+★ Para arzı sorunu YENİ DEĞİL: oturum boyunca %22–30 arasında, hep pozitif
+ve yukarı yönlü seyrediyordu. R73 onu yaratmadı, eşiğin üstüne itti. Kronik
+bir enflasyon eğilimi var ve şimdi görünür oldu.
+
+### Ve iki hipotezim daha çürüdü
+
+1. **"Fiyatlar musluğu şişirdi."** Ölçüldü: son gün SALES 5.413.885 →
+   5.405.414. Neredeyse aynı. Tüketici BÜTÇE sınırlı — fiyat artınca daha az
+   adet alıyor, aynı parayı harcıyor.
+2. **"CAPEX patlaması sebep."** CAPEX 318.100 → 1.190.500 (dört kat) ama CAPEX
+   bir GİDERdir, parayı ekonomiden çıkarır. Sebep olamaz.
+
+Kalan şüphe: ücret reçeteden gelen SABİT NOMİNAL bir sayı ve ÜRETİLEN ADEDE
+göre ödeniyor. Fiyat artınca adet düşerse gider küçülür, musluk sabit kalır,
+para birikir. Ama son gün maaşı da neredeyse aynı (2.893.867 → 2.876.764),
+yani mekanizma biliniyor, BÜYÜKLÜĞÜ bilinmiyor.
+
+Ölçüt haftanın tamamını sayıyor; son günün fotoğrafı cevap vermiyor.
+`teshis.sql` R74 bloğu günlük seriyi verecek: para arzı, musluk, maaş, capex
+ve üretilen adet — gün gün.
+
+★ Üst üste üç kez veriden önce akıl yürütüp yanıldım. Bu koşum DAVRANIŞ
+DEĞİL, yalnız ölçüm taşıyor.
+
 ---
 
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa

@@ -299,3 +299,44 @@ SELECT s.kind,
               - COALESCE(SUM(g.tutar) FILTER (WHERE g.account <> 'CAPEX'),0))/10000.0) AS net_kar
   FROM satis s LEFT JOIN gider g ON g.kind = s.kind
  GROUP BY s.kind, s.ciro, s.maliyet ORDER BY 1;
+
+\echo '=== R74 — PARA ARZI GÜN GÜN: nerede ve neden büyüyor? ==='
+-- ★ `money_supply` ölçütü HAFTANIN TAMAMINI sayar (ilk tur → son tur). Son
+-- günün akışlarına bakmak bu yüzden cevap vermiyordu: R73'ten sonra son gün
+-- musluğu neredeyse aynıydı (5.413.885 → 5.405.414) ama haftalık büyüme
+-- %22,5'ten %40,7'ye çıkmıştı.
+--
+-- Şüphe: tüketici BÜTÇE sınırlı, yani fiyat artınca daha az adet alıyor ve
+-- musluk sabit kalıyor. Ücret ise reçeteden gelen SABİT NOMİNAL bir sayı ve
+-- ÜRETİLEN ADEDE göre ödeniyor. Adet düşünce gider küçülüyor, musluk aynı
+-- kalıyor ve para birikiyor. Doğruysa günlük seride görünür.
+WITH gunler AS (
+  SELECT (tick_id - 1) / 96 AS gun,
+         MIN(tick_id) AS ilk_tur,
+         (ARRAY_AGG(total_money_supply ORDER BY tick_id DESC))[1] AS arz
+    FROM economy_snapshots GROUP BY 1
+),
+akis AS (
+  SELECT (le.tick_id - 1) / 96 AS gun,
+         SUM(le.amount) FILTER (WHERE le.account = 'SALES'   AND le.direction = 'DEBIT')  AS musluk,
+         SUM(le.amount) FILTER (WHERE le.account = 'SALARY'  AND le.direction = 'CREDIT') AS maas,
+         SUM(le.amount) FILTER (WHERE le.account = 'CAPEX'   AND le.direction = 'CREDIT') AS capex
+    FROM ledger_entries le
+    JOIN companies c ON c.id = le.company_id AND c.kind = 'SYSTEM'
+   GROUP BY 1
+),
+uretim AS (
+  SELECT (tick_id - 1) / 96 AS gun, SUM(produced) AS adet
+    FROM production_records GROUP BY 1
+)
+SELECT g.gun,
+       ROUND(g.arz/10000.0)                                   AS para_arzi,
+       ROUND((g.arz - LAG(g.arz) OVER (ORDER BY g.gun))/10000.0) AS degisim,
+       ROUND(COALESCE(a.musluk,0)/10000.0)                    AS musluk,
+       ROUND(COALESCE(a.maas,0)/10000.0)                      AS maas,
+       ROUND(COALESCE(a.capex,0)/10000.0)                     AS capex,
+       ROUND(COALESCE(u.adet,0)/1000.0)                       AS uretilen_adet
+  FROM gunler g
+  LEFT JOIN akis a ON a.gun = g.gun
+  LEFT JOIN uretim u ON u.gun = g.gun
+ ORDER BY g.gun;
