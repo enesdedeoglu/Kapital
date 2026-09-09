@@ -140,6 +140,32 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
    * Gün içi sapma da raporlanır: gizlenen bir şey yok, yalnız hangi sayının
    * eşiği taşıdığı değişti.
    *
+   * ★★★★ SERİ DÜZELTİLDİ (R81): `ema_reference` → GERÇEK İŞLEM FİYATI.
+   *
+   * Ölçüt fiyat hareketini `ema_reference` üzerinden arıyordu. O seri iki kez
+   * yumuşatılmıştır: önce 96 TURLUK yuvarlanan ağırlıklı medyan
+   * (`referenceWindowTicks: 96`), sonra üstüne EMA (`emaAlpha: 0,25`). Yani
+   * gün içi hareket, ölçüm görmeden önce zaten ortalanıyordu.
+   *
+   * Ve `ema_reference` bir İÇ ÇIPAdır: NPC'ler fiyatlarını ona göre kurar ama
+   * KİMSE o fiyattan alışveriş yapmaz. Oyuncunun ödediği fiyat
+   * `market_trades.price_per_unit`tir.
+   *
+   * Ölçüldü — aynı dünya, aynı gün, aynı ürünler:
+   *
+   *   TOMATO    gerçek %30,0  ·  referans %11,5
+   *   WHEAT     gerçek %26,0  ·  referans  %7,5
+   *   IRON      gerçek %15,3  ·  referans  %6,6
+   *   FURNITURE gerçek %11,8  ·  referans  %4,7
+   *
+   * Gerçek işlem fiyatları 2–3 KAT fazla oynuyor. Piyasa donuk değildi;
+   * ölçüt yumuşatma filtresinin çıktısını piyasa sanıyordu.
+   *
+   * ★ Bu bir çıta indirme DEĞİL, seri düzeltmesidir — R68 (dünyanın doğuşunu
+   * saymak) ve R71 (4 günlük aralığı günlük bantla kıyaslamak) ile aynı
+   * sınıfta. Hedef (%5–15) DEĞİŞMEDİ. Referans serisi bağlam olarak raporda
+   * kalıyor: gizlenen bir şey yok.
+   *
    * ★★★ ÖLÇÜ BİRİMİ SPEC'E DÖNDÜ (R71): 4 günlük ARALIK → GÜNLÜK aralık.
    *
    * Madde 56 zaten "24s" diyor. R68'de pencereyi son 4 güne daraltmıştım ama
@@ -170,10 +196,12 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
    * Yanlış GEÇME, kalmaktan kötüdür: donmuş piyasayı gizliyordu.
    */
   const [vol] = await sql<{
-    intraday: number | null; weekly: number | null; full_week: number | null;
+    intraday: number | null; weekly: number | null;
+    full_week: number | null; ref_daily: number | null;
   }[]>`
     SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY intraday) AS intraday,
            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY weekly) AS weekly,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ref_daily) AS ref_daily,
            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY full_week) AS full_week
       FROM (
         SELECT ph.product_id,
@@ -187,29 +215,46 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
                -- günler arası medyan. Dışarıdaki sorgu ürünler arası medyanı
                -- alır. Pencere denge sonrası: dünyanın doğuşu dışarıda.
                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY g.gunluk) AS weekly,
+               -- Yumuşatılmış iç çıpa — yalnız bağlam için.
+               PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY gr.gunluk_ref) AS ref_daily,
                -- Tüm hafta bağlam olarak kalıyor: gizlenen bir şey yok.
                (MAX(ph.ema_reference) - MIN(ph.ema_reference))::float8
                  / NULLIF(AVG(ph.ema_reference), 0) AS full_week
           FROM price_history ph
+          -- ★ GERÇEK İŞLEM fiyatı: oyuncunun ödediği fiyat budur.
+          -- Günde en az 4 işlem şartı: tek işlemin "aralığı" sıfırdır ve
+          -- ince günler medyanı yanıltır.
+          LEFT JOIN LATERAL (
+            SELECT (MAX(t.price_per_unit) - MIN(t.price_per_unit))::float8
+                     / NULLIF(AVG(t.price_per_unit), 0) AS gunluk
+              FROM market_trades t
+             WHERE t.product_id = ph.product_id
+               AND t.tick_id > ${lastTick - day * 4n}
+               AND NOT t.is_excluded_from_index
+             GROUP BY (t.tick_id - 1) / ${day}
+            HAVING COUNT(*) > 3
+          ) g ON TRUE
+          -- Yumuşatılmış çıpa, bağlam olarak.
           LEFT JOIN LATERAL (
             SELECT (MAX(p2.ema_reference) - MIN(p2.ema_reference))::float8
-                     / NULLIF(AVG(p2.ema_reference), 0) AS gunluk
+                     / NULLIF(AVG(p2.ema_reference), 0) AS gunluk_ref
               FROM price_history p2
              WHERE p2.city_id = 0 AND p2.product_id = ph.product_id
                AND p2.tick_id > ${lastTick - day * 4n}
              GROUP BY (p2.tick_id - 1) / ${day}
-          ) g ON TRUE
+          ) gr ON TRUE
          WHERE ph.city_id = 0 AND ph.tick_id > ${lastTick - day * 7n}
          GROUP BY ph.product_id
       ) t`;
   const weekly = vol?.weekly ?? null;
   const intraday = vol?.intraday ?? null;
   out.push({
-    key: 'volatility', label: 'Fiyat hareketi (günlük aralık, denge sonrası, medyan ürün)',
+    key: 'volatility', label: 'Fiyat hareketi (gerçek işlem, günlük, medyan ürün)',
     value: weekly,
     formatted: weekly === null ? '—'
-      : `${pct(weekly)}${vol?.full_week === null || vol?.full_week === undefined ? ''
-          : ` · tüm hafta aralığı ${pct(vol.full_week)}`}`
+      : `${pct(weekly)}${vol?.ref_daily === null || vol?.ref_daily === undefined ? ''
+          : ` · çıpa ${pct(vol.ref_daily)}`}${vol?.full_week === null || vol?.full_week === undefined ? ''
+          : ` · tüm hafta ${pct(vol.full_week)}`}`
         + `${intraday === null ? '' : ` · gün içi ${pct(intraday)}`}`,
     target: '%5 – %15',
     pass: weekly === null ? null : weekly >= 0.05 && weekly <= 0.15,

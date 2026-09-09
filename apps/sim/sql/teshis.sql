@@ -340,3 +340,53 @@ SELECT g.gun,
   LEFT JOIN akis a ON a.gun = g.gun
   LEFT JOIN uretim u ON u.gun = g.gun
  ORDER BY g.gun;
+
+\echo '=== R81 — FİYAT NEDEN OYNAMIYOR: iten sinyal oynuyor mu? ==='
+-- ★ `scarcityPremium` stok KAPSAMINI okur. Kapsam gun icinde kipirdamiyorsa
+-- prim de sabit kalir ve fiyat oynamaz. Yani asil soru "fiyat neden
+-- oynamiyor" degil, "fiyati iten sinyal oynuyor mu".
+--
+-- Olculdu (R80): oynaklik tohum bazinda %2,3 - %5,6. Gecen dunyada 6/10 urun
+-- kisilmis ve stoklar 2-3 kat buyuk; donuk dunyada 7/10 urun tam kapasitede
+-- ve stoklar dusuk. Ama bu KISMI bir aciklamaydi (korelasyon bir tohumda
+-- net, otekinde zayif). Bu blok mekanizmayi dogrudan olcer.
+--
+-- Her urun icin denge sonrasi pencerede: arz/talep oraninin gunluk araligi
+-- (iten sinyal) ve fiyatin gunluk araligi (sonuc). Sinyal duzse fiyatin
+-- oynamamasi beklenir; sinyal oynayip fiyat oynamiyorsa sorun baska yerde.
+WITH s AS (SELECT MAX(seq) AS son, MAX(seq) - 384 AS baslangic FROM economic_ticks),
+sinyal AS (
+  SELECT mh.product_id,
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY g.aralik) AS gunluk_sinyal
+    FROM (SELECT DISTINCT product_id FROM market_health) mh, s
+    JOIN LATERAL (
+      SELECT (MAX(h.supply_units::float8 / NULLIF(h.demand_units, 0))
+              - MIN(h.supply_units::float8 / NULLIF(h.demand_units, 0)))
+             / NULLIF(AVG(h.supply_units::float8 / NULLIF(h.demand_units, 0)), 0) AS aralik
+        FROM market_health h
+       WHERE h.city_id = 0 AND h.product_id = mh.product_id
+         AND h.tick_id > s.baslangic AND h.demand_units > 0
+       GROUP BY (h.tick_id - 1) / 96
+    ) g ON TRUE
+   GROUP BY mh.product_id
+),
+fiyat AS (
+  SELECT ph.product_id,
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY g2.aralik) AS gunluk_fiyat
+    FROM (SELECT DISTINCT product_id FROM price_history) ph, s
+    JOIN LATERAL (
+      SELECT (MAX(p2.ema_reference) - MIN(p2.ema_reference))::float8
+             / NULLIF(AVG(p2.ema_reference), 0) AS aralik
+        FROM price_history p2
+       WHERE p2.city_id = 0 AND p2.product_id = ph.product_id AND p2.tick_id > s.baslangic
+       GROUP BY (p2.tick_id - 1) / 96
+    ) g2 ON TRUE
+   GROUP BY ph.product_id
+)
+SELECT p.code,
+       ROUND((si.gunluk_sinyal * 100)::numeric, 1) AS sinyal_gunluk_yuzde,
+       ROUND((f.gunluk_fiyat  * 100)::numeric, 1) AS fiyat_gunluk_yuzde
+  FROM products p
+  JOIN sinyal si ON si.product_id = p.id
+  JOIN fiyat  f  ON f.product_id  = p.id
+ ORDER BY 2 DESC;

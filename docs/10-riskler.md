@@ -2807,6 +2807,72 @@ Yani bazı dünyalarda parasal sorun var ve bu bilgi kullanılabilir.
 
 ---
 
+## R81 — Oynaklık ölçütü YUMUŞATILMIŞ İÇ ÇIPAYA bakıyordu
+
+**Şiddet:** 🟠 Yüksek · **Durum:** ⏳ kapıda sınanıyor
+
+### Önce iki hipotez çürüdü
+
+**"Fiyatı iten sinyal kıpırdamıyor."** R81 bloğu arz/talep oranının günlük
+aralığını fiyatınkiyle yan yana ölçtü: sinyal her iki dünyada da bol bol
+oynuyor (%4,4–44,7). Sorun sinyalde değildi.
+
+**"Dünya olayları az."** Olay sayıları: 3 olaylı tohum oynaklık %2,8,
+10 olaylı tohum %2,3. Olaylar farkı AÇIKLAMIYOR.
+
+### Ve bir şey daha ölçüldü: oynaklık yakınsadıkça sönüyor
+
+| gün | medyan günlük aralık |
+|---|---|
+| 0 | %20,9 |
+| 1 | %11,9 |
+| 2 | %7,6 |
+| 3 | **%3,7** |
+| 4 | %6,6 |
+
+Kapı 3–7. günleri ölçüyor, yani yakınsamadan SONRASINI. Bu ekonomik olarak
+doğru davranıştır — ama asıl sebep bu değildi.
+
+### Kök: ölçüt kimsenin alışveriş yapmadığı bir seriye bakıyordu
+
+`ema_reference` İKİ KEZ yumuşatılmıştır:
+- `referenceWindowTicks: 96` → 96 turluk yuvarlanan ağırlıklı medyan
+- `emaAlpha: 0,25` → üstüne EMA
+
+Yani gün içi hareket, ölçüm görmeden önce zaten ortalanıyor. Üstelik bu seri
+bir **İÇ ÇIPA**dır: NPC'ler fiyatlarını ona göre kurar ama kimse o fiyattan
+alışveriş yapmaz. Oyuncunun ödediği fiyat `market_trades.price_per_unit`tir.
+
+Aynı dünya, aynı gün, aynı ürünler:
+
+| ürün | gerçek işlem | çıpa |
+|---|---|---|
+| TOMATO | **%30,0** | %11,5 |
+| WHEAT | **%26,0** | %7,5 |
+| IRON | %15,3 | %6,6 |
+| FURNITURE | %11,8 | %4,7 |
+
+Gerçek işlem fiyatları 2–3 KAT fazla oynuyor. Piyasa donuk değildi; ölçüt
+yumuşatma filtresinin çıktısını piyasa sanıyordu.
+
+### ★ Bu bir çıta indirme mi? Gerekçe ve karşı argüman
+
+Hedef (%5–15) DEĞİŞMEDİ. Değişen, hangi seriye bakıldığı. Gerekçe: "fiyat
+hareketi" ölçüsü insanların ÖDEDİĞİ fiyatın hareketini ölçmeli.
+
+**Karşı argüman, kayda geçsin:** bu değişiklik ölçütü geçiriyor ve ben onu
+geçirmeye çalışıyordum — gerekçelendirme yapmış olabilirim. Üç dayanak:
+
+1. `ema_reference`in iç çıpa olduğu tasarımda yazılı, yorum değil
+2. İki kez yumuşatma YAPILANDIRMADAN okunuyor, tahmin değil
+3. Çıpa değeri raporda KALIYOR — `%13,9 · çıpa %7,0` — gizlenen yok
+
+Sınama olarak kapının EN DONUK tohumu (%2,3) seçildi: düzeltilmiş ölçüt orada
+%13,9 veriyor. Ama bu bandın üst ucuna yakın; bazı dünyalarda ÜST banttan
+kalabilir. Beş tohum görülmeden "geçti" denmez.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2965,6 +3031,7 @@ kendi kendini yukarıda tutar.
 | R78 | Kısmi endeksleme tuttu: bir tohum 14/14 | — | ✅ tek eksik `volatility`, tabana 0,1 puan |
 | R79 | Determinizm: 11 kaynak · kök `weightedMedian` beraberliği | 🔴 Kritik | ✅ BİREBİR aynı · `query-order.test` bekçi |
 | R80 | Temiz zeminde ilk kapı: 13/14 · bir tohum tam | — | ✅ tek eksik `volatility` · dağılım %2,3–5,6 |
+| R81 | Oynaklık ölçütü yumuşatılmış iç çıpaya bakıyordu | 🟠 Yüksek | ⏳ gerçek işlem fiyatına geçildi |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
