@@ -12,6 +12,15 @@ import { configValue, rngFor, type EngineTick } from '../context.js';
 import { PHASE } from '../phases.js';
 import { loadActiveEvents } from './world-events.js';
 
+/**
+ * Ücretin fiyat seviyesini ne kadar takip ettiği (0 = hiç, 1 = tamamen).
+ *
+ * 1 sarmal yaratır (R76): fiyatlama maliyet artı marj olduğu için döngü
+ * kapanır. 0 ise para arzı sızar (R75): musluk bütçe sınırlı, gider adede
+ * bağlıdır ve adet düşünce açık büyür. Yarım, ikisinin arasıdır.
+ */
+const WAGE_INDEXATION = 0.5;
+
 interface ProducerRow {
   facility_id: string; company_id: string; city_id: number; inventory_id: string;
   facility_name: string; category: FacilityCategory; level: number; condition: string;
@@ -129,8 +138,24 @@ export async function runProducePhase(sql: Sql, tick: EngineTick): Promise<Produ
      WHERE ph.city_id = 0
        AND ph.tick_id = (SELECT MAX(tick_id) FROM price_history WHERE tick_id <= ${tick.seq})
        AND p.base_reference_price > 0`;
-  // Sınırlı: bozuk veri ya da tek turluk sıçrama gideri patlatmasın.
-  const wageIndex = Math.max(0.5, Math.min(3, endeks?.index ?? 1));
+  /*
+   * ★★ KISMİ endeksleme (R76) — tam endeksleme SARMAL yaratıyor.
+   *
+   * İlk hâli endeksi doğrudan uyguluyordu ve pozitif geri besleme kurdu:
+   * fiyat ↑ → ücret ↑ → maliyet ↑ → fiyat ↑. Fiyatlama maliyet artı marj
+   * olduğu için döngü kapanıyor ve kendini besliyor. Ölçüldü: para arzı
+   * düzeldi (%40,7 → %37,9) ama kur %8,5'ten %50,0'ye fırladı — kur
+   * `baseRate × gameCpi` ile fiyat seviyesini takip eder, yani sarmalın
+   * göstergesi.
+   *
+   * Gerçek ekonomilerdeki ücret-fiyat sarmalının aynısı ve çözümü de aynı:
+   * ücret fiyatın TAMAMINI değil, bir KISMINI takip eder. Böylece maliyet
+   * fiyattan yavaş artar, döngü yakınsar.
+   *
+   * Sızıntı yine kapanır (gider musluğa ayak uydurur) ama sarmal kurulmaz.
+   */
+  const ham = Math.max(0.5, Math.min(3, endeks?.index ?? 1));
+  const wageIndex = 1 + WAGE_INDEXATION * (ham - 1);
 
   for (const producer of producers) {
     result.facilities++;

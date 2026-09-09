@@ -2510,6 +2510,49 @@ o yüzden artık her davranış testi böyle sınanıyor.
 
 ---
 
+## R76 — Kendi düzeltmem ücret-fiyat sarmalı yarattı
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R75 koşumu · **Durum:** ⏳ sınanıyor
+
+R75 (ücret endeksi) hedefini tutturdu ama iki şeyi bozdu:
+
+| | R73 | R75 |
+|---|---|---|
+| para arzı | %40,7 · 1/5 | **%37,9 · 4/5** ✓ |
+| oynaklık | %4,5 · 2/5 | %2,9 · 1/5 |
+| **kur** | %8,5 · 4/5 | **%50,0 · 1/5** |
+| tohumlar | 11,12,12,13,13 | 10,10,12,13,12 |
+
+Kur `baseRate × gameCpi` ile fiyat seviyesini takip eder; %50 sıçraması CPI'ın
+fırladığını söylüyor.
+
+**Sebep tam endeksleme.** Fiyatlama maliyet artı marjdır; ücreti fiyata
+tamamen bağlayınca döngü kapanıyor:
+
+```
+fiyat ↑ → ücret ↑ → maliyet ↑ → fiyat ↑
+```
+
+Gerçek ekonomilerdeki ücret-fiyat sarmalının aynısı. Çözümü de aynı: ücret
+fiyatın TAMAMINI değil bir KISMINI takip eder (`WAGE_INDEXATION = 0.5`).
+Maliyet fiyattan yavaş artar, döngü yakınsar. Sızıntı yine kapanır çünkü gider
+musluğa ayak uydurmaya devam eder.
+
+### Kayda geçsin: son iki değişiklik net olarak GERİLETTİ
+
+| durum | tohumlar | tutmayan |
+|---|---|---|
+| R72 sonrası | **10,13,12,13,13** | yalnız `volatility` |
+| R73 sonrası | 11,12,12,12,13 | `volatility`, `money_supply` |
+| R75 sonrası | 10,10,12,13,12 | `volatility`, `fx_change` |
+
+Ekonominin bağlaşımları tek tek değişiklikle öngörebildiğimden güçlü. Her
+düzeltme başka bir ölçütü kırdı. R76 bunu sönümlemeye çalışıyor; tutmazsa
+doğru hamle R73+R75'i geri alıp `volatility`'yi açık bilinen sorun olarak
+bırakmak ve kapıyı tek eksikle geçirmek olabilir. Bu karar oyuncunun.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2663,7 +2706,8 @@ kendi kendini yukarıda tutar.
 | R71 | Kapı ölçütleri oyunun hedefine göre yeniden yazıldı | 🔴 Kritik | ✅ 4 ölçüt · birleşik kapıda tek ölçüt kaldı |
 | R72 | Ekonomide günlük ölçek yok: piyasa günden güne donuk | 🔴 Kritik | ⏳ `dailyRhythm` · tek başına yetmedi |
 | R73 | Fiyat formülünde talep terimi yok: maliyet + kendi geçmişi | 🔴 Kritik | ✅ `scarcityPremium` · oynaklık %1,7→%4,6 |
-| R75 | Para arzı sızıntısı: bütçeli musluk, adede bağlı gider | 🔴 Kritik | ⏳ ücret endeksi |
+| R75 | Para arzı sızıntısı: bütçeli musluk, adede bağlı gider | 🔴 Kritik | ✅ ücret endeksi · para arzı %40,7→%37,9 |
+| R76 | Tam endeksleme ücret-fiyat sarmalı yarattı | 🔴 Kritik | ⏳ kısmi endeksleme (0,5) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |
