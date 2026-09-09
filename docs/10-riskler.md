@@ -2553,6 +2553,60 @@ bırakmak ve kapıyı tek eksikle geçirmek olabilir. Bu karar oyuncunun.
 
 ---
 
+## R77 — Referans fiyatın ÇIPASI yok (ertelendi: F9 sonrası)
+
+**Şiddet:** 🟠 Yüksek · **Karar:** oyuncunun · **Durum:** ⏸ ertelendi
+
+Oyuncu sordu: fiyatlar sabit olsa, ara sıra kuraklık gibi olaylarla değişse
+işimiz basitleşmez mi? Sezgi doğru yeri işaret ediyor — ama suçlu daha dar.
+
+### Ölçülen kök sebep
+
+`p5-settle` referansı şöyle kuruyor:
+
+```
+previousEma = önceki ema ?? base_reference_price
+median      = piyasa işlemlerinin ağırlıklı medyanı
+smoothed    = EMA(median, previousEma)
+```
+
+`base_reference_price` yalnız İLK turda kullanılıyor. Sonrası kendi geçmişini
+takip eden bir rastgele yürüyüş — hiçbir yere bağlı değil.
+
+★ Son üç koşumda kovaladığım üç ayrı arıza aynı kökten geliyor:
+`money_supply` sürüklenmesi, `fx_change` sıçraması (kur `baseRate × gameCpi`
+ile fiyat seviyesini takip eder) ve `volatility`nin haftalık aralığının günlük
+aralıktan kat kat büyük olması. Hepsi çıpasızlığın belirtisi.
+
+### Neden TAM SABİT fiyat değil
+
+1. **Kendini düzeltme kaybolur.** NPC yatırımı marja ve kıtlığa bakar. Fiyat
+   sabitse kıtlık kârlı olmaz: ekmek tükenir, fiyat artmaz, kimse fırın
+   kurmaz. Yerine merkezi planlayıcı gerekir — ADR-0004'e aykırı ve işi
+   azaltmaz, taşır.
+2. **Al-sat stratejisi kalkar.** Geriye lojistik kalır; oyun üretim/lojistik
+   oyununa döner.
+3. Not: Capitalism'de fiyatlar sabit DEĞİLdi — perakende fiyatını oyuncu
+   koyuyor, talep ona tepki veriyordu. Hatırlanan şey istikrar HİSSİ; o his
+   sabit fiyat gerektirmiyor.
+
+### Önerilen (uygulanmadı)
+
+Referans kendi geçmişine değil temel fiyata bağlanır:
+
+```
+referans = base_reference_price × (olay çarpanları) × (yavaş yapısal düzeltme)
+```
+
+Fiyat arz/talebe göre çıpanın etrafında oynar ama sürüklenemez. Kıtlık yine
+kârlı, oyuncu yine al-sat yapar, kuraklık çıpayı kaydırır. Muhtemelen
+`scarcityPremium` (R73) ve ücret endeksini (R75/R76) gereksiz kılar.
+
+**Karar:** şimdilik dokunulmuyor, kapı bitirilecek. Bu iş F9 sonrasına
+ertelendi.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2708,6 +2762,7 @@ kendi kendini yukarıda tutar.
 | R73 | Fiyat formülünde talep terimi yok: maliyet + kendi geçmişi | 🔴 Kritik | ✅ `scarcityPremium` · oynaklık %1,7→%4,6 |
 | R75 | Para arzı sızıntısı: bütçeli musluk, adede bağlı gider | 🔴 Kritik | ✅ ücret endeksi · para arzı %40,7→%37,9 |
 | R76 | Tam endeksleme ücret-fiyat sarmalı yarattı | 🔴 Kritik | ⏳ kısmi endeksleme (0,5) |
+| R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |
