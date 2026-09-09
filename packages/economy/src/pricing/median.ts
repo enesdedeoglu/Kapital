@@ -21,7 +21,23 @@ export function weightedMedian(
   const valid = samples.filter((s) => s.price > 0n && s.quantity > 0n);
   if (valid.length === 0) return null;
 
-  const sorted = [...valid].sort((a, b) => (a.price < b.price ? -1 : a.price > b.price ? 1 : 0));
+  /*
+   * ★ Sıralama TAM olmalı: eşit fiyatta 0 dönmek girdi sırasını korur (JS
+   * sıralaması kararlıdır) ve aşağıdaki kırpma/medyan taraması o sırayla
+   * miktar biriktirdiği için SONUÇ girdi sırasına bağlı hale gelir.
+   *
+   * Ölçüldü (R79): `price_history` iki koşumda 32. turda ayrışıyordu ve
+   * `retail_sales` (33) ile `market_trades` (34) onu takip ediyordu — yani
+   * referans fiyat oluşumu bütün sapmanın köküydü. Besleyen sorguda ORDER BY
+   * yoktu; o da düzeltildi ama saf fonksiyon girdi sırasına DAYANMAMALIdır.
+   *
+   * Beraberlik miktarla, sonra kalite ile bozulur: ikisi de veriden gelir.
+   */
+  const sorted = [...valid].sort((a, b) => {
+    if (a.price !== b.price) return a.price < b.price ? -1 : 1;
+    if (a.quantity !== b.quantity) return a.quantity < b.quantity ? -1 : 1;
+    return 0;
+  });
   const total = sorted.reduce((sum, s) => sum + (s.quantity as bigint), 0n);
 
   // Uç bandı kırp (tek örnekte kırpma yapılmaz)

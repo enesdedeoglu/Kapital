@@ -52,7 +52,10 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
     const trades = await sql<{ price_per_unit: bigint; quantity: bigint }[]>`
       SELECT price_per_unit, quantity FROM market_trades
       WHERE product_id = ${product.id} AND tick_id > ${windowStart} AND tick_id <= ${tick.seq}
-        AND NOT is_excluded_from_index`;
+        AND NOT is_excluded_from_index
+      -- ★ Sira GARANTILI olmali (R79): weightedMedian kirpma ve medyan
+      -- taramasini bu sirayla yapar, esit fiyatta girdi sirasi sonucu belirler.
+      ORDER BY price_per_unit, quantity`;
 
     const [prev] = await sql<{ ema: bigint }[]>`
       SELECT ema_reference AS ema FROM price_history

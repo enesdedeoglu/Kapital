@@ -2702,13 +2702,60 @@ yerine sınıfı tara.** İlk altısını tek tek buldum, 6–10'u bir taramayla
 - Tüketici talebi ve üretim kayıtları **birebir aynı**
 - Sapma yalnız toptan piyasa / NPC karar yolunda kaldı
 
-### Açık kalan
+### ★ 11. kaynak — ve kök buydu
 
-Determinizm **oturmadı**. On kaynak sonrası toptan işlemler hâlâ ayrışıyor.
-Kalan tarama listesi (45 sorgudan 35'i) elde duruyor.
+Nedensel sıra ölçüldü, tahmin edilmedi:
 
-★ Dürüst kayıt: bu avın ne kadar süreceği ÖLÇÜLEMEDİ. Her adım daralttı ama
-bitiş noktası görünmüyor. Kapı bu sırada tek eksikle bekliyor.
+| tablo | ilk sapan tur |
+|---|---|
+| **`price_history`** | **32** |
+| `retail_sales` | 33 |
+| `market_trades` | 34 |
+
+Referans fiyat oluşumu bütün sapmanın köküydü; işlemler sonuçtu. (Bu, "işlemler
+sapıyor, gerisi onun sonucu" varsayımımı çürüttü.)
+
+Sebep `weightedMedian` içinde:
+
+```ts
+.sort((a, b) => (a.price < b.price ? -1 : a.price > b.price ? 1 : 0))
+```
+
+Eşit fiyatta **0 dönüyor**. JS sıralaması kararlı olduğu için eşit fiyatlı
+örnekler GİRDİ SIRASINI koruyor ve hemen altındaki kırpma/medyan taraması o
+sırayla miktar biriktiriyor. Aynı fiyattan iki işlem varsa hangisinin önce
+geldiği medyan sınırına hangisinin düştüğünü değiştiriyor. Besleyen sorguda da
+`ORDER BY` yoktu.
+
+★ Bu sorgu tarama listesindeydi ve ben onu **"toplama fonksiyonu, zararsız"
+diye elemiştim.** Yanılmışım: zararsızlık sorgunun şekline değil, sonucu
+TÜKETEN kodun sıraya duyarlılığına bağlı.
+
+İki yerden birden kapatıldı: sorgu sıralandı, VE saf fonksiyon girdi sırasından
+bağımsız hale getirildi (beraberlik miktarla bozuluyor). İkincisi ilkeseldir —
+saf bir fonksiyonun doğruluğu çağıranın sorgu disiplinine bağlı olmamalı.
+
+### ✅ SONUÇ: determinizm oturdu
+
+Aynı tohumla iki koşum — fiyat geçmişi, toptan işlemler ve **tüm ölçütler
+BİREBİR aynı**. Farklı tohumda (20261917) ve daha uzun ufukta (40 oyuncu,
+480 tur) teyit edildi.
+
+### Kalıcı önlem: `query-order.test.ts`
+
+Motor fazlarındaki her `SELECT` ya sıralı olmalı ya kabul edilmiş tabanda
+olmalı. Yeni eklenen sıralamasız sorgu testi kırar.
+
+★ Taban bir ONAY değil, bir SINIRdır: "bugün zarar vermiyor" ile "sırası
+önemsiz" aynı şey değildir. Listeden madde silmek (sorguyu sıralamak) her zaman
+doğrudur; eklemek bilinçli bir karardır.
+
+★ Testin yeni ihlali gerçekten yakaladığı, geçici bir sıralamasız sorgu
+eklenerek doğrulandı.
+
+**Ders:** on bir kaynağın dokuzu aynı sınıftandı. R56'da bu iş "bitirilmişti"
+ama el yordamıyla arandığı için iki sorgu atlanmıştı. Tek tek düzeltmek kalıcı
+değil; kalıbı bir kurala bağlamak kalıcı.
 
 ---
 
@@ -2868,7 +2915,7 @@ kendi kendini yukarıda tutar.
 | R75 | Para arzı sızıntısı: bütçeli musluk, adede bağlı gider | 🔴 Kritik | ✅ ücret endeksi · para arzı %40,7→%37,9 |
 | R76 | Tam endeksleme ücret-fiyat sarmalı yarattı | 🔴 Kritik | ✅ kısmi endeksleme · kur %50→%15 |
 | R78 | Kısmi endeksleme tuttu: bir tohum 14/14 | — | ✅ tek eksik `volatility`, tabana 0,1 puan |
-| R79 | Determinizm: on kaynak kapandı, iş bitmedi | 🔴 Kritik | ⏳ kurulum kanıtlı aynı · toptan yol açık |
+| R79 | Determinizm: 11 kaynak · kök `weightedMedian` beraberliği | 🔴 Kritik | ✅ BİREBİR aynı · `query-order.test` bekçi |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
