@@ -361,7 +361,7 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'npc.population',   value: { perProductPerCity: 1.2, priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35,
                                      // ★ Kıtlık primi (R73): fiyatın talebe tepki verdiği tek yer.
                                      // Deposu eriyen satıcı fiyatı yukarı, biriken aşağı eğer.
-                                     scarcitySwing: 0.15 } },
+                                     scarcitySwing: 0.18 } },
   { key: 'npc.inventory',    value: { minTicks: 4, targetTicks: 12, maxTicks: 24 } },
   { key: 'npc.throttle',     value: { targetTicks: 8, maxStepPerTick: 0.05, floor: 0.10 } },
   /*

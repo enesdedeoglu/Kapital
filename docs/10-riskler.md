@@ -2607,6 +2607,53 @@ ertelendi.
 
 ---
 
+## R78 — Kısmi endeksleme tuttu: bir tohum 14/14
+
+**Şiddet:** — · **Durum:** ✅ ölçüldü
+
+R76 (kısmi endeksleme, 0,5) sarmalı kırdı ve iki ölçütü birden kurtardı:
+
+| | R75 | R76 |
+|---|---|---|
+| kur | %50,0 · 1/5 | **%15,1 · 4/5** |
+| para arzı | %37,9 · 4/5 | %36,3 · 3/5 |
+| oynaklık | %2,9 · 1/5 | **%4,9 · 2/5** |
+
+**Tohum skorları: 12, 12, 14, 10, 13 / 14.** Tohum 20262930 hiçbir ölçütü
+kaçırmadan geçti — oturumun ilk tam geçişi. Birleşik kapıda tek eksik
+`volatility` ve o da tabana **0,1 puan** uzakta.
+
+| tohum | oynaklık | tutmayan |
+|---|---|---|
+| s2 | %5,6 ✓ | **—** (14/14) |
+| s3 | %6,2 ✓ | week1_growth, progression_pace, money_supply, foreign_band |
+| s4 | %4,8 | volatility |
+| s1 | %4,9 | volatility, money_supply |
+| s0 | %3,8 | volatility, fx_change |
+
+### Çürüyen hipotez: "ince piyasalar medyanı çekiyor"
+
+IRON/FURNITURE/STEEL'in 2'şer tesisi var ve neredeyse hiç işlem görmüyorlar;
+bunların donuk fiyatının medyanı aşağı çektiğini düşündüm. **Ölçüm çürüttü:**
+4 günlük aralıklar hep büyük — TOMATO %36,4, CIGARETTE %31,7, IRON %18,1,
+FURNITURE %5,1.
+
+Gerçek durum: fiyat 4 günde %30 hareket ediyor ama gün içinde ~%5. Zirve/dip
+günleri sebebi söylüyor — TOMATO 2,1. günde zirve, 6,4. günde dip. Günlük
+salınım değil, YAVAŞ BİR YAY. Çünkü kıtlık primi stok kapsamını okuyor ve
+kapsam yavaş değişen bir büyüklük.
+
+### ★ Daha çok oynaklık bedava değil
+
+Oynaklığın GEÇTİĞİ tohumda (s3, %6,2) dört başka ölçüt kaldı. Fiyat hareketi
+ile parasal istikrar ve oyuncu büyümesi arasında gerçek bir gerilim var.
+
+Bu yüzden genlik büyük bir sıçramayla değil, ölçülen açık kadar artırıldı:
+`scarcitySwing` 0,15 → 0,18. 0,15 ilk denemede rastgele seçilmişti; artık
+ölçüme dayanıyor.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2761,7 +2808,8 @@ kendi kendini yukarıda tutar.
 | R72 | Ekonomide günlük ölçek yok: piyasa günden güne donuk | 🔴 Kritik | ⏳ `dailyRhythm` · tek başına yetmedi |
 | R73 | Fiyat formülünde talep terimi yok: maliyet + kendi geçmişi | 🔴 Kritik | ✅ `scarcityPremium` · oynaklık %1,7→%4,6 |
 | R75 | Para arzı sızıntısı: bütçeli musluk, adede bağlı gider | 🔴 Kritik | ✅ ücret endeksi · para arzı %40,7→%37,9 |
-| R76 | Tam endeksleme ücret-fiyat sarmalı yarattı | 🔴 Kritik | ⏳ kısmi endeksleme (0,5) |
+| R76 | Tam endeksleme ücret-fiyat sarmalı yarattı | 🔴 Kritik | ✅ kısmi endeksleme · kur %50→%15 |
+| R78 | Kısmi endeksleme tuttu: bir tohum 14/14 | — | ✅ tek eksik `volatility`, tabana 0,1 puan |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |

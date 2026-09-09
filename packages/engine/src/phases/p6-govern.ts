@@ -71,7 +71,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   }>(
     tick, 'npc.population',
     { priceBandPerTick: 0.03, emergencyBandPerTick: 0.10, emergencyHealthBelow: 35,
-      scarcitySwing: 0.15 },
+      scarcitySwing: 0.18 },
   );
   const invCfg = configValue<{ minTicks: number; targetTicks: number; maxTicks: number }>(
     tick, 'npc.inventory', { minTicks: 4, targetTicks: 12, maxTicks: 24 },

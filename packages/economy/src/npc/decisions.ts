@@ -66,6 +66,16 @@ export interface PriceDecision {
  *
  * ★ Bu bir DENGELEYİCİ döngüdür: fiyat artar → talep düşer → stok birikir →
  * fiyat düşer. Fiyatın sürüklenmesini değil, TEPKİ VERMESİNİ sağlar.
+ *
+ * ★★ Genlik ÖLÇÜMLE ayarlandı, tahminle değil. 0,15 ilk denemede rastgele
+ * seçilmişti; günlük oynaklık %4,8–4,9'da, tabanın (%5) hemen altında kaldı.
+ * Kapsam yavaş değişen bir büyüklük olduğu için fiyat GÜN İÇİNDE değil GÜNLER
+ * boyunca hareket ediyor: aynı dünyada 4 günlük aralık %30, günlük %4,8.
+ *
+ * ★ Daha çok hareket BEDAVA DEĞİL: oynaklığın geçtiği tohumda (%6,2) dört
+ * başka ölçüt kaldı (hafta büyümesi, ilerleme temposu, para arzı, dış ticaret
+ * bandı). Bu yüzden genlik büyük bir sıçramayla değil, ölçülen açık kadar
+ * artırıldı: 0,15 → 0,18.
  */
 export function scarcityPremium(
   coverageTicks: number, targetTicks: number, maxSwing: number,
