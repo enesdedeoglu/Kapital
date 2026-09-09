@@ -2459,6 +2459,57 @@ DEĞİL, yalnız ölçüm taşıyor.
 
 ---
 
+## R75 — Para arzı sızıntısı: bütçeli musluk, adede bağlı gider
+
+**Şiddet:** 🔴 Kritik · **Bulunma:** R74 günlük serisi · **Durum:** ⏳ sınanıyor
+
+R73'ten sonra `money_supply` %22,5'ten %40,7'ye çıkıp eşiği aştı. Son günün
+fotoğrafı cevap vermiyordu (musluk neredeyse aynıydı); R74 bloğu günlük seriyi
+verdi ve mekanizma tek bakışta çıktı — tohum 1:
+
+| gün | musluk | maaş | üretilen adet | para değişimi |
+|---|---|---|---|---|
+| 2 | 5.216.518 | 2.972.499 | 261.918 | +1.592.144 |
+| 3 | 4.883.609 | 2.602.545 | 239.185 | +1.958.887 |
+| 4 | 4.697.412 | 2.341.289 | 213.787 | +2.065.328 |
+| 5 | 4.890.158 | **2.263.230** | **205.949** | **+2.400.087** |
+
+**Musluk sabit, gider küçülüyor, açık her gün büyüyor.**
+
+Sebep iki tasarım kararının çarpışması:
+
+- Tüketici harcaması **BÜTÇE** sınırlıdır: fiyat artınca daha az ADET alır,
+  aynı parayı harcar. Musluk fiyattan bağımsız.
+- İşçilik+enerji gideri reçeteden gelen **SABİT NOMİNAL** bir sayıdır ve
+  **ÜRETİLEN ADEDE** göre ödenir. Adet düşünce gider küçülür.
+
+Kendini besleyen döngü: fiyat ↑ → adet ↓ → gider ↓ → para ↑ → fiyat ↑.
+
+★ Bu aynı zamanda CAPEX'in dört katına çıkmasını da açıklıyor (318.100 →
+1.190.500): sabit nominal maliyet + artan fiyat = genişleyen marj = yatırım
+patlaması. Yatırım skorunda marj en ağır terimdir (0,35).
+
+### Çürüyen hipotezler (sırayla ölçüldü)
+
+1. "Fiyatlar musluğu şişirdi" — SALES 5.413.885 → 5.405.414, neredeyse aynı.
+2. "CAPEX patlaması sebep" — CAPEX bir GİDERdir, parayı çıkarır; sebep olamaz.
+
+### Düzeltme: ücret endeksi
+
+İşçilik+enerji gideri fiyat seviyesi endeksiyle (ortalama
+`ema_reference ÷ base_reference_price`) çarpılıyor. Reel ücret sabit kalır,
+gider musluğa ayak uydurur, marj yapay olarak şişmez. Gerçek ekonomilerde de
+böyledir.
+
+Endeks 0,5–3 arasına sınırlı: bozuk veri ya da tek turluk sıçrama gideri
+patlatmasın.
+
+★ Test düzeltme olmadan KALDIĞI doğrulandı (fiyat iki katına çıkarılıp aynı
+üretim koşuldu). Bu oturumda bir kez düzeltmesiz geçen test yazmıştım (R45);
+o yüzden artık her davranış testi böyle sınanıyor.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2611,7 +2662,8 @@ kendi kendini yukarıda tutar.
 | R70 | Merdivenin darboğazı XP · 200'den 2.000'e on katlık uçurum | 🔴 Kritik | ✅ Lv3 1.000, Lv4 2.500 |
 | R71 | Kapı ölçütleri oyunun hedefine göre yeniden yazıldı | 🔴 Kritik | ✅ 4 ölçüt · birleşik kapıda tek ölçüt kaldı |
 | R72 | Ekonomide günlük ölçek yok: piyasa günden güne donuk | 🔴 Kritik | ⏳ `dailyRhythm` · tek başına yetmedi |
-| R73 | Fiyat formülünde talep terimi yok: maliyet + kendi geçmişi | 🔴 Kritik | ⏳ `scarcityPremium` |
+| R73 | Fiyat formülünde talep terimi yok: maliyet + kendi geçmişi | 🔴 Kritik | ✅ `scarcityPremium` · oynaklık %1,7→%4,6 |
+| R75 | Para arzı sızıntısı: bütçeli musluk, adede bağlı gider | 🔴 Kritik | ⏳ ücret endeksi |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
 | R47 | ED kıtlığı görüp susuyor · marj terimi ölü | 🔴 Kritik | ✅ F8 — kıtlık tavanı + `PRICE_MARKUP_BAND` |

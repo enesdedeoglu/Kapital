@@ -102,10 +102,40 @@ export async function runProducePhase(sql: Sql, tick: EngineTick): Promise<Produ
   // enerji krizi işçilik+enerji giderini şişirir.
   const events = await loadActiveEvents(sql, tick);
 
+  /*
+   * ★ ÜCRET ENDEKSİ (R75) — para arzı sızıntısının kaynağı.
+   *
+   * Musluk (tüketici harcaması) BÜTÇE sınırlıdır: fiyat artınca tüketici daha
+   * az ADET alır, aynı parayı harcar. Gider (işçilik+enerji) ise reçeteden
+   * gelen SABİT NOMİNAL bir sayıdır ve ÜRETİLEN ADEDE göre ödenir. Adet
+   * düşünce gider küçülür, musluk sabit kalır ve para birikir.
+   *
+   * Ölçüldü (tohum 1, gün 2→5): musluk 5.216.518 → 4.890.158 (sabit) iken
+   * maaş 2.972.499 → 2.263.230 ve üretilen adet 261.918 → 205.949. Günlük
+   * para yaratımı 1.592.144'ten 2.400.087'ye ÇIKTI — açık her gün büyüyor.
+   * Kendini besleyen bir döngü: fiyat ↑ → adet ↓ → gider ↓ → para ↑ → fiyat ↑.
+   *
+   * Bu ayrıca CAPEX'in dört katına çıkmasını da açıklıyor: sabit nominal
+   * maliyet + artan fiyat = genişleyen marj = yatırım patlaması.
+   *
+   * Endeks, fiyat seviyesinin tohum seviyesine oranıdır. Ücret onunla birlikte
+   * hareket edince reel ücret sabit kalır, gider musluğa ayak uydurur ve marj
+   * yapay olarak şişmez. Gerçek ekonomilerde de böyledir.
+   */
+  const [endeks] = await sql<{ index: number | null }[]>`
+    SELECT AVG(ph.ema_reference::float8 / NULLIF(p.base_reference_price, 0)) AS index
+      FROM price_history ph
+      JOIN products p ON p.id = ph.product_id
+     WHERE ph.city_id = 0
+       AND ph.tick_id = (SELECT MAX(tick_id) FROM price_history WHERE tick_id <= ${tick.seq})
+       AND p.base_reference_price > 0`;
+  // Sınırlı: bozuk veri ya da tek turluk sıçrama gideri patlatmasın.
+  const wageIndex = Math.max(0.5, Math.min(3, endeks?.index ?? 1));
+
   for (const producer of producers) {
     result.facilities++;
     const started = await startJob(sql, tick, producer, inputsByRecipe.get(producer.recipe_id) ?? [], {
-      sinkId: sink!.id, baseQuality, variance, events,
+      sinkId: sink!.id, baseQuality, variance, events, wageIndex,
     });
     if (started.halted) result.halted++;
     if (started.jobId !== null) result.jobsStarted++;
@@ -125,7 +155,11 @@ async function startJob(
   tick: EngineTick,
   p: ProducerRow,
   inputs: readonly RecipeInputRow[],
-  ctx: { sinkId: string; baseQuality: number; variance: number; events: ActiveEvent[] },
+  ctx: {
+    sinkId: string; baseQuality: number; variance: number; events: ActiveEvent[];
+    /** Fiyat seviyesi endeksi — işçilik+enerji gideri bununla ölçeklenir (R75). */
+    wageIndex: number;
+  },
 ): Promise<{ jobId: bigint | null; halted: boolean; overhead: bigint }> {
   const cityBonus = cityBonusFor(p.category, {
     agricultureBonus: p.agriculture_bonus,
@@ -222,8 +256,9 @@ async function startJob(
     const scale = output * 1000n / p.output_quantity;
     // Maliyet çarpanı işçilik ve enerjiye uygulanır: enerji krizinde üretim
     // durmaz, PAHALILAŞIR (madde 45).
+    // ★ Ücret endeksi: gider fiyat seviyesiyle birlikte hareket eder (R75).
     const overhead = (((p.labor_cost + p.energy_cost) * scale) / 1000n
-      * BigInt(Math.round(effects.cost * 1000))) / 1000n;
+      * BigInt(Math.round(effects.cost * ctx.wageIndex * 1000))) / 1000n;
 
     if (overhead > 0n) {
       try {

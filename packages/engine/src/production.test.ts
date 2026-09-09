@@ -85,6 +85,46 @@ describe('hammadde üretimi (girdisiz reçete)', () => {
     expect(row!.amount).toBeGreaterThan(0n);
   });
 
+  it('★ işçilik gideri fiyat seviyesiyle birlikte hareket eder (R75)', async () => {
+    // Musluk (tüketici harcaması) bütçe sınırlıdır: fiyat artınca tüketici
+    // daha az ADET alır, aynı parayı harcar. Gider ise reçeteden gelen SABİT
+    // NOMİNAL bir sayıydı ve adede göre ödeniyordu — adet düşünce gider
+    // küçülüyor, musluk sabit kalıyor ve para birikiyordu.
+    //
+    // Ölçüldü (tohum 1, gün 2→5): musluk 5.216.518 → 4.890.158 sabit iken
+    // maaş 2.972.499 → 2.263.230; günlük para yaratımı 1.592.144'ten
+    // 2.400.087'ye ÇIKTI.
+    const maas = async (companyId: string) => {
+      const [row] = await sql<{ amount: bigint }[]>`
+        SELECT COALESCE(SUM(amount), 0)::bigint AS amount FROM ledger_entries
+        WHERE company_id = ${companyId}::uuid AND account = 'SALARY' AND direction = 'DEBIT'`;
+      return row!.amount;
+    };
+
+    const taban = await producer({ typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT' });
+    await runTick(sql);
+    const ucuz = await maas(taban.player.id);
+    expect(ucuz).toBeGreaterThan(0n);
+
+    // Fiyat seviyesini iki katına çıkar: aynı üretim, daha yüksek gider.
+    await truncateGameState(sql);
+    await sql.unsafe(`
+      TRUNCATE price_history, production_jobs, production_records,
+               economic_ticks RESTART IDENTITY CASCADE;
+    `);
+    const pahali = await producer({ typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT' });
+    await sql`
+      INSERT INTO price_history (tick_id, product_id, city_id, weighted_median, ema_reference)
+      SELECT 0, p.id, 0, p.base_reference_price * 2, p.base_reference_price * 2
+        FROM products p WHERE p.base_reference_price > 0
+      ON CONFLICT DO NOTHING`;
+    await runTick(sql);
+    const yuksek = await maas(pahali.player.id);
+
+    // Reel ücret sabit: nominal gider fiyatla birlikte artar.
+    expect(yuksek).toBeGreaterThan(ucuz);
+  });
+
   it('depo dolduğunda üretim durur ve nedeni kaydedilir', async () => {
     const { facility } = await producer({ typeCode: 'WHEAT_FIELD', outputCode: 'WHEAT' });
     // Depoyu doldur
