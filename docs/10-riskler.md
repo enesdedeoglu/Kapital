@@ -2759,6 +2759,54 @@ değil; kalıbı bir kurala bağlamak kalıcı.
 
 ---
 
+## R80 — Temiz zeminde ilk kapı: 13/14, bir tohum tam geçti
+
+**Şiddet:** — · **Durum:** ✅ ölçüldü
+
+Determinizm oturduktan sonraki ilk koşum. **11, 10, 14, 11, 13 / 14.**
+Tohum 20262930 hiçbir ölçütü kaçırmadan geçti. Birleşik kapıda tek eksik
+`volatility`.
+
+### ★ Determinizm bir yanılsamayı kaldırdı
+
+Oynaklık tohum bazında: **%2,3 · 2,8 · 4,2 · 4,5 · 5,6** (hedef %5–15).
+
+Önceki koşumlarda medyan %4,7–4,9 arasında geziyordu ve bunu "eşiğe 0,1 puan
+uzaktayız" diye okumuştum. **Yanlış okumaymış:** medyan gürültüyle oynuyordu.
+Gerçek dağılım çok daha geniş ve çoğu dünya bandın belirgin biçimde altında.
+Mesafe sanılandan büyük ve yapısal.
+
+★ Aynı ölçüm iyi haberi de veriyor: hedef ULAŞILABİLİR, bir dünya tutturuyor.
+Doğru soru "0,1 puan nereden bulunur" değil, "20262930'da ne farklı".
+
+### Kısmi açıklama: bolluk mu darlık mı
+
+| | GEÇEN (20262930, %5,6) | DONUK (20264956, %2,3) |
+|---|---|---|
+| kısılmış ürün | **6/10** | 3/10 |
+| un stoğu | 3.021 | 1.285 |
+| buğday stoğu | 6.013 | 1.552 |
+| domates stoğu | 24.656 | 8.443 |
+
+Donuk dünya **dar** çalışıyor: 7 ürün tam kapasitede, stoklar düşük. Geçen
+dünyada slak var — stoklar büyük, kısma çalışıyor.
+
+Mekanizma adayı: `scarcityPremium` stok kapsamını okur. Kapsam sürekli dipte
+sabitse prim de sürekli yüksek sabit kalır — fiyat tavana yapışır ama
+OYNAMAZ. Kapsam nefes alıyorsa prim salınır ve fiyat hareket eder.
+
+★ Ama bu **kısmi** bir açıklama, kanıt değil. Kısılmış ürünlerin 4 günlük
+aralığı tohum 2'de belirgin biçimde yüksek (%33,5 vs %14,9) ama tohum 4'te
+fark zayıf (%21,5 vs %18,8). Kayda böyle geçiyor.
+
+### Not: "kararsız" ölçütlerin anlamı değişti
+
+`money_supply` (3/5), `fx_change` (3/5), `retail_fulfilment` (4/5) hâlâ
+tohumlar arasında ayrışıyor — ama artık bu GÜRÜLTÜ DEĞİL, gerçek dünya farkı.
+Yani bazı dünyalarda parasal sorun var ve bu bilgi kullanılabilir.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -2916,6 +2964,7 @@ kendi kendini yukarıda tutar.
 | R76 | Tam endeksleme ücret-fiyat sarmalı yarattı | 🔴 Kritik | ✅ kısmi endeksleme · kur %50→%15 |
 | R78 | Kısmi endeksleme tuttu: bir tohum 14/14 | — | ✅ tek eksik `volatility`, tabana 0,1 puan |
 | R79 | Determinizm: 11 kaynak · kök `weightedMedian` beraberliği | 🔴 Kritik | ✅ BİREBİR aynı · `query-order.test` bekçi |
+| R80 | Temiz zeminde ilk kapı: 13/14 · bir tohum tam | — | ✅ tek eksik `volatility` · dağılım %2,3–5,6 |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
