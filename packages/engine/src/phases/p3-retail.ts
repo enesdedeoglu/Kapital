@@ -19,7 +19,7 @@ import { loadActiveEvents } from './world-events.js';
  * 1 olursa fiyat seviyesinin çıpası kalmaz; 0 olursa fiyat artışı talebi
  * tamamen ezer.
  */
-const BUDGET_INDEXATION = 0.5;
+const BUDGET_INDEXATION = 0.75;
 
 interface OfferRow {
   facility_id: string; company_id: string; city_id: number; product_id: number;

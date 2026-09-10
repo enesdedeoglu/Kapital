@@ -19,7 +19,7 @@ import { loadActiveEvents } from './world-events.js';
  * kapanır. 0 ise para arzı sızar (R75): musluk bütçe sınırlı, gider adede
  * bağlıdır ve adet düşünce açık büyür. Yarım, ikisinin arasıdır.
  */
-const WAGE_INDEXATION = 0.5;
+const WAGE_INDEXATION = 0.75;
 
 interface ProducerRow {
   facility_id: string; company_id: string; city_id: number; inventory_id: string;
