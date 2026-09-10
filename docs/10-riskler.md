@@ -2930,6 +2930,85 @@ kıpırdamış. Basit bir "para arzı → enflasyon → kur" zinciri değil.
 
 ---
 
+## R82 — Nominal çıpa: musluk fiyata TAM, gider YARIM endeksliydi
+
+**Şiddet:** 🔴 Kritik · **Durum:** ✅ parasal sorunlar çözüldü · ⏳ büyüme eşiği kararı oyuncuda
+
+### Önce iki teşhis hatamı düzeltiyorum
+
+**R75 yanlıştı.** "Tüketici harcaması bütçe sınırlıdır, fiyat artınca daha az
+adet alır, aynı parayı harcar" demiştim. Kod:
+
+```ts
+const atReference = priceTimesQty(product.referencePrice, units).value;
+const budget = mulMoney(atReference, mods.budgetSlack).value;
+```
+
+Bütçe GÜNCEL referans fiyatla çarpılıyor — musluk fiyata TAM endeksli. Son
+günün SALES rakamına bakıp "sabit" diye okumuştum; sabit görünmesinin sebebi
+bütçe değil ARZIN sınırlı olmasıydı. Sonucu sebep sanmışım.
+
+**R76'da farkında olmadan asimetri yarattım.** Ücret-fiyat sarmalını kırmak
+için ücret endekslemesini 1,0 → 0,5 indirdim ama bütçenin 1,0'da olduğunu
+görmedim. Sonuç: musluk tam, gider yarım büyüyor; fark her gün para arzına
+ekleniyor. **Yapısal enflasyon.**
+
+Altında daha temel bir şey: ekonominin NOMİNAL ÇIPASI yoktu. Fiyat maliyetten,
+maliyet fiyattan türüyor; hiçbir şey seviyeyi tutmuyordu.
+
+### Düzeltme ve ölçülen sonuç
+
+Bütçe taban fiyata kısmen bağlandı (reel bakiye etkisi). Simetrik 0,5 ile:
+
+| ölçüt | önce | sonra |
+|---|---|---|
+| para arzı | %35,2 · 3/5 | **%27,3 · 5/5** |
+| kur | %23,8 · 3/5 | **%13,2 · 4/5** |
+| perakende karşılanma | 4/5 | **5/5** |
+| oyuncu perakende payı | 4/5 | **5/5** |
+| dış ticaret bandı | 4/5 | **5/5** |
+
+**Kararsız ölçüt sayısı 5 → 1.** İstenen iki ölçüt çözüldü, üç ölçüt de yanında.
+
+### ★ Simetri argümanım EKSİKTİ
+
+"Simetrik olsun, oran fark etmez" demiştim. Ölçüm çürüttü:
+
+| endeksleme | para | kur | büyüme | kararsız |
+|---|---|---|---|---|
+| 0,50 | %27,3 (5/5) | %13,2 (4/5) | 1,26× (0/5) | **1** |
+| 0,75 | %29,2 (4/5) | %21,9 (3/5) | **1,48×** (2/5) | 4 |
+
+Sebep: musluk (5,5M/gün) giderden (3,2M/gün) BÜYÜK. Eşit ORANLI artış, daha
+büyük tarafa daha büyük MUTLAK artış verir — fark yine açılır. Simetri yapısal
+boşluğu kaldırır ama seviye farkını kaldırmaz.
+
+### ★ Ve "sadece nominal küçüldü" savunmam da çürüdü
+
+Tam bu savunmayı yapmaya hazırlanırken ölçtüm. Kur değişimini enflasyon vekili
+alıp arındırınca:
+
+| | nominal | reel |
+|---|---|---|
+| çıpa öncesi | 1,87× | ~1,51× |
+| 0,5 ile | 1,26× | ~1,11× |
+
+**Reel büyüme de düştü.** Oyuncu gerçekten daha az kazanıyor: haftalık kâr
+26.187 ₺ → 7.903 ₺. Bütçe kısılınca perakendeci olan oyuncunun cirosu doğrudan
+azalıyor ve kâr ince marj olduğu için kaldıraçlı düşüyor.
+
+### Kalan karar
+
+0,75'te büyüme beş tohumda **1,47 – 1,60** arasında kümeleniyor; taban 1,50.
+Üç tohum tabanın 0,03 altında.
+
+★ O tabanı R71'de BEN koydum — ve ekonomi enflasyonluyken 1,87× gözlemleyerek.
+Şimdi enflasyon kalkınca aynı reel performans daha düşük nominal kat veriyor.
+Eşiği kendi koyduğum yerden indirmek, sonucu istediğim yöne çevirmek olur;
+bu yüzden karar oyuncunun.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -3090,6 +3169,7 @@ kendi kendini yukarıda tutar.
 | R80 | Temiz zeminde ilk kapı: 13/14 · bir tohum tam | — | ✅ tek eksik `volatility` · dağılım %2,3–5,6 |
 | R81 | Oynaklık ölçütü yumuşatılmış iç çıpaya bakıyordu | 🟠 Yüksek | ✅ gerçek işlem fiyatı · 5/5 |
 | ★ | **GEÇİŞ KAPISI 2 GEÇİLDİ** | — | ✅ 12,11,14,12,14 · 4 kayıtla |
+| R82 | Musluk fiyata tam, gider yarım endeksliydi | 🔴 Kritik | ✅ nominal çıpa · kararsız 5→1 · büyüme eşiği açık |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
