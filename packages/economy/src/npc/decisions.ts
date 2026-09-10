@@ -90,11 +90,41 @@ export function scarcityPremium(
 export function decidePrice(input: PriceDecisionInput): PriceDecision {
   const target = mulMoney(input.unitCost, 1 + Math.max(0, input.targetMargin)).value;
   const weight = Math.max(0, Math.min(1, input.priceAggressiveness));
+  const premium = input.scarcityPremium ?? 1;
 
+  /*
+   * ★★★★ PRİM YALNIZ MALİYET ÇIPASINI ÇARPAR, PİYASA REFERANSINI DEĞİL (R85).
+   *
+   * Önceden prim toplam arzuyu çarpıyordu:
+   *   arzu = (hedef·(1−w) + referans·w) · s
+   * Referans, bu fiyatlardan oluşan EMA'nın kendisidir. Yani fiyat kendi
+   * kendisinin fonksiyonu olur ve denge noktası
+   *   referans/maliyet = (1−w)(1+m)s / (1 − w·s)
+   * olarak çözülür. Payda `w·s` ile küçülür: prim %18 iken satıcı %18 değil,
+   * (1 − w·s) kadar BÜYÜTÜLMÜŞ bir zam yapar. w·s ≥ 1 olduğunda payda sıfırın
+   * altına düşer ve DENGE NOKTASI HİÇ KALMAZ — fiyat sınırsız tırmanır.
+   *
+   * s = 1,18 tavanında bu sınır w = 0,847'dir. Ucuzcu (0,85) ve Spekülatör
+   * (0,90) arketipleri bu sınırın ÜSTÜNDEDİR; ±%15 dağıtımla Hacimci de
+   * yaklaşır. Hangi arketipin hangi ürüne düştüğü tohuma bağlı olduğu için
+   * fiyat seviyesi dünyadan dünyaya savruluyordu.
+   *
+   * ÖLÇÜLDÜ (tohum 20260904, gün 2) — satış fiyatı ÷ birim maliyet:
+   *   WHEAT 1,698 · TOMATO 1,656 · FLOUR 1,633   (ima edilen s: 1,20/1,19/1,18)
+   *   BREAD 1,271 · CIGARETTE 1,192 · IRON 1,074 (ima edilen s: 1,03/0,99/0,93)
+   * Formülün prim tavanı için verdiği değer 1,63'tü; üç ürün 0,02 içinde
+   * oturdu. Tavana yapışanlar YÜKSEK DEVİRLİ mallar: satılmadan stok
+   * birikmediği için kapsam hedefin (8 tur) hep altında kalır ve prim kalıcı
+   * olur. Kalıcı prim + kendine referans = kalıcı fiyat seviyesi kayması.
+   *
+   * Düzeltilmiş biçimde denge `referans/maliyet = (1+m)·s`: prim ne ise o
+   * kadar, büyütme yok, w'den bağımsız, her w için sonlu. Talep terimi
+   * (R73'ün amacı) yerinde kalır — yalnız kendi kuyruğunu ısırmaz.
+   */
   const desiredRaw =
-    (Number(target) * (1 - weight) + Number(input.reference) * weight)
+    Number(input.reference) * weight
     // ★ Kıtlık primi: fiyatın talebe tepki verdiği TEK yer (R73).
-    * (input.scarcityPremium ?? 1);
+    + Number(target) * (1 - weight) * premium;
   const desired = BigInt(Math.max(1, Math.round(desiredRaw))) as Money;
 
   if (input.currentPrice === null || input.currentPrice <= 0n) {

@@ -416,3 +416,51 @@ SELECT p.code,
         AND ph.tick_id = (SELECT MAX(tick_id) FROM price_history)
  WHERE p.is_active AND p.is_retail_product AND p.base_demand > 0
  ORDER BY 6 DESC NULLS LAST;
+
+\echo ''
+\echo '=== R86 — DÜNYA OLAYLARI: fiyat hareketini ne tetikledi? ==='
+SELECT w.code, w.scope,
+       COALESCE(pr.code, COALESCE(w.category, '-')) AS hedef,
+       ROUND(w.demand_multiplier::numeric, 2) AS talep,
+       ROUND(w.supply_multiplier::numeric, 2)  AS arz,
+       ROUND(w.cost_multiplier::numeric, 2)    AS maliyet,
+       (w.start_tick - 1) / 96 AS bas_gun,
+       (w.end_tick   - 1) / 96 AS bit_gun
+  FROM world_events w
+  LEFT JOIN products pr ON pr.id = w.product_id
+ ORDER BY w.start_tick, w.code;
+
+\echo ''
+\echo '=== R86 — FİYAT SEVİYESİ GÜN GÜN (taban = 1,00) ==='
+SELECT (ph.tick_id - 1) / 96 AS gun,
+       ROUND(AVG(ph.ema_reference::numeric / p.base_reference_price), 3) AS tum_urun_ort,
+       ROUND(SUM((ph.ema_reference * p.base_demand)::numeric)
+               FILTER (WHERE p.is_retail_product AND p.base_demand > 0)
+             / NULLIF(SUM((p.base_reference_price * p.base_demand)::numeric)
+               FILTER (WHERE p.is_retail_product AND p.base_demand > 0), 0), 3) AS cpi
+  FROM price_history ph
+  JOIN products p ON p.id = ph.product_id
+ WHERE ph.city_id = 0 AND p.base_reference_price > 0
+ GROUP BY 1 ORDER BY 1;
+
+\echo ''
+\echo '=== R86 — KITLIK PRİMİ: kapsam nötr noktaya ulaşabiliyor mu? ==='
+WITH kap AS (
+  SELECT r.output_product_id AS pid, f.id,
+         ft.base_capacity * f.utilization
+           * (1 + ft.upgrade_multiplier * (f.level - 1)) AS tur_basi,
+         COALESCE(SUM(ib.quantity), 0)::numeric / 1000 AS stok
+    FROM facilities f
+    JOIN facility_types ft ON ft.id = f.facility_type_id
+    JOIN production_recipes r ON r.id = f.active_recipe_id
+    JOIN companies c ON c.id = f.company_id
+    JOIN inventories inv ON inv.facility_id = f.id
+    LEFT JOIN inventory_batches ib ON ib.inventory_id = inv.id
+         AND ib.product_id = r.output_product_id
+   WHERE f.closed_at IS NULL AND c.kind = 'NPC' AND ft.base_capacity > 0
+   GROUP BY 1, 2, 3)
+SELECT p.code, COUNT(*) AS satici,
+       ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP
+              (ORDER BY stok / NULLIF(tur_basi, 0)))::numeric, 2) AS medyan_kapsam
+  FROM kap JOIN products p ON p.id = kap.pid
+ GROUP BY 1 ORDER BY 3;

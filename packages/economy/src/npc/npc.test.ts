@@ -99,6 +99,82 @@ describe('fiyat kararı (madde 25)', () => {
   });
 });
 
+/*
+ * ★★★★ R85 — KITLIK PRİMİ KENDİ KUYRUĞUNU ISIRMAMALI.
+ *
+ * `reference` bu fiyatlardan oluşan EMA'nın kendisidir, yani fiyatlama KAPALI
+ * BİR DÖNGÜdür. Prim toplam arzuyu çarptığında döngü kendini büyütür ve
+ * yüksek agresiflikli arketiplerde denge noktası hiç kalmaz. Bu blok döngüyü
+ * doğrudan koşturur: referansı fiyata eşitleyip sabit noktaya kadar iterler.
+ */
+describe('★ R85 — fiyat döngüsünün sabit noktası', () => {
+  const TAVAN_PRIM = 1.18;  // scarcityPremium(0, 8, 0,18) — boş depo
+  const MALIYET = 10;
+
+  /** Referans = fiyat kapalı döngüsünü sabit noktaya kadar iterler. */
+  const sabitNokta = (w: number, m: number, s: number): number | null => {
+    let referans = MALIYET * (1 + m);
+    for (let i = 0; i < 20_000; i++) {
+      const { price } = decidePrice({
+        ...priceBase, targetMargin: m, priceAggressiveness: w,
+        unitCost: money(MALIYET), reference: money(referans),
+        currentPrice: null, scarcityPremium: s,
+      });
+      const yeni = Number(price) / 10_000;
+      if (Math.abs(yeni - referans) < 1e-9) return yeni / MALIYET;
+      if (yeni > MALIYET * 1e6) return null;  // ıraksadı
+      referans = yeni;
+    }
+    return null;
+  };
+
+  it('her arketip prim tavanında SONLU bir dengeye oturur', () => {
+    for (const a of ARCHETYPES) {
+      const oran = sabitNokta(a.priceAggressiveness, a.targetMargin, TAVAN_PRIM);
+      expect(oran, `${a.archetype} ıraksadı`).not.toBeNull();
+    }
+  });
+
+  it('denge (1+marj)×prim — agresiflikten BAĞIMSIZ', () => {
+    for (const a of ARCHETYPES) {
+      const oran = sabitNokta(a.priceAggressiveness, a.targetMargin, TAVAN_PRIM)!;
+      expect(oran).toBeCloseTo((1 + a.targetMargin) * TAVAN_PRIM, 4);
+    }
+  });
+
+  it('prim yokken denge tam olarak hedef marjdır', () => {
+    for (const a of ARCHETYPES) {
+      const oran = sabitNokta(a.priceAggressiveness, a.targetMargin, 1)!;
+      expect(oran).toBeCloseTo(1 + a.targetMargin, 4);
+    }
+  });
+
+  /*
+   * Karşı örnek — düzeltilmeden ÖNCEKİ formül. Burada çalıştırılmıyor,
+   * kapalı çözümü yazılıyor: neyin bozuk olduğunu belge olarak saklar.
+   *   referans/maliyet = (1−w)(1+m)s / (1 − w·s)
+   * Ölçüm bunu doğruladı (tohum 20260904, gün 2): WHEAT 1,698 · TOMATO 1,656
+   * · FLOUR 1,633; AGRI/INDUSTRIAL için formülün verdiği 1,63/1,64.
+   */
+  it('★ eski formül ucuzcu ve spekülatörde IRAKSAR (karşı örnek)', () => {
+    const eskiDenge = (w: number, m: number, s: number) => {
+      const payda = 1 - w * s;
+      return payda <= 0 ? null : ((1 - w) * (1 + m) * s) / payda;
+    };
+    const iraksayan = ARCHETYPES
+      .filter((a) => eskiDenge(a.priceAggressiveness, a.targetMargin, TAVAN_PRIM) === null)
+      .map((a) => a.archetype);
+    expect(iraksayan).toEqual(['DISCOUNTER', 'SPECULATOR']);
+
+    // Iraksamayanlar bile büyütülüyordu: AGRI %18 prim için %63 zam yapıyordu.
+    const agri = ARCHETYPES.find((a) => a.archetype === 'AGRI')!;
+    expect(eskiDenge(agri.priceAggressiveness, agri.targetMargin, TAVAN_PRIM)!)
+      .toBeCloseTo(1.63, 2);
+    expect(sabitNokta(agri.priceAggressiveness, agri.targetMargin, TAVAN_PRIM)!)
+      .toBeCloseTo(1.39, 2);  // (1+0,18)×1,18
+  });
+});
+
 describe('stok yönetimi (madde 26)', () => {
   const base = { consumptionPerTick: 10, minTicks: 4, targetTicks: 12, maxTicks: 24 };
 

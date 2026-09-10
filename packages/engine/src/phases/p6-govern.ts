@@ -207,6 +207,63 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
     ? Math.max(0.25, Math.min(1, hedefNpcPayi / mevcutNpcPayi))
     : 1;
 
+  /*
+   * ★★★★ KITLIK PRİMİNİN NÖTR NOKTASI ÜRÜN BAZINDADIR (R86).
+   *
+   * Prim, satıcının SATILMAMIŞ çıktı stokunu (kapsam = stok ÷ tur başına
+   * üretim) sabit bir hedefle (npc.throttle.targetTicks = 8) kıyaslıyordu.
+   * O sabit KISMA eşiğidir — "stok birikti, üretimi kıs" demek için doğru
+   * sayı. Fiyatın NÖTR noktası olarak kullanıldığında ise şunu söylüyor:
+   * "8 turluk satılmamış mal üstünde oturmuyorsan zam yap."
+   *
+   * Yüksek devirli mallar bu noktaya HİÇ ulaşamaz — ürettiğini o tur satar.
+   * Prim kalıcı olarak tavana yapışır ve sinyal olmaktan çıkıp SABİT BİR
+   * MARJA dönüşür; zincir boyunca bileşik büyür ve ücret endekslemesi farkı
+   * fiyat seviyesine ~5 kat büyüterek yazar.
+   *
+   * ÖLÇÜLDÜ (tohum 20260904) — koşum sonu medyan kapsam:
+   *   FLOUR 0,68 · TOBACCO 0,68 · WHEAT 0,77   → prim 1,16 (TAVAN)
+   *   TOMATO 8,18 · BREAD 8,88                 → prim ~1,00 (nötr)
+   *   IRON 17,8 · CIGARETTE 36,5               → prim 0,82 (TABAN)
+   * Sürdürülebilir kapsam ürünler arasında 53 KAT değişiyor; tek bir sabit
+   * hiçbirine uymuyor. Ve pinlenme kuraklıktan ÖNCE, gün 0'da başlıyor:
+   * ima edilen prim WHEAT için gün 0'da 1,13, gün 1'de 1,16.
+   *
+   * Nötr nokta artık o ürünün satıcılarının MEDYAN kapsamıdır: akranından
+   * daha dar olan zam yapar, daha bol olan indirir. Piyasa geneli sıkıştığında
+   * medyan da düşer, yani bu terim yapay bir marj üretmez — genel kıtlık
+   * fiyata emir defteri üzerinden yansır, ki doğru kanal odur.
+   *
+   * Medyan, döngünün kendi kullandığı `stock` ve `facilities` üzerinden
+   * BELLEKTE hesaplanır; ikinci bir sorgu sayıların ayrışmasına yol açardı.
+   */
+  const kapsamlar = new Map<number, number[]>();
+  for (const f of facilities) {
+    if (f.output_product_id === null || f.recipe_id === null) continue;
+    const turBasi = f.base_capacity * f.level_multiplier;
+    if (!(turBasi > 0)) continue;
+    const eldeki = Number(stockOf(stock, f.inventory_id, f.output_product_id).available) / 1000;
+    const liste = kapsamlar.get(f.output_product_id);
+    if (liste) liste.push(eldeki / turBasi);
+    else kapsamlar.set(f.output_product_id, [eldeki / turBasi]);
+  }
+  /*
+   * Üçten az satıcıda medyan gürültüdür (tek satıcı kendi kendinin nötrü
+   * olur ve prim sonsuza dek 1 kalır); o ürünlerde sabit eşiğe düşülür.
+   * Taban 0,5 tur: medyan sıfıra inerse nötr nokta sıfır olur ve sapma
+   * hesabı (hedef − kapsam) ÷ hedef tanımsızlaşır.
+   */
+  const primHedefi = (productId: number): number => {
+    const liste = kapsamlar.get(productId);
+    if (!liste || liste.length < 3) return throttleCfg.targetTicks;
+    const sirali = [...liste].sort((a, b) => a - b);
+    const orta = sirali.length >> 1;
+    const medyan = sirali.length % 2 === 1
+      ? sirali[orta]!
+      : (sirali[orta - 1]! + sirali[orta]!) / 2;
+    return Math.max(0.5, medyan);
+  };
+
   for (const npc of npcs) {
     let budget = npc.cash - BigInt(Math.round(Number(npc.cash) * npc.cash_reserve_ratio));
 
@@ -254,7 +311,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           const kapsam = perTick > 0 ? Number(output.available) / 1000 / perTick : 0;
           const decision = priceFor(
             npc, output.unit_cost, facility.output_product_id, references, health, npcCfg,
-            { coverageTicks: kapsam, targetTicks: throttleCfg.targetTicks,
+            { coverageTicks: kapsam, targetTicks: primHedefi(facility.output_product_id),
               maxSwing: npcCfg.scarcitySwing ?? 0 },
           );
           if (decision) {
