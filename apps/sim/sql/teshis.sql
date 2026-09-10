@@ -390,3 +390,29 @@ SELECT p.code,
   JOIN sinyal si ON si.product_id = p.id
   JOIN fiyat  f  ON f.product_id  = p.id
  ORDER BY 2 DESC;
+
+\echo '=== R84 — CPI BİLEŞENLERİ: kuru hangi ürün itiyor? ==='
+-- ★ Kur `baseRate × gameCpi` ile fiyat seviyesini takip eder ve gameCpi
+-- perakende urunlerinin TALEP AGIRLIKLI fiyat endeksidir (p5-settle).
+--
+-- Olculdu (R84): tohum 0'da kur %61,7 ama para arzi yalniz %11,8 -- en
+-- dusugu. Yani kur para arzini takip etmiyor. Ayni tohumda sigara ve tutun
+-- FAZLA arzda (oran 1,93 ve 2,17), yani fiyatlari dusuk olmali; oran tek
+-- basina fiyat SEVIYESINI soylemiyor.
+--
+-- Agirliklar taban_fiyat x taban_talep: sigara 640, ekmek 600, domates 375.
+-- Sigara talebi dusuk olmasina ragmen EN AGIR kalem.
+SELECT p.code,
+       ROUND((p.base_reference_price / 10000.0)::numeric, 2)          AS taban_fiyat,
+       ROUND((ph.ema_reference / 10000.0)::numeric, 2)                AS simdiki_fiyat,
+       ROUND((ph.ema_reference::numeric / NULLIF(p.base_reference_price, 0)), 2) AS kat,
+       ROUND((p.base_reference_price * p.base_demand)::numeric, 0)    AS agirlik,
+       -- Bu urunun CPI'ya katkisi: (simdiki - taban) x agirlik / toplam agirlik
+       ROUND((((ph.ema_reference - p.base_reference_price)::numeric * p.base_demand::numeric)
+              / NULLIF(SUM((p.base_reference_price * p.base_demand)::numeric) OVER (), 0)), 3) AS cpi_katkisi
+  FROM products p
+  LEFT JOIN price_history ph
+         ON ph.product_id = p.id AND ph.city_id = 0
+        AND ph.tick_id = (SELECT MAX(tick_id) FROM price_history)
+ WHERE p.is_active AND p.is_retail_product AND p.base_demand > 0
+ ORDER BY 6 DESC NULLS LAST;

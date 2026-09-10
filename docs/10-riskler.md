@@ -3009,6 +3009,89 @@ bu yüzden karar oyuncunun.
 
 ---
 
+## R83 — NPC perakendesi geri çekilmiyordu: madde 31'in eksik yarısı
+
+**Şiddet:** 🔴 Kritik · **Durum:** ✅ çözüldü — kapı geçti
+
+Oyuncu büyümesini PARA YARATMADAN artırmak gerekiyordu (oyuncunun kararı:
+eşiğe dokunma, ekonomiyi düzelt). Önce ölçüldü:
+
+| | değer |
+|---|---|
+| oyuncu brüt marjı | %22,2 (NPC %19,7'den yüksek) |
+| oyuncu net marjı | %18,7 |
+| oyuncu perakende payı | %58,1 (bant %30–70) |
+| toplam perakende cirosu | 4,52M/gün — **bütçeyle sınırlı** |
+| eksik | oyuncu başına **631 ₺** |
+
+Marj sağlıklı; sorun ÖLÇEKte. Ve %70 sınırına kadar %20 alan var.
+
+**Boşluk:** `CAPACITY_CAP` — "NPC payı oyuncu payına göre kademeli geri
+çekilir" (madde 31) — yalnız ÜRETİM tarafında uygulanıyordu (p6-govern, üretici
+dalı). Perakendede karşılığı YOKTU: oyuncu payı ne olursa olsun NPC dükkânları
+aynı hedefle stok tutuyordu.
+
+Aynı formül NPC perakende stok hedefine uygulandı. **Para yaratmaz** — toplam
+ciro bütçeyle sabit, yalnız pay değişir.
+
+### Ölçülen sonuç: ★ KAPI GEÇİLDİ
+
+**12, 12, 14, 13, 13 / 14** — tüm eşikler medyanda ve çoğunlukta.
+
+| ölçüt | önce | sonra |
+|---|---|---|
+| `week1_growth` | 1,48× (2/5) | **1,59× (4/5)** |
+| `money_supply` | %35,2 (3/5) | **%26,4 (4/5)** |
+| `fx_change` | %23,8 (3/5) | %19,0 (3/5) |
+| oyuncu perakende payı | %58,1 | %57,6 — **%70'e çarpmadı** |
+
+Korkulan takas olmadı: oyuncu payı tavana dayanmadan büyüme düzeldi.
+
+★ Test gönderimden ÖNCE bir kusur yakaladı: `npcShareTarget` üstten 0,85'e
+kırpıldığı için oyuncusuz dünyada bile %15 kısma çıkıyordu ve boşluğu
+dolduracak kimse olmadığı için kıtlık doğardı. Üretim tarafındaki muafiyetin
+aynısı kondu; ayrıca 0,25 tabanı (NPC perakendesi tamamen kapanmamalı).
+
+---
+
+## R84 — Kur para arzını takip etmiyor
+
+**Şiddet:** 🟠 Yüksek · **Durum:** ⏳ ölçülüyor
+
+`money_supply` çözüldü ama `fx_change` hâlâ 3/5 — kıl payı çoğunluk. Ve basit
+"para arzı → enflasyon → kur" zinciri ÇÜRÜK:
+
+| tohum | kur | para arzı |
+|---|---|---|
+| 20260904 | **%61,7** ✗ | **%11,8** (en düşük) ✓ |
+| 20261917 | %33,5 ✗ | %41,8 ✗ |
+| 20262930 | %16,5 ✓ | %26,4 ✓ |
+| 20263943 | %2,7 ✓ | %36,1 ✓ |
+| 20264956 | %19,0 ✓ | %22,2 ✓ |
+
+Tohum 0'da kur en yüksek, para arzı en düşük.
+
+Kur `baseRate × gameCpi` ile fiyat seviyesini takip eder; gameCpi perakende
+ürünlerinin TALEP AĞIRLIKLI endeksidir. Ağırlıklar (`taban fiyat × taban
+talep`):
+
+| ürün | ağırlık | CPI payı |
+|---|---|---|
+| CIGARETTE | 6.400.000 | **%35,7** |
+| BREAD | 6.000.000 | %33,4 |
+| TOMATO | 3.750.000 | %20,9 |
+| FURNITURE | 1.800.000 | %10,0 |
+
+★ Sigara talebi düşük olmasına rağmen EN AĞIR kalem — fiyatı yüksek olduğu
+için. Yani tek bir ürünün fiyatı CPI'yı ve dolayısıyla kuru tek başına
+sürükleyebilir.
+
+Ama tohum 0'da sigara FAZLA arzda (oran 1,93) ve tütün de öyle (2,17) —
+fiyatları düşük olmalı. Oran fiyat SEVİYESİNİ söylemiyor; `teshis.sql` R84
+bloğu her ürünün CPI'ya katkısını doğrudan ölçecek.
+
+---
+
 ## R44 — Dış ticaret hiç sınanmıyor: kapının ufku mekaniğin kilidinden kısa
 
 **Şiddet:** 🟡 Orta · **Bulunma:** F8 kapı ölçümleri · **Durum:** ⏳ ayrı senaryo gerekiyor
@@ -3169,7 +3252,9 @@ kendi kendini yukarıda tutar.
 | R80 | Temiz zeminde ilk kapı: 13/14 · bir tohum tam | — | ✅ tek eksik `volatility` · dağılım %2,3–5,6 |
 | R81 | Oynaklık ölçütü yumuşatılmış iç çıpaya bakıyordu | 🟠 Yüksek | ✅ gerçek işlem fiyatı · 5/5 |
 | ★ | **GEÇİŞ KAPISI 2 GEÇİLDİ** | — | ✅ 12,11,14,12,14 · 4 kayıtla |
-| R82 | Musluk fiyata tam, gider yarım endeksliydi | 🔴 Kritik | ✅ nominal çıpa · kararsız 5→1 · büyüme eşiği açık |
+| R82 | Musluk fiyata tam, gider yarım endeksliydi | 🔴 Kritik | ✅ nominal çıpa |
+| R83 | NPC perakendesi geri çekilmiyordu (madde 31) | 🔴 Kritik | ✅ **KAPI GEÇTİ** 12,12,14,13,13 |
+| R84 | Kur para arzını takip etmiyor · CPI tek üründen sürüklenebilir | 🟠 Yüksek | ⏳ CPI bileşenleri ölçülüyor |
 | R77 | Referans fiyatın çıpası yok — üç arızanın ortak kökü | 🟠 Yüksek | ⏸ F9 sonrasına ertelendi (oyuncu kararı) |
 | R45 | Sürü hücumu: 58 NPC aynı turda yatırım kararı | 🔴 Kritik | ✅ F8 — faz dağıtımı + tur içi defter |
 | R46 | Tohum denge testi kendi modelini doğruluyordu | 🟠 Yüksek | ✅ F8 — `planSlots` tek kaynak |
