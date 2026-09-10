@@ -1,7 +1,7 @@
 import { transfer, type Sql } from '@kapital/db';
 import {
   clearanceFactor, decidePrice, demandGapScore, inputBid, investmentScore, leverMultiplier,
-  NPC_CAPACITY_SHARE, outputThrottle, priceTrendScore, scarcityPremium,
+  NPC_CAPACITY_SHARE, npcShareTarget, outputThrottle, priceTrendScore, scarcityPremium,
   shouldDivest,
   strategicNeed,
   PRICE_MARKUP_BAND,
@@ -180,6 +180,33 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
     (byCompany.get(f.company_id) ?? byCompany.set(f.company_id, []).get(f.company_id)!).push(f);
   }
 
+  /*
+   * ★ Perakendede oyuncu payı ve NPC tavanı (R83). Bir kez hesaplanır: tüm
+   * NPC dükkânları aynı tavana tabidir, ürün bazlı değil dünya bazlıdır —
+   * perakende rekabeti dükkân düzeyindedir, ürün düzeyinde değil.
+   */
+  const [pay] = await sql<{ oyuncu: number | null }[]>`
+    SELECT SUM(rs.revenue) FILTER (WHERE c.kind = 'PLAYER')::float8
+           / NULLIF(SUM(rs.revenue), 0) AS oyuncu
+      FROM retail_sales rs JOIN companies c ON c.id = rs.company_id
+     WHERE rs.tick_id > ${tick.seq - BigInt(TICKS_PER_DAY)}`;
+  const oyuncuPayi = Math.max(0, Math.min(1, pay?.oyuncu ?? 0));
+  // Üretim tarafındaki formülün aynısı (director.issueCapacityCap).
+  const hedefNpcPayi = npcShareTarget(oyuncuPayi);
+  const mevcutNpcPayi = 1 - oyuncuPayi;
+  /*
+   * ★ Oyuncu payı 0 iken tavan 1'dir — üretim tarafındaki muafiyetin aynısı
+   * (director.issueCapacityCap). Gerekçesi: `npcShareTarget` üstten 0,85'e
+   * kırpılır, dolayısıyla oyuncusuz dünyada bile 0,85/1,0 = %15 kısma çıkardı
+   * ve boşluğu dolduracak kimse olmadığı için kıtlık doğardı.
+   *
+   * Taban 0,25: NPC perakendesi tamamen kapanmamalı, aksi hâlde oyuncu
+   * çekilirse raf boş kalır.
+   */
+  const retailCap = oyuncuPayi > 0 && mevcutNpcPayi > 0.01
+    ? Math.max(0.25, Math.min(1, hedefNpcPayi / mevcutNpcPayi))
+    : 1;
+
   for (const npc of npcs) {
     let budget = npc.cash - BigInt(Math.round(Number(npc.cash) * npc.cash_reserve_ratio));
 
@@ -305,7 +332,26 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
       if (isRetail) {
         for (const product of retailDemand) {
           const held = stockOf(stock, facility.inventory_id, product.id);
-          const salesPerTick = product.base_demand * 0.35; // şehir payı tahmini
+          /*
+           * ★ NPC PERAKENDE GERİ ÇEKİLMESİ (R83) — madde 31'in eksik yarısı.
+           *
+           * `CAPACITY_CAP` "NPC payı oyuncu payına göre kademeli geri çekilir"
+           * kuralını uygular ama yalnız ÜRETİM tarafında (yukarıda, üretici
+           * dalında). Perakende tarafında karşılığı YOKTU: oyuncu payı ne
+           * olursa olsun NPC dükkânları aynı hedefle stok tutuyordu.
+           *
+           * Ölçüldü (R83): toplam perakende cirosu tüketici bütçesiyle sınırlı
+           * (4,52M/gün) ve oyuncular %58,1'ini alıyor. Bant %30–70, yani %20
+           * alan var — ama NPC dükkânları o alanı bırakmıyor.
+           *
+           * Tavan üretim tarafındaki formülün AYNISI: hedef NPC payı mevcut
+           * NPC payına oranlanır. Oyuncu payı düşükken tavan 1'dir (kısma yok);
+           * oyuncu büyüdükçe NPC stok hedefi geri çekilir ve alan açılır.
+           *
+           * ★ Bu para YARATMAZ: toplam ciro bütçeyle sabit, yalnız payı
+           * değiştirir. İstenen tam olarak buydu.
+           */
+          const salesPerTick = product.base_demand * 0.35 * retailCap; // şehir payı tahmini
 
           // Rafa fiyat koy
           if (held.available > 0n) {

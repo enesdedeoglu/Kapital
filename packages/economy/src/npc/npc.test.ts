@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { money, mulberry32, mulMoney, qty, type Money } from '@kapital/shared';
 import { productionCapacity } from '../production/capacity.js';
-import { scarcityPremium,
+import { npcShareTarget, scarcityPremium,
   decidePrice, inputBid, investmentScore, npcCapacityCap, outputThrottle,
   planInventory, representativeDistance, clearanceFactor, shouldDivest, strategicNeed,
   priceTrendScore, PRICE_TREND_FULL_SIGNAL, demandGapScore,
@@ -514,5 +514,39 @@ describe('★ kıtlık primi — fiyatın talebe tepki verdiği tek yer (R73)', 
   it('bozuk girdi davranışı değiştirmez', () => {
     expect(scarcityPremium(Number.NaN, 8, 0.15)).toBe(1);
     expect(scarcityPremium(-3, 8, 0.15)).toBe(1);
+  });
+});
+
+describe('★ NPC perakende geri çekilmesi — madde 31\'in eksik yarısı (R83)', () => {
+  /** p6-govern'daki tavan hesabının aynısı. */
+  const tavan = (oyuncuPayi: number) => {
+    const mevcutNpc = 1 - oyuncuPayi;
+    return oyuncuPayi > 0 && mevcutNpc > 0.01
+      ? Math.max(0.25, Math.min(1, npcShareTarget(oyuncuPayi) / mevcutNpc))
+      : 1;
+  };
+
+  it('oyuncusuz dünyada kısma YOKtur', () => {
+    expect(tavan(0)).toBe(1);
+  });
+
+  it('★ oyuncu payı büyüdükçe NPC geri çekilir', () => {
+    expect(tavan(0.6)).toBeLessThan(tavan(0.3));
+    expect(tavan(0.3)).toBeLessThan(tavan(0.1));
+  });
+
+  it('★ ölçülen durumda alan açar ama NPC\'yi silmez', () => {
+    // Ölçüldü (R83): oyuncular perakende cirosunun %58,1'ini alıyor, bant
+    // %30–70. NPC dükkânları o alanı bırakmıyordu çünkü CAPACITY_CAP yalnız
+    // ÜRETİM tarafında uygulanıyordu.
+    const t = tavan(0.581);
+    expect(t).toBeLessThan(1);
+    expect(t).toBeGreaterThan(0.5);
+  });
+
+  it('★ tabanı vardır: NPC perakendesi tamamen kapanmaz', () => {
+    // Kıtlıkta boşluğu dolduracak kimse kalmaması ED\'nin önlemesi gereken
+    // şeyi ED\'nin üretmesi olurdu (director.issueCapacityCap aynı kaygı).
+    expect(tavan(0.95)).toBeGreaterThanOrEqual(0.25);
   });
 });
