@@ -79,7 +79,9 @@ describe('aynı şehirde eşleşme', () => {
     expect((await checkInvariants(sql)).ok).toBe(true);
   });
 
-  it('fiyat satıcı isteği ile alıcı tavanının ortasıdır', async () => {
+  // ★ R88: fiyat artık satıcının İSTEDİĞİdir; alıcının tavanı yalnız
+  // eşleşmeyi belirler. Gerekçe ve ölçüm: matching.ts.
+  it('★ fiyat satıcının istediğidir — alıcı tavanı endekse sızmaz', async () => {
     const seller = await trader('S', IST);
     const buyer = await trader('B', IST);
     await stockUp(seller.facility.inventoryId, qty(100));
@@ -88,7 +90,7 @@ describe('aynı şehirde eşleşme', () => {
     await runTick(sql);
 
     const [trade] = await sql<{ price_per_unit: bigint }[]>`SELECT price_per_unit FROM market_trades`;
-    expect(trade!.price_per_unit).toBe(money(18)); // (16+20)/2
+    expect(trade!.price_per_unit).toBe(money(16)); // satıcının isteği
   });
 });
 

@@ -152,6 +152,56 @@ export const facilityLevelCurve = [
   [6, 4.30], [7, 5.60], [8, 7.20], [9, 9.10], [10, 11.50],
 ] as const;
 
+/**
+ * ★★★★ SIZINTISIZ DENGE MARJI (R91) — taban fiyat ÷ birim maliyet.
+ *
+ * Piyasanın dengesi `referans = maliyet × (1 + marj) × kıtlık_primi`. Bu oran
+ * ÖLÇÜLDÜ: alıcı tavanının fiyat endeksine sızması kapatıldığında (tohum
+ * 20260904) gerçekleşen fiyat/maliyet oranı on üründe 1,171–1,367 aralığına,
+ * ortalama 1,255'e oturdu.
+ *
+ * Reçetelerdeki işçilik/enerji sayıları elle seçilmişti ve bu oranı ürün ürün
+ * savuruyordu: COAL 1,400 · BREAD/TOMATO/TOBACCO 1,364 · FLOUR 1,347 · STEEL
+ * 1,346 · CIGARETTE/FURNITURE 1,350 · WHEAT/IRON 1,333. Tek bir tasarım kararı
+ * olması gereken sayı on farklı değere dağılmıştı; iki ürünün göreli fiyatı
+ * göreli maliyetlerini yansıtmıyordu.
+ *
+ * Artık işçilik/enerji SEVİYESİ bu orandan TÜRETİLİR. Elle yazılan sayılar
+ * karakter değeridir: reçetenin işçilik:enerji oranı ve reçeteler arası
+ * büyüklük hissi korunur, seviye kalibrasyona ölçeklenir.
+ */
+export const DENGE_MARJI = 1.255;
+
+/**
+ * Reçetenin işçilik+enerji giderini kalibrasyona ölçekler.
+ *
+ *   taban_fiyat × çıktı_adedi ÷ (işçilik + enerji + girdiler) = DENGE_MARJI
+ *
+ * Girdi maliyeti girdilerin TABAN fiyatından gelir ve bu fonksiyon taban
+ * fiyatlara dokunmaz — o yüzden her reçete bağımsız çözülür, zincir çözümü
+ * gerekmez.
+ */
+export function kalibreGider(
+  recipe: { outputCode: string; outputQty: number; labor: number; energy: number;
+            inputs: { code: string; qty: number }[] },
+  fiyat: (code: string) => number,
+): { labor: number; energy: number } {
+  const ciktiDegeri = fiyat(recipe.outputCode) * recipe.outputQty;
+  const girdiMaliyeti = recipe.inputs.reduce((t, i) => t + i.qty * fiyat(i.code), 0);
+  const hedefSabit = ciktiDegeri / DENGE_MARJI - girdiMaliyeti;
+  const simdikiSabit = recipe.labor + recipe.energy;
+  if (!(hedefSabit > 0) || !(simdikiSabit > 0)) return { labor: recipe.labor, energy: recipe.energy };
+  const olcek = hedefSabit / simdikiSabit;
+  /*
+   * ★ Para hassasiyetine yuvarlanır (ADR-0001: 4 ondalık). Yuvarlamadan
+   * `money()` "sessiz hassasiyet kaybı" diye reddeder — doğru davranış.
+   * Yuvarlama hatası 1e-4 ₺, en küçük kalemde (buğday enerji 2,12 ₺) bile
+   * bağıl olarak 5e-5; denge marjını dördüncü basamaktan sonra etkilemez.
+   */
+  const dortHane = (v: number) => Math.round(v * 10_000) / 10_000;
+  return { labor: dortHane(recipe.labor * olcek), energy: dortHane(recipe.energy * olcek) };
+}
+
 /** Reçeteler — madde 13. Girdisiz olanlar hammadde üreticileridir. */
 export const recipes: {
   facilityCode: string; outputCode: string; outputQty: number;

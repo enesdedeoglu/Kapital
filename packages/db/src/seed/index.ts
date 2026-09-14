@@ -106,14 +106,17 @@ export async function seed(sql: Sql, opts: { quiet?: boolean } = {}): Promise<vo
     }
 
     // 4) Reçeteler -----------------------------------------------------------
+    // ★ R91: işçilik/enerji SEVİYESİ kalibrasyondan türetilir (bkz. data.ts).
+    const urunFiyati = (code: string) => d.products.find((p) => p.code === code)!.price;
     for (const r of d.recipes) {
       const ft = d.facilityTypes.find((f) => f.code === r.facilityCode)!;
       const out = d.products.find((p) => p.code === r.outputCode)!;
+      const gider = d.kalibreGider(r, urunFiyati);
       const [row] = await tx<{ id: number }[]>`
         INSERT INTO production_recipes (facility_type_id, output_product_id, output_quantity,
                                         cycle_ticks, labor_cost, energy_cost, unlock_level)
         VALUES (${ft.id}, ${out.id}, ${qty(r.outputQty)}, ${r.cycleTicks},
-                ${money(r.labor)}, ${money(r.energy)}, ${r.unlock})
+                ${money(gider.labor)}, ${money(gider.energy)}, ${r.unlock})
         ON CONFLICT (facility_type_id, output_product_id) DO UPDATE SET
           output_quantity = EXCLUDED.output_quantity, cycle_ticks = EXCLUDED.cycle_ticks,
           labor_cost = EXCLUDED.labor_cost, energy_cost = EXCLUDED.energy_cost

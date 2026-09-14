@@ -132,8 +132,11 @@ jobs:
           # (apps/sim) çalışır, depo kökünde değil. Göreli yazıldığında ham
           # dosyalar apps/sim altına düştü, yükleme adımı kökte aradı ve
           # sessizce yalnız teşhis dosyalarını yükledi.
+          # --bekle: eksik tohumla karar verilmesin (R92). Matris beş iş koşar;
+          # biri artefakt yükleyemezse birleştirme dörtle karar verirdi.
           pnpm --filter @kapital/sim exec tsx src/cli/aggregate.ts \
-            "$GITHUB_WORKSPACE"/ham/*.json --json "$GITHUB_WORKSPACE/kapi.json" \
+            "$GITHUB_WORKSPACE"/ham/*.json --bekle 5 \
+            --json "$GITHUB_WORKSPACE/kapi.json" \
             | tee "$GITHUB_WORKSPACE/rapor.txt"
           # Adım özetine de yaz: Actions sayfasında tıklamadan görünsün.
           { echo '```'; cat rapor.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

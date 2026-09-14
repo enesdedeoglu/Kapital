@@ -249,14 +249,21 @@ describe('★ zincir kökten dolar — beslenemeyen tesise yatırım yapılmaz (
    * Buradaki iddia sayı değil YAYILIMdır: sermaye tek bir halkaya yığılmaz.
    * Kuralın kendisi `investmentScore` testlerinde ölçülür.
    */
+  /*
+   * ★ ÖRNEKLEM BÜYÜTÜLDÜ (R91): 6 NPC × 12 tur yalnız ~4 yatırım üretiyordu
+   * ve "hiçbir tür yarıdan fazlasını almaz" iddiası o ölçekte gürültüydü —
+   * 3/4 bile eşiği aşıyor, oysa iddia edilen çöküş (28 yatırımın HEPSİ tek
+   * türe) bambaşka bir şey. Maliyet kalibrasyonu göreli kârlılığı bir tık
+   * kaydırınca test düştü; sorun kuralda değil, ölçümün küçüklüğündeydi.
+   */
   it('sermaye tek halkaya yığılmaz', async () => {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 14; i++) {
       await makeNpc(sql, {
         typeCode: 'GREENGROCER', cityId: KONYA,
         strategyIntervalTicks: 1, cash: money(50_000_000),
       });
     }
-    for (let i = 0; i < 12; i++) await runTick(sql);
+    for (let i = 0; i < 24; i++) await runTick(sql);
 
     const kurulan = await sql<{ code: string; adet: bigint }[]>`
       SELECT ft.code, COUNT(*) AS adet
@@ -268,7 +275,10 @@ describe('★ zincir kökten dolar — beslenemeyen tesise yatırım yapılmaz (
        GROUP BY 1`;
     const toplam = kurulan.reduce((n, r) => n + Number(r.adet), 0);
     const enBuyuk = Math.max(...kurulan.map((r) => Number(r.adet)));
-    expect(toplam).toBeGreaterThan(0);
+    // Örneklem iddiayı taşıyacak kadar büyük olmalı; değilse test gürültü ölçer.
+    expect(toplam).toBeGreaterThanOrEqual(8);
+    // Asıl regresyon: bir halka SIFIR alırken hepsi tek türe gitmesin.
+    expect(kurulan.length).toBeGreaterThanOrEqual(2);
     // Hiçbir tesis türü yatırımların yarısından fazlasını almaz.
     expect(enBuyuk).toBeLessThanOrEqual(Math.ceil(toplam / 2));
   });

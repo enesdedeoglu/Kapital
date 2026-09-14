@@ -97,13 +97,28 @@ describe('emir eşleştirme (madde 16, C2)', () => {
     expect(matchBuyOrder(buy, [candidate(own, 0n as Money)]).matches).toHaveLength(0);
   });
 
-  it('fiyat, satıcı isteği ile alıcı tavanının orta noktasıdır', () => {
+  /*
+   * ★ R88: fiyat SATICININ İSTEDİĞİdir. Alıcının tavanı bir rezervasyon
+   * fiyatıdır ve iki bileşeni de piyasa dışıdır (referans×%102 + navlun payı);
+   * orta nokta kuralı onu endekse yazıyordu, endeks de bir sonraki turun
+   * referansı oluyordu. Ölçüm ve gerekçe: matching.ts.
+   */
+  it('★ fiyat satıcının istediğidir — alıcının tavanı endekse sızmaz', () => {
     const buy = order({ orderId: 1n, pricePerUnit: money(30), companyId: 'a', remaining: qty(10) });
     const sell = order({ orderId: 2n, pricePerUnit: money(20), companyId: 's' });
     const { matches } = matchBuyOrder(buy, [candidate(sell, money(2))]);
-    // alıcının mala ayırdığı tavan = 30 − 2 = 28; orta nokta (20+28)/2 = 24
-    expect(matches[0]!.pricePerUnit).toBe(money(24));
-    expect(matches[0]!.buyerTotal).toBe(money(24 * 10 + 2 * 10));
+    expect(matches[0]!.pricePerUnit).toBe(money(20));
+    expect(matches[0]!.buyerTotal).toBe(money(20 * 10 + 2 * 10));
+  });
+
+  it('★ alıcının tavanı yalnız EŞLEŞMEYİ belirler, fiyatı değil', () => {
+    const fiyat = (tavan: number) => matchBuyOrder(
+      order({ orderId: 1n, pricePerUnit: money(tavan), companyId: 'a', remaining: qty(10) }),
+      [candidate(order({ orderId: 2n, pricePerUnit: money(20), companyId: 's' }), money(2))],
+    ).matches[0]?.pricePerUnit;
+    expect(fiyat(30)).toBe(money(20));   // cömert alıcı
+    expect(fiyat(23)).toBe(money(20));   // cimri alıcı — aynı fiyat
+    expect(fiyat(21)).toBeUndefined();   // nakliyeyi karşılamıyor → eşleşme yok
   });
 
   it('birden çok satıcıdan kısmi doldurur, ucuzdan başlar', () => {

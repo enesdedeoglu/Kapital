@@ -215,19 +215,31 @@ describe('kur modeli', () => {
     expect(fx!.game_cpi).toBeCloseTo(1, 3);
   });
 
-  it('fiyatlar yükselince kur da yükselir (PPP çıpası)', async () => {
-    // Tacirler yalnız dünyayı doldurmak için kurulur; bu test onlara
-    // doğrudan dokunmaz, kur hareketini fırıncı üzerinden ölçer.
+  /*
+   * ★★★★ TEST YENİDEN YAZILDI (R88).
+   *
+   * Eski hâli ekmeğe 17 ₺'lik bir ALIŞ EMRİ koyup CPI'nın yükselmesini
+   * bekliyordu. Ama alıcı kendi satıcısıyla değil NPC fırıncılarla eşleşiyor
+   * ve onların isteği 14,40 ₺ idi — ortada pahalı ekmek YOKTU. Fiyatı yukarı
+   * taşıyan şey, orta nokta kuralının (14,40 + 17)/2 basmasıydı. Yani bu test,
+   * tek bir cömert alıcının ULUSAL FİYAT ENDEKSİNİ şişirmesine dayanıyordu.
+   * R88 tam olarak o sızıntıyı kapattı; testin dayanağı da onunla gitti.
+   * (Ölçüm: market_trades 144000/142560/141134, alıcı PLAYER, satıcı NPC.)
+   *
+   * Yeni hâli modelin KENDİ SÖZÜNÜ sınıyor — docs/12 §4:
+   *   hedef = kur₀ × game_cpi   (satın alma gücü paritesi)
+   * Kurun yönü CPI'nın 1'in hangi tarafında olduğuyla belirlenir; fiyatı kimin
+   * bastığına bağlı olmadığı için kurgu kırılgan değildir.
+   */
+  it('★ kur, CPI çıpasını takip eder (PPP — docs/12 §4)', async () => {
     await trader('S');
     await trader('B');
-    // Ekmek fiyatını yukarı çekerek CPI'yi yükselt
     const bakerySeller = await trader('Fırıncı');
     await stockUp(bakerySeller.facility.inventoryId, qty(500));
     await runTick(sql);
     const [before] = await sql<{ rate: bigint }[]>`
       SELECT rate_try_per_usd AS rate FROM fx_rates ORDER BY tick_id DESC LIMIT 1`;
 
-    // Ekmekte yüksek fiyatlı işlemler → CPI yükselir
     for (let i = 0; i < 3; i++) {
       const x = await trader(`X${i}`);
       const y = await trader(`Y${i}`);
@@ -235,17 +247,26 @@ describe('kur modeli', () => {
         inventoryId: x.facility.inventoryId, productId: 3, quantity: qty(400),
         quality: 80, unitCost: money(10), producedInTick: 0n, expiresAtTick: null,
       }));
-      await placeOrder(sql, { companyId: x.id, facilityId: x.facility.id, cityId: IST, productId: 3, side: 'SELL', quantity: qty(400), price: money(17) });
-      await placeOrder(sql, { companyId: y.id, facilityId: y.facility.id, cityId: IST, productId: 3, side: 'BUY', quantity: qty(400), price: money(17) });
+      await placeOrder(sql, { companyId: x.id, facilityId: x.facility.id, cityId: IST, productId: 3, side: 'SELL', quantity: qty(400), price: money(25) });
+      await placeOrder(sql, { companyId: y.id, facilityId: y.facility.id, cityId: IST, productId: 3, side: 'BUY', quantity: qty(400), price: money(25) });
       await runTick(sql);
     }
 
     const [after] = await sql<{ rate: bigint; game_cpi: number }[]>`
       SELECT rate_try_per_usd AS rate, game_cpi FROM fx_rates ORDER BY tick_id DESC LIMIT 1`;
-    expect(after!.game_cpi).toBeGreaterThan(1);
-    expect(after!.rate).toBeGreaterThan(before!.rate);
-  });
-});
+
+    // CPI 1'den saptıysa kur AYNI YÖNE hareket etmiş olmalı.
+    expect(after!.game_cpi).not.toBeCloseTo(1, 3);
+    expect(Math.sign(Number(after!.rate) - Number(before!.rate)))
+      .toBe(Math.sign(after!.game_cpi - 1));
+
+    // Ve PPP hedefine DOĞRU gitmiş olmalı.
+    const [ilk] = await sql<{ rate: bigint }[]>`
+      SELECT rate_try_per_usd AS rate FROM fx_rates ORDER BY tick_id LIMIT 1`;
+    const hedef = Number(ilk!.rate) * after!.game_cpi;
+    expect(Math.abs(Number(after!.rate) - hedef))
+      .toBeLessThan(Math.abs(Number(before!.rate) - hedef));
+  });});
 
 describe('★ tesis bazlı kâr/zarar toptan satışı da sayar (madde 46)', () => {
   it('üreten tesis ciro yazar — yalnız perakende sayılırsa her üretici zarar görünür', async () => {

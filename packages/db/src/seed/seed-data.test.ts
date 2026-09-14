@@ -3,7 +3,8 @@ import {
   capacityGaps, chainRequirements, PRICE_MARKUP_BAND, validateProductGraph,
   type ChainRecipe, type GraphProduct, type GraphRecipe,
 } from '@kapital/economy';
-import { cities, companyLevels, facilityTypes, gameConfigs, products, recipes } from './data.js';
+import { cities, companyLevels, DENGE_MARJI, facilityTypes, gameConfigs, kalibreGider,
+  products, recipes } from './data.js';
 import { npcFacilityCounts } from './npc-world.js';
 
 /**
@@ -218,6 +219,43 @@ describe('dünya kapasitesi kendi talebini karşılar', () => {
     const producible = new Set(recipes.map((r) => r.outputCode));
     for (const code of finalDemand.keys()) {
       expect(producible.has(code), `${code} üretilemiyor`).toBe(true);
+    }
+  });
+});
+
+/*
+ * ★★★★ R91 — TABAN FİYAT ÷ BİRİM MALİYET HER ÜRÜNDE AYNI OLMALI.
+ *
+ * Bu oran piyasanın sızıntısız dengesidir ve TEK bir tasarım kararıdır. Elle
+ * yazılan işçilik/enerji sayıları onu ürün ürün savuruyordu (1,333–1,400);
+ * iki ürünün göreli fiyatı göreli maliyetlerini yansıtmıyordu. Artık seviye
+ * kalibrasyondan türetilir — bu test türetmenin tuttuğunu kilitler.
+ */
+describe('★ R91 — maliyet kalibrasyonu', () => {
+  const fiyat = (code: string) => products.find((p) => p.code === code)!.price;
+
+  it('her reçete denge marjına oturur', () => {
+    for (const r of recipes) {
+      const g = kalibreGider(r, fiyat);
+      const girdi = r.inputs.reduce((t, i) => t + i.qty * fiyat(i.code), 0);
+      const oran = (fiyat(r.outputCode) * r.outputQty) / (g.labor + g.energy + girdi);
+      // Para hassasiyetine yuvarlandığı için 4 basamak; ötesi yuvarlama gürültüsü.
+      expect(oran, `${r.outputCode} kalibre değil`).toBeCloseTo(DENGE_MARJI, 4);
+    }
+  });
+
+  it('işçilik:enerji oranı KORUNUR — karakter değeri', () => {
+    for (const r of recipes) {
+      const g = kalibreGider(r, fiyat);
+      expect(g.labor / g.energy).toBeCloseTo(r.labor / r.energy, 4);
+    }
+  });
+
+  it('kalibre gider pozitiftir — hiçbir reçete bedava üretmez', () => {
+    for (const r of recipes) {
+      const g = kalibreGider(r, fiyat);
+      expect(g.labor, `${r.outputCode} işçilik`).toBeGreaterThan(0);
+      expect(g.energy, `${r.outputCode} enerji`).toBeGreaterThan(0);
     }
   });
 });
