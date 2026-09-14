@@ -148,12 +148,15 @@ export async function runStandingOrders(
        * SATIŞ tarafında sayılmaz: yoldaki malı satamazsın, henüz elinde değil.
        */
       const bosKapasite = rule.free_capacity - rule.incoming;
+      // ★ R93: teklife giren navlun payı emirde AYRI saklanır; eşleştirici
+      // kullanılmayan kısmı fiyattan düşer (bkz. matching.ts).
+      const navlunPayi = freight(rule.city_id, rule.product_id);
       const decision = standingRestock({
         onHand: asQty(rule.on_hand + rule.incoming),
         targetQuantity: asQty(rule.target_quantity),
         freeCapacity: asQty(bosKapasite > 0n ? bosKapasite : 0n),
         reference,
-        freightAllowance: freight(rule.city_id, rule.product_id),
+        freightAllowance: navlunPayi,
         maxPrice: rule.max_price === null ? null : asMoney(rule.max_price),
         budget: asMoney(budget > 0n ? budget : 0n),
       });
@@ -165,10 +168,11 @@ export async function runStandingOrders(
       await sql`
         INSERT INTO market_orders (company_id, facility_id, product_id, city_id, side,
                                    quantity, remaining_quantity, price_per_unit, quality,
-                                   expires_at_tick)
+                                   freight_allowance, expires_at_tick)
         VALUES (${rule.company_id}::uuid, ${rule.facility_id}::uuid, ${rule.product_id},
                 ${rule.city_id}, 'BUY', ${decision.quantity}, ${decision.quantity},
-                ${decision.bidPrice}, '0.000', ${tick.seq + BigInt(TICKS_PER_DAY)})`;
+                ${decision.bidPrice}, '0.000', ${navlunPayi},
+                ${tick.seq + BigInt(TICKS_PER_DAY)})`;
       budgets.set(
         rule.company_id,
         budget - (decision.bidPrice * decision.quantity) / 1000n,
