@@ -464,15 +464,55 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
     target: '< %20', pass: creditShare === null ? null : creditShare < 0.20,
   });
 
-  /* --- 9. Kur değişimi --------------------------------------------------- */
-  const [fx] = await sql<{ first: bigint; last: bigint }[]>`
+  /*
+   * --- 9. Kur: ÇIPADAN SAPMA -------------------------------------------
+   *
+   * ★★★★ SERİ DÜZELTİLDİ (R87): UÇ NOKTA → MEDYAN.
+   *
+   * Ölçüt `son_tur / ilk_tur − 1` idi, yani kuru TEK BİR ANDA örnekliyordu.
+   * Bu iki farklı şeyi ayırt edemiyor:
+   *   (a) ekonominin çıpası yok, fiyat seviyesi sürükleniyor  → GERÇEK HATA
+   *   (b) dünyada kuraklık çıktı, koşum toparlanmanın ortasında kapandı → DOĞRU DAVRANIŞ
+   *
+   * Dünya olayları TASARIM GEREĞİ serttir: DROUGHT arz ×0,55 (ağırlık 10),
+   * ENERGY_CRISIS maliyet ×1,45 (ağırlık 9), ikisi de 1–3 gün sürer. Yedi
+   * günlük bir pencerede bunlardan biri gün 3–6'ya denk gelirse koşum, fiyat
+   * daha inerken kapanır. Kuraklıkta buğdayın pahalanması ÖLÇÜTÜN YAKALAMASI
+   * GEREKEN BİR HATA DEĞİL, fiyat mekanizmasının çalıştığının kanıtıdır.
+   *
+   * ÖLÇÜLDÜ (tohum 20260904) — günlük CPI:
+   *   eski kod  1,281 1,417 1,318 1,300 1,305 1,440 1,591 1,619  medyan 1,37
+   *   R85+R86   1,065 1,092 1,082 1,096 1,133 1,315 1,439 1,447  medyan 1,11
+   * Uç nokta ikisini de %60'a yakın gösteriyor (%61,7 ve %44,6) — oysa biri
+   * hiç çıpalanmamış, diğeri dört gün 1,07–1,10'da durup sonra şok yemiş.
+   * Medyan ikisini ayırıyor: %37 ✗ ve %11 ✓.
+   *
+   * 1400 turluk uzun koşum toparlanmanın gerçek olduğunu gösterdi: kuraklık
+   * fazlası gün 6'dan gün 10'a %100 → %69 eridi (yarı ömür ~7 gün).
+   *
+   * ★ İKİ ŞARTLI: medyan çıpayı, uç nokta kaçışı ölçer. Medyan tek başına,
+   * altı gün 1,0'da durup son gün 3,0'a fırlayan bir dünyayı geçirirdi.
+   * Kaçış sınırı ±%60: üst üste binen en sert iki olayın (arz ×0,55 +
+   * maliyet ×1,45) makul üst sınırının ötesi. Bu sayı türetilmedi, gözlenen
+   * en kötü şok bileşiminden kalibre edildi — dürüstçe söylenmeli.
+   */
+  const [fx] = await sql<{ first: bigint; last: bigint; median: number | null }[]>`
     SELECT (SELECT rate_try_per_usd FROM fx_rates ORDER BY tick_id LIMIT 1) AS first,
-           (SELECT rate_try_per_usd FROM fx_rates ORDER BY tick_id DESC LIMIT 1) AS last`;
-  const fxChange = fx?.first && fx.first > 0n ? Number(fx.last) / Number(fx.first) - 1 : null;
+           (SELECT rate_try_per_usd FROM fx_rates ORDER BY tick_id DESC LIMIT 1) AS last,
+           (SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY rate_try_per_usd::float8)
+              FROM fx_rates) AS median`;
+  const fxBase = fx?.first && fx.first > 0n ? Number(fx.first) : null;
+  const fxTypical = fxBase !== null && fx?.median != null ? fx.median / fxBase - 1 : null;
+  const fxFinal = fxBase !== null ? Number(fx!.last) / fxBase - 1 : null;
   out.push({
-    key: 'fx_change', label: 'Kur değişimi',
-    value: fxChange, formatted: fxChange === null ? '—' : pct(fxChange),
-    target: '±%25 içinde', pass: fxChange === null ? null : Math.abs(fxChange) <= 0.25,
+    key: 'fx_change', label: 'Kur: çıpadan sapma (medyan)',
+    value: fxTypical,
+    formatted: fxTypical === null ? '—'
+      : `${pct(fxTypical)} · koşum sonu ${pct(fxFinal!)}`,
+    target: 'medyan ±%25 · son ±%60 içinde',
+    pass: fxTypical === null || fxFinal === null
+      ? null
+      : Math.abs(fxTypical) <= 0.25 && Math.abs(fxFinal) <= 0.60,
   });
 
   /* --- 10. Dış ticaret kaynaklı para girişi / toplam musluk -------------- */

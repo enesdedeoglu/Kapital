@@ -76,8 +76,40 @@ export function matchBuyOrder(
     const quantity = min(remaining, candidate.sell.remaining as bigint);
     if (quantity <= 0n) continue;
 
-    // Fiyat, satıcının istediği ile alıcının mal için ayırdığı tavanın orta
-    // noktasıdır: her iki taraf da eşleşmeden fayda sağlar.
+    /*
+     * ★ BİLİNEN SIZINTI — ÖLÇÜLDÜ, HENÜZ KAPATILMADI (R88 bulgusu).
+     *
+     * Alıcının tavanı bir REZERVASYON fiyatıdır ve iki bileşeni de piyasa
+     * dışıdır: `referans × (1 + %2) + navlun_payı`. Navlun payı şehrin MEDYAN
+     * mesafesine göre sabit hesaplanır; satıcı aynı şehirdeyse gerçek nakliye
+     * SIFIRDIR ve o payın tamamı fazlalık kalır. Orta nokta kuralı yarısını
+     * satıcıya verir ve `price_history` üzerinden ENDEKSE yazar — endeks de
+     * bir sonraki turun referansıdır.
+     *
+     * Denge: referans = [(1−w)·maliyet·(1+marj)·s + F] / (1 − w − b)
+     * Payda ~0,43 olduğu için navlun payı fiyata ~2,3 KATI yansıyor.
+     * ÖLÇÜLDÜ (tohum 20260904): WHEAT %24,2 · COAL %20,8 · TOMATO %19,3 ·
+     * FLOUR %8,5 · CIGARETTE %0,7 — en çok ağır ve ucuz malları vuruyor.
+     *
+     * NEDEN KAPATILMADI: `price = candidate.sell.pricePerUnit` denendi ve
+     * sızıntıyı gerçekten kapattı, ama ürün TABAN FİYATLARI bu sızıntı
+     * varken kalibre edilmiş. Sızıntı kalkınca fiyat seviyesi 1,08'den
+     * 0,79'a düştü ve bu salınım volatiliteyi %12,0'den %16,4'e çıkardı.
+     * Marj kalibrasyonuyla telafi denendi (arketip marjlarını taban fiyat
+     * oranından türetmek) — gerçekleşen/hedef oranı rejimden rejime
+     * 1,016 → 1,006 → 0,980 arasında gezdiği için sabit ayarla tutturulamadı.
+     * Nominal çıpayı güçlendirmek de (endeksleme 0,75 → 0,50) denendi:
+     * fiyat seviyesi sabitlendi (0,839'da düz) ama tüketici bütçesi fiyatı
+     * takip edemeyince pahalı mallarda talep çöktü (FURNITURE arz/talep 0,24)
+     * ve volatilite %19,0'a çıktı.
+     *
+     * Doğru sıra: ÖNCE taban fiyatları (veya reçete maliyetlerini) sızıntısız
+     * dengeye göre yeniden kalibre et, SONRA bu satırı satıcının isteğine
+     * çevir. İkisi tek adımda yapılmalı; ayrı ayrı her biri ekonomiyi bozuyor.
+     *
+     * Fiyat, satıcının istediği ile alıcının mal için ayırdığı tavanın orta
+     * noktasıdır: her iki taraf da eşleşmeden fayda sağlar.
+     */
     const buyerGoodsCeiling = (buy.pricePerUnit as bigint) - (candidate.shippingPerUnit as bigint);
     const price = divRoundHalfEven((candidate.sell.pricePerUnit as bigint) + buyerGoodsCeiling, 2n);
 
