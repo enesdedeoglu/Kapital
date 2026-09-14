@@ -528,10 +528,52 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
     target: '< %30', pass: foreignShare === null ? null : foreignShare < 0.30,
   });
 
-  /* --- 11. Fiyatın dış ticaret bandına yapışması (R18) ------------------- */
+  /*
+   * --- 11. Fiyatın dış ticaret BANDINA yapışması (R18) -------------------
+   *
+   * ★★★★ ÖLÇÜT DÜZELTİLDİ (R94): DÜNYA FİYATI → BANT KENARLARI.
+   *
+   * Ölçüt, yerli fiyatın DÜNYA FİYATINA %2 içinde olduğu zamanın oranını
+   * sayıyordu. Ama dünya fiyatı bandın ORTASIDIR, kenarı değil: sürtünme bandı
+   * dünya fiyatının %25 altı (ihracat tabanı) ile %35 üstü (ithalat tavanı)
+   * arasındadır (docs/12 §3.2, `economy.foreign`). Tam dünya fiyatında durmak,
+   * ne ithalatın ne ihracatın kârlı olduğu ARBİTRAJ-NÖTR noktadır — yani
+   * yapışmanın tam tersi.
+   *
+   * Dahası ölçüt, adının söylediği şeyi hiç ölçmüyordu. Dünya fiyatı
+   * `taban_fiyat ÷ kur₀` ile türetilir ve kur PPP ile CPI'yı takip eder
+   * (`nextFxRate`: hedef = kur₀ × game_cpi), dolayısıyla
+   *   dünya_₺ = taban_fiyat × CPI    ⇒    yerli ÷ dünya = ürün_oranı ÷ CPI
+   * Yani ölçüt "bu ürün ekonominin ORTALAMASINDA mı?" sorusunu soruyordu.
+   * Göreli fiyatlar birbirine yaklaştıkça — sağlıklı bir şey — ceza veriyordu.
+   *
+   * ÖLÇÜLDÜ (tohum 20260904, son tur) — iki oran üç ondalığa kadar aynı:
+   *   COAL 0,813 / 0,810 · CIGARETTE 1,020 / 1,017 · TOMATO 1,090 / 1,087
+   * (aradaki kıl payı kurun CPI'yı α=0,05 ile gecikmeli takip etmesinden.)
+   *
+   * R18'in asıl kaygısı arbitrajın fiyatı BANT KENARINA çivilemesiydi: yerli
+   * fiyat ithalat tavanına dayanırsa herkes ithal eder, ihracat tabanına
+   * inerse herkes ihraç eder ve fiyat keşfi ölür. Ölçüt artık bunu ölçüyor:
+   * kenara %2 kadar yaklaşmış ya da bandı aşmış gözlemler.
+   *
+   * Düzeltme kimseyi kayırmıyor, iki dünyayı da geçiriyor:
+   *   gönderilen kod  eski %11,6 → yeni %4,3  (%3,6'sı ithalat tavanının
+   *                   ÜSTÜNDE — buğday oradaydı ve eski ölçüt bunu görmüyordu)
+   *   navlun düzeltmesi  eski %24,1 → yeni %0,0
+   */
+  // Bant çarpanları yapılandırmadan okunur: ölçüt, oyunun kendi bandını
+  // sorgular — burada ikinci bir kopya tutulmaz.
+  const [bandRow] = await sql<{ e: number | null; i: number | null }[]>`
+    SELECT (value->>'exportMultiplier')::float8 AS e,
+           (value->>'importMultiplier')::float8 AS i
+      FROM game_configs WHERE key = 'economy.foreign'`;
+  const exportMult = bandRow?.e ?? 0.75;
+  const importMult = bandRow?.i ?? 1.35;
   const [stuck] = await sql<{ share: number | null }[]>`
-    SELECT AVG(CASE WHEN ABS(ph.ema_reference::float8
-                             / NULLIF(f.world_price_try, 0) - 1) < 0.02
+    SELECT AVG(CASE WHEN ph.ema_reference::float8 / NULLIF(f.world_price_try, 0)
+                      <= ${exportMult * 1.02}
+                    OR ph.ema_reference::float8 / NULLIF(f.world_price_try, 0)
+                      >= ${importMult * 0.98}
                     THEN 1 ELSE 0 END)::float8 AS share
       FROM price_history ph
       JOIN LATERAL (
@@ -543,7 +585,7 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
      WHERE ph.city_id = 0 AND ph.tick_id > ${lastTick - day}`;
   const stuckShare = stuck?.share ?? null;
   out.push({
-    key: 'foreign_band', label: 'Fiyatın dış ticaret bandına yapışma oranı',
+    key: 'foreign_band', label: 'Fiyatın dış ticaret bandı KENARINA yapışma oranı',
     value: stuckShare, formatted: stuckShare === null ? '—' : pct(stuckShare),
     target: '< %20', pass: stuckShare === null ? null : stuckShare < 0.20,
   });
