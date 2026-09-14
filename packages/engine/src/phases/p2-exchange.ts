@@ -15,6 +15,7 @@ interface OrderRow {
   id: bigint; company_id: string; facility_id: string | null; city_id: number;
   remaining_quantity: bigint; price_per_unit: bigint; min_quality: string; quality: string;
   max_delivery_distance: number | null; created_epoch: number;
+  freight_allowance: bigint;
   logistics_modifier: number;
 }
 
@@ -400,6 +401,9 @@ async function loadOrders(sql: Sql, productId: number, side: 'BUY' | 'SELL'): Pr
   return sql<OrderRow[]>`
     SELECT o.id, o.company_id, o.facility_id, o.city_id, o.remaining_quantity,
            o.price_per_unit, o.min_quality::text, o.quality::text, o.max_delivery_distance,
+           -- ★ R93: teklifin navluna ayrılmış kısmı. Uygunlukta sayılır,
+           -- fiyat oluşumunda sayılmaz; fiyattan geri hesaplanamaz.
+           o.freight_allowance,
            -- ★ Zaman önceliği EMİR SIRASINDAN okunur, DUVAR SAATİNDEN değil.
            --
            -- Once EXTRACT(EPOCH FROM o.created_at) idi ve ADR-0003'u ihlal
@@ -434,6 +438,14 @@ function toBookOrder(row: OrderRow, remaining: bigint): BookOrder {
     minQuality: Number(row.min_quality),
     quality: Number(row.quality),
     maxDeliveryDistance: row.max_delivery_distance,
+    /*
+     * ★ AÇIK DÖNÜŞÜM: `asMoney` yalnız TİP İDDİASIDIR, çalışma zamanında hiçbir
+     * şey dönüştürmez. Sütun yeni eklendiği için eski satırlarda ya da eksik
+     * seçildiği bir yolda `undefined` gelebilir ve `bigint - undefined`
+     * "Cannot mix BigInt and other types" ile patlar. Para sınırdan bigint
+     * olarak girmeli (ADR-0001); iddia etmek yetmez, dönüştürmek gerekir.
+     */
+    freightAllowance: asMoney(BigInt(row.freight_allowance ?? 0)),
     createdAt: row.created_epoch,
   };
 }

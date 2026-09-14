@@ -45,7 +45,8 @@ describe('emir eşleştirme (madde 16, C2)', () => {
   const order = (o: Partial<BookOrder> & { orderId: bigint; pricePerUnit: Money }): BookOrder => ({
     companyId: 'c' + o.orderId, facilityId: 'f' + o.orderId, cityId: 1,
     remaining: qty(1000), minQuality: 0, quality: 80,
-    maxDeliveryDistance: null, createdAt: Number(o.orderId), ...o,
+    // Varsayılan 0: oyuncu emirleri navlun payı taşımaz, NPC alışları taşır (R93).
+    maxDeliveryDistance: null, freightAllowance: money(0), createdAt: Number(o.orderId), ...o,
   });
   const candidate = (sell: BookOrder, ship: Money, distance = 0, transit = 0): MatchCandidate =>
     ({ sell, shippingPerUnit: ship, distanceIndex: distance, transitTicks: transit });
@@ -104,6 +105,63 @@ describe('emir eşleştirme (madde 16, C2)', () => {
     // alıcının mala ayırdığı tavan = 30 − 2 = 28; orta nokta (20+28)/2 = 24
     expect(matches[0]!.pricePerUnit).toBe(money(24));
     expect(matches[0]!.buyerTotal).toBe(money(24 * 10 + 2 * 10));
+  });
+
+  /*
+   * ★★★★ R93 — kullanılmayan navlun payı fiyata karışmaz.
+   * Gerekçe ve ölçüm: matching.ts.
+   */
+  describe('★ R93 — navlun payı', () => {
+    it('aynı şehirde kullanılmayan pay fiyattan düşer', () => {
+      // Teklif 30 = mal 25 + navlun payı 5. Satıcı aynı şehirde: nakliye 0.
+      const buy = order({
+        orderId: 1n, pricePerUnit: money(30), companyId: 'a',
+        remaining: qty(10), freightAllowance: money(5),
+      });
+      const sell = order({ orderId: 2n, pricePerUnit: money(20), companyId: 's' });
+      const { matches } = matchBuyOrder(buy, [candidate(sell, money(0))]);
+      // Mal tavanı 30 − 5 = 25; orta nokta (20+25)/2 = 22,5.
+      // Pay düşülmeseydi (20+30)/2 = 25 basardı ve aradaki 2,5 ENDEKSE girerdi.
+      expect(matches[0]!.pricePerUnit).toBe(money(22.5));
+    });
+
+    it('paydan uzak satıcıda GERÇEK nakliye düşer — alıcı teklifini aşmaz', () => {
+      const buy = order({
+        orderId: 1n, pricePerUnit: money(30), companyId: 'a',
+        remaining: qty(10), freightAllowance: money(2),
+      });
+      const sell = order({ orderId: 2n, pricePerUnit: money(20), companyId: 's' });
+      const { matches } = matchBuyOrder(buy, [candidate(sell, money(6))]);
+      // max(6, 2) = 6 → mal tavanı 24; orta nokta 22. Toplam 22 + 6 = 28 ≤ 30 ✓
+      expect(matches[0]!.pricePerUnit).toBe(money(22));
+      expect(matches[0]!.buyerTotal).toBe(money(22 * 10 + 6 * 10));
+    });
+
+    it('★ alıcı hiçbir durumda teklifinin üstünde ödemez', () => {
+      for (const pay of [0, 1, 3, 5, 9]) {
+        for (const nakliye of [0, 2, 4, 8]) {
+          const buy = order({
+            orderId: 1n, pricePerUnit: money(30), companyId: 'a',
+            remaining: qty(10), freightAllowance: money(pay),
+          });
+          const sell = order({ orderId: 2n, pricePerUnit: money(20), companyId: 's' });
+          const { matches } = matchBuyOrder(buy, [candidate(sell, money(nakliye))]);
+          if (matches.length === 0) continue;
+          const birim = (matches[0]!.buyerTotal as bigint) / 10n;
+          expect(birim, `pay ${pay} nakliye ${nakliye}`).toBeLessThanOrEqual(money(30) as bigint);
+        }
+      }
+    });
+
+    it('pay uygunluğu ETKİLEMEYE devam eder — erişim işlevi korunur', () => {
+      // Satıcı 26 + nakliye 3 = 29 ≤ 30 → pay sayesinde eşleşir.
+      const buy = order({
+        orderId: 1n, pricePerUnit: money(30), companyId: 'a',
+        remaining: qty(10), freightAllowance: money(5),
+      });
+      const sell = order({ orderId: 2n, pricePerUnit: money(26), companyId: 's' });
+      expect(matchBuyOrder(buy, [candidate(sell, money(3))]).matches).toHaveLength(1);
+    });
   });
 
   it('birden çok satıcıdan kısmi doldurur, ucuzdan başlar', () => {

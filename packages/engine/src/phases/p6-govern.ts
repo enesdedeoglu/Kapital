@@ -291,15 +291,16 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           if (!reference) continue;
           // Acil ihtiyaçta piyasanın biraz üstünü ödemeye razı olur; navlun payı
           // olmadan yalnızca aynı şehirdeki satıcıya erişebilirdi (R20).
-          const bid = inputBid({
-            reference, urgent: plan.urgent,
-            freightAllowance: freight(facility.city_id, input.product_id),
-          });
+          // ★ R93: teklife giren navlun payı emirde AYRI saklanır — eşleştirici
+          // kullanılmayan kısmı fiyattan düşebilsin diye. Fiyattan geri
+          // hesaplanamaz, o yüzden taşınması şart.
+          const navlunPayi = freight(facility.city_id, input.product_id);
+          const bid = inputBid({ reference, urgent: plan.urgent, freightAllowance: navlunPayi });
           const placed = await upsertOrder(sql, tick, openOrders, {
             companyId: npc.company_id, facilityId: facility.facility_id,
             cityId: facility.city_id, productId: input.product_id, side: 'BUY',
             quantity: biasedQuantity(plan.buyQuantity, directives, support, input.product_id),
-            price: bid, budget,
+            price: bid, budget, freightAllowance: navlunPayi,
           });
           if (placed > 0n) { out.buyOrders++; budget -= placed; }
         }
@@ -552,6 +553,8 @@ async function upsertOrder(
   input: {
     companyId: string; facilityId: string; cityId: number; productId: number;
     side: 'BUY' | 'SELL'; quantity: bigint; price: Money; quality?: number; budget?: bigint;
+    /** Alışta teklifin navluna ayrılmış kısmı (R93); fiyat oluşumunda sayılmaz. */
+    freightAllowance?: Money;
   },
 ): Promise<bigint> {
   let quantity = input.quantity;
@@ -579,6 +582,7 @@ async function upsertOrder(
       UPDATE market_orders
          SET quantity = ${quantity}, remaining_quantity = ${quantity},
              price_per_unit = ${price}, status = 'OPEN',
+             freight_allowance = ${input.freightAllowance ?? 0n},
              expires_at_tick = ${tick.seq + BigInt(TICKS_PER_DAY)}
        WHERE id = ${existing.id}`;
     open.set(key, { id: existing.id, price });
@@ -586,10 +590,11 @@ async function upsertOrder(
     const [row] = await sql<{ id: bigint }[]>`
       INSERT INTO market_orders (company_id, facility_id, product_id, city_id, side,
                                  quantity, remaining_quantity, price_per_unit, quality,
-                                 expires_at_tick)
+                                 freight_allowance, expires_at_tick)
       VALUES (${input.companyId}::uuid, ${input.facilityId}::uuid, ${input.productId},
               ${input.cityId}, ${input.side}::order_side, ${quantity}, ${quantity},
-              ${price}, ${(input.quality ?? 70).toFixed(3)}, ${tick.seq + BigInt(TICKS_PER_DAY)})
+              ${price}, ${(input.quality ?? 70).toFixed(3)},
+              ${input.freightAllowance ?? 0n}, ${tick.seq + BigInt(TICKS_PER_DAY)})
       RETURNING id`;
     open.set(key, { id: row!.id, price });
   }

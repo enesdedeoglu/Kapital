@@ -10,6 +10,11 @@ export interface BookOrder {
   readonly minQuality: number;
   readonly quality: number;
   readonly maxDeliveryDistance: number | null;
+  /**
+   * Alış emrinde teklifin NAVLUNA ayrılmış kısmı (R93). Uygunlukta sayılır,
+   * fiyat oluşumunda sayılmaz. Satış emirlerinde 0.
+   */
+  readonly freightAllowance: Money;
   readonly createdAt: number;
 }
 
@@ -77,40 +82,38 @@ export function matchBuyOrder(
     if (quantity <= 0n) continue;
 
     /*
-     * ★ BİLİNEN SIZINTI — ÖLÇÜLDÜ, HENÜZ KAPATILMADI (R88 bulgusu).
+     * ★★★★ KULLANILMAYAN NAVLUN PAYI FİYATA KARIŞMAZ (R93).
      *
-     * Alıcının tavanı bir REZERVASYON fiyatıdır ve iki bileşeni de piyasa
-     * dışıdır: `referans × (1 + %2) + navlun_payı`. Navlun payı şehrin MEDYAN
-     * mesafesine göre sabit hesaplanır; satıcı aynı şehirdeyse gerçek nakliye
-     * SIFIRDIR ve o payın tamamı fazlalık kalır. Orta nokta kuralı yarısını
-     * satıcıya verir ve `price_history` üzerinden ENDEKSE yazar — endeks de
-     * bir sonraki turun referansıdır.
+     * Alıcının teklifi `referans × (1 + prim) + navlun_payı`. Navlun payı
+     * şehrin MEDYAN mesafesine göre bir tahmindir; amacı başka şehirdeki
+     * satıcıya ERİŞEBİLMEKTİR (R20). Satıcı aynı şehirdeyse gerçek nakliye
+     * SIFIRDIR ve o pay hiç harcanmaz — ama tavanın içinde kaldığı için orta
+     * nokta kuralı yarısını satıcıya verip FİYAT ENDEKSİNE yazıyordu. Endeks
+     * de bir sonraki turun referansı: fiyat kendi kendini besliyordu.
      *
-     * Denge: referans = [(1−w)·maliyet·(1+marj)·s + F] / (1 − w − b)
-     * Payda ~0,43 olduğu için navlun payı fiyata ~2,3 KATI yansıyor.
-     * ÖLÇÜLDÜ (tohum 20260904): WHEAT %24,2 · COAL %20,8 · TOMATO %19,3 ·
-     * FLOUR %8,5 · CIGARETTE %0,7 — en çok ağır ve ucuz malları vuruyor.
+     * ÖLÇÜLDÜ (tohum 20260904) — navlun payının fiyat seviyesine etkisi:
+     *   WHEAT %24,2 · COAL %20,8 · TOMATO %19,3 · FURNITURE %12,5 · FLOUR %8,5
+     * En çok ağır ve ucuz malları vuruyor: navlun ağırlıkla ölçeklenir, fiyatla
+     * ölçeklenmez.
      *
-     * NEDEN KAPATILMADI: `price = candidate.sell.pricePerUnit` denendi ve
-     * sızıntıyı gerçekten kapattı, ama ürün TABAN FİYATLARI bu sızıntı
-     * varken kalibre edilmiş. Sızıntı kalkınca fiyat seviyesi 1,08'den
-     * 0,79'a düştü ve bu salınım volatiliteyi %12,0'den %16,4'e çıkardı.
-     * Marj kalibrasyonuyla telafi denendi (arketip marjlarını taban fiyat
-     * oranından türetmek) — gerçekleşen/hedef oranı rejimden rejime
-     * 1,016 → 1,006 → 0,980 arasında gezdiği için sabit ayarla tutturulamadı.
-     * Nominal çıpayı güçlendirmek de (endeksleme 0,75 → 0,50) denendi:
-     * fiyat seviyesi sabitlendi (0,839'da düz) ama tüketici bütçesi fiyatı
-     * takip edemeyince pahalı mallarda talep çöktü (FURNITURE arz/talep 0,24)
-     * ve volatilite %19,0'a çıktı.
+     * Çözüm: mal için ayrılan tavandan, nakliye ile navlun payının BÜYÜĞÜ
+     * düşülür.
+     *   · Aynı şehir (nakliye 0 < pay): pay düşer, fazlalık fiyata girmez.
+     *   · Medyandan uzak satıcı (nakliye > pay): nakliye düşer, alıcı
+     *     teklifinin üstünde ödemek zorunda kalmaz.
+     * Büyüğünü almak ikisini birden garanti eder.
      *
-     * Doğru sıra: ÖNCE taban fiyatları (veya reçete maliyetlerini) sızıntısız
-     * dengeye göre yeniden kalibre et, SONRA bu satırı satıcının isteğine
-     * çevir. İkisi tek adımda yapılmalı; ayrı ayrı her biri ekonomiyi bozuyor.
-     *
-     * Fiyat, satıcının istediği ile alıcının mal için ayırdığı tavanın orta
-     * noktasıdır: her iki taraf da eşleşmeden fayda sağlar.
+     * ★ Fazlalık PAYLAŞIMI korunur (orta nokta kuralı yerinde): satıcı hâlâ
+     * eşleşmeden kazanır. Ölçüldü ki bunu tamamen kaldırmak (fiyat = satıcının
+     * isteği) oyuncu gelirini doğrudan kesiyor — oyuncular da satıcıdır: beş
+     * tohumda 1. hafta büyümesi 1,74–2,00× aralığından 1,29–1,70×'e düşmüş,
+     * bir dünyada 1,5× eşiğinin altına inmişti. Kaldırılan yalnız navlunun
+     * fiyata sızması.
      */
-    const buyerGoodsCeiling = (buy.pricePerUnit as bigint) - (candidate.shippingPerUnit as bigint);
+    const navlunDusumu = (candidate.shippingPerUnit as bigint) > (buy.freightAllowance as bigint)
+      ? (candidate.shippingPerUnit as bigint)
+      : (buy.freightAllowance as bigint);
+    const buyerGoodsCeiling = (buy.pricePerUnit as bigint) - navlunDusumu;
     const price = divRoundHalfEven((candidate.sell.pricePerUnit as bigint) + buyerGoodsCeiling, 2n);
 
     const goodsTotal = priceTimesQty(price as Money, asQty(quantity)).value;
