@@ -91,24 +91,31 @@ export function matchBuyOrder(
      * ÖLÇÜLDÜ (tohum 20260904): WHEAT %24,2 · COAL %20,8 · TOMATO %19,3 ·
      * FLOUR %8,5 · CIGARETTE %0,7 — en çok ağır ve ucuz malları vuruyor.
      *
-     * NEDEN KAPATILMADI: `price = candidate.sell.pricePerUnit` denendi ve
-     * sızıntıyı gerçekten kapattı, ama ürün TABAN FİYATLARI bu sızıntı
-     * varken kalibre edilmiş. Sızıntı kalkınca fiyat seviyesi 1,08'den
-     * 0,79'a düştü ve bu salınım volatiliteyi %12,0'den %16,4'e çıkardı.
-     * Marj kalibrasyonuyla telafi denendi (arketip marjlarını taban fiyat
-     * oranından türetmek) — gerçekleşen/hedef oranı rejimden rejime
-     * 1,016 → 1,006 → 0,980 arasında gezdiği için sabit ayarla tutturulamadı.
-     * Nominal çıpayı güçlendirmek de (endeksleme 0,75 → 0,50) denendi:
-     * fiyat seviyesi sabitlendi (0,839'da düz) ama tüketici bütçesi fiyatı
-     * takip edemeyince pahalı mallarda talep çöktü (FURNITURE arz/talep 0,24)
-     * ve volatilite %19,0'a çıktı.
+     * NEDEN KAPATILMADI — ÖLÇÜLDÜ, BEDELİ OYUNCU İLERLEMESİ:
      *
-     * Doğru sıra: ÖNCE taban fiyatları (veya reçete maliyetlerini) sızıntısız
-     * dengeye göre yeniden kalibre et, SONRA bu satırı satıcının isteğine
-     * çevir. İkisi tek adımda yapılmalı; ayrı ayrı her biri ekonomiyi bozuyor.
+     * İki kapatma yolu denendi, ikisi de beş tohumda ölçüldü.
      *
-     * Fiyat, satıcının istediği ile alıcının mal için ayırdığı tavanın orta
-     * noktasıdır: her iki taraf da eşleşmeden fayda sağlar.
+     * (a) `price = candidate.sell.pricePerUnit` — sızıntıyı tamamen kapatır
+     *     ama fazlalık PAYLAŞIMINI da kaldırır. Taban fiyatlar sızıntı varken
+     *     kalibre edildiği için fiyat seviyesi 1,08'den 0,79'a düştü; reçete
+     *     maliyetlerini sızıntısız dengeye (1,255) kalibre etmek gerekti.
+     *     Sonuç: kur çıpası mükemmel (medyan %-2,9) ama kararsız ölçüt sayısı
+     *     sıfırdan YEDİYE çıktı, bir dünyada 1. hafta büyümesi 1,29×'e indi.
+     *
+     * (b) Mal tavanından `max(nakliye, navlun_payı)` düşmek — CERRAHİ. Navlun
+     *     emirde ayrı saklanır (yeni sütun), uygunluk kuralı değişmez.
+     *     Kalibrasyon gerekmedi: fiyat seviyesi 1,040'a kendiliğinden oturdu.
+     *     Kapı GEÇTİ (13,14,14,12,14) ve kur beş dünyada da düzeldi
+     *     (medyan %11,6 → %6,8). Kalan bedel: orta nokta kuralındaki navlun
+     *     payı satıcıya gidiyordu ve OYUNCULAR DA SATICI — 1. hafta büyümesi
+     *     medyanı 1,81×'ten 1,74×'e, bir dünyada 1,79×'ten 1,48×'e (eşik 1,5×)
+     *     düştü.
+     *
+     * (b) çalışan ve ölçülmüş bir düzeltmedir; bekletilme sebebi teknik değil:
+     *     oyuncunun kaybettiği gelirin BİLEREK geri verilmesi gerekiyor
+     *     (perakende marjı ya da tesis gideri gibi açık bir kanaldan). Gizli
+     *     bir endeks sızıntısıyla telafi etmek yerine ayarlanabilir bir yerden
+     *     vermek doğru olur. O karar verilmeden kapatılmadı.
      */
     const buyerGoodsCeiling = (buy.pricePerUnit as bigint) - (candidate.shippingPerUnit as bigint);
     const price = divRoundHalfEven((candidate.sell.pricePerUnit as bigint) + buyerGoodsCeiling, 2n);

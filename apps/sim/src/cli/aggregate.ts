@@ -22,7 +22,21 @@ import { printGateReport } from '../report.js';
 const args = process.argv.slice(2);
 const jsonAt = args.indexOf('--json');
 const jsonPath = jsonAt === -1 ? null : args[jsonAt + 1] ?? null;
-const files = (jsonAt === -1 ? args : args.slice(0, jsonAt)).filter((a) => !a.startsWith('--'));
+/*
+ * ★ BEKLENEN TOHUM SAYISI (R92) — eksik tohumla SESSİZCE karar verilmesin.
+ *
+ * 2026-09-14 koşumunda bir işin artefakt yüklemesi GitHub tarafında zaman
+ * aşımına uğradı (FinalizeArtifact, 5 deneme). Simülasyon sorunsuz geçmişti
+ * ama dosya gelmedi ve birleştirme dört tohumla koşup yine "KAPI GEÇİLDİ"
+ * dedi. Kapının tamamı "karar medyan + tohumların çoğunluğu" ilkesine
+ * dayanıyor; taban sessizce küçülürse o ilke çöker — üstelik düşen tohumun
+ * kapıyı düşüren tohum olma ihtimali vardır.
+ */
+const bekleAt = args.indexOf('--bekle');
+const beklenen = bekleAt === -1 ? null : Number(args[bekleAt + 1]);
+const flagIndices = [jsonAt, bekleAt].filter((i) => i !== -1);
+const firstFlag = flagIndices.length > 0 ? Math.min(...flagIndices) : args.length;
+const files = args.slice(0, firstFlag).filter((a) => !a.startsWith('--'));
 
 if (files.length === 0) {
   console.error('Kullanım: tsx src/cli/aggregate.ts ham-*.json [--json rapor.json]');
@@ -41,6 +55,17 @@ for (const file of files) {
 
 // Tohum sırası koşucuların bitiş sırasına göre değişir; rapor kararlı olsun.
 runs.sort((a, b) => a.seed - b.seed);
+
+if (beklenen !== null && Number.isFinite(beklenen) && runs.length < beklenen) {
+  console.error(
+    `\n✗ EKSİK TOHUM: ${runs.length}/${beklenen} geldi. Kapı kararı ` +
+    'tohumların çoğunluğuna dayanır; eksik tabanla verilen karar geçersizdir.\n' +
+    '  Gelen tohumlar: ' + runs.map((r) => r.seed).join(', ') + '\n' +
+    '  Düşen işin log\'unu aç: sonuç orada basılmış olabilir (artefakt yüklemesi\n' +
+    '  simülasyondan SONRA çalışır, yani koşum başarılı olup yükleme düşebilir).',
+  );
+  process.exit(2);
+}
 
 console.log(`\n★ GEÇİŞ KAPISI 2 — ${runs.length} tohum (${files.length} paralel iş)`);
 for (const run of runs) {
