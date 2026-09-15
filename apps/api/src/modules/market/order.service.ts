@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { currentTickSeq, type Sql } from '@kapital/db';
+import { currentTickSeq, lastCompletedTickSeq, nextTickAt, type Sql } from '@kapital/db';
 import { shippingPerUnit } from '@kapital/economy';
 import {
   asMoney, asQty, DomainError, formatMoney, formatQty, money, NotFound,
-  qtyFromNumber, TICKS_PER_DAY,
+  qtyFromNumber, TICK_MINUTES, TICKS_PER_DAY,
 } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import type { PlaceOrderDto } from './order.dto.js';
@@ -292,14 +292,34 @@ export class OrderService {
   }
 
   /** Yoldaki mal — hiçbir envanterde değildir, ayrı gösterilir (A3). */
+  /**
+   * Yoldaki mal — alınmış ama henüz varmamış sevkiyatlar.
+   *
+   * ★★★★ BU UÇ VARDI, ÇAĞIRAN YOKTU (R97). Oyuncu alış emri veriyor, tur
+   * düşünce emir doluyor, para kasadan çıkıyor ve mal transit süresi boyunca
+   * HİÇBİR YERDE GÖRÜNMÜYORDU: emir listeden düşüyor, depo hâlâ boş. Ekranda
+   * "malım nerede" sorusunun cevabı yoktu. Ölçüldü (kapital_dev kopyası):
+   * 100 kg domates alındı, `/market/shipments` "Gediz Endüstri 51 → Manav ·
+   * İstanbul" diyordu, uygulama o ucu hiç çağırmıyordu.
+   *
+   * ★ SIRA `lastCompletedTickSeq`, `currentTickSeq` DEĞİL — ve bu bir
+   * düzeltmedir. `currentTickSeq` MAX(seq)'tir: BEKLEYEN tur satırını da
+   * sayar ve tur KOŞARKEN ilerler. İkisinde de kalan tur olduğundan az
+   * görünür, yani varış zamanı erken gösterilirdi. Aynı tuzağı `/tick` ucunda
+   * bir kez yaşadık; geri sayımın dayandığı saat ile sevkiyatın saati aynı
+   * kaynaktan okumak zorunda.
+   */
   async shipments(userId: string) {
     const company = await this.companyOf(userId);
-    const tickSeq = await currentTickSeq(this.sql);
+    const [tamamlanan, sonraki] = await Promise.all([
+      lastCompletedTickSeq(this.sql),
+      nextTickAt(this.sql),
+    ]);
     const rows = await this.sql<Record<string, never>[]>`
       SELECT s.id, s.quantity, s.delivered_quantity, s.quality, s.unit_cost, s.shipping_cost,
              s.dispatched_tick, s.arrival_tick, s.status,
              p.code AS product_code, p.name AS product_name, p.unit,
-             seller.name AS seller_name,
+             seller.name AS seller_name, s.to_facility_id,
              COALESCE(tf.name, tft.name) AS to_facility, tc.name AS to_city
       FROM shipments s
       JOIN products p ON p.id = s.product_id
@@ -313,18 +333,38 @@ export class OrderService {
     return rows.map((r) => {
       const s = r as unknown as Record<string, never>;
       const arrival = s.arrival_tick as unknown as bigint;
+      const kalanTur = arrival > tamamlanan ? Number(arrival - tamamlanan) : 0;
+      const unitCost = asMoney(s.unit_cost as unknown as bigint);
+      const shipping = asMoney(s.shipping_cost as unknown as bigint);
       return {
         id: (s.id as unknown as bigint).toString(),
         product: { code: s.product_code, name: s.product_name, unit: s.unit },
         seller: s.seller_name,
+        /** Hangi tesise geliyor — kimlik DE verilir: ekran tesise göre gruplar. */
+        toFacilityId: s.to_facility_id,
         destination: `${s.to_facility} · ${s.to_city}`,
         quantity: (s.quantity as unknown as bigint).toString(),
         quantityFormatted: formatQty(asQty(s.quantity as unknown as bigint), s.unit as unknown as string),
         delivered: (s.delivered_quantity as unknown as bigint).toString(),
         quality: Number(s.quality),
-        shippingCost: (s.shipping_cost as unknown as bigint).toString(),
+        unitCost: unitCost.toString(),
+        unitCostFormatted: formatMoney(unitCost),
+        shippingCost: shipping.toString(),
+        shippingCostFormatted: formatMoney(shipping),
         arrivalTick: arrival.toString(),
-        ticksRemaining: arrival > tickSeq ? Number(arrival - tickSeq) : 0,
+        ticksRemaining: kalanTur,
+        /*
+         * ★ ZAMAN GÖNDERİLİR, KALAN SÜRE DEĞİL — `GeriSayim`in gerekçesiyle
+         * aynı: kalan süre gönderilseydi ağ gecikmesi ve ekranın açık kaldığı
+         * süre kadar yanlış olurdu. Hedef saatten farkı istemci sayar.
+         *
+         * Sıradaki tur `sonraki`de düşer; yani N tur kalmışsa varış
+         * `sonraki + (N−1) × tur süresi`. Hiç tamamlanmış tur yoksa saat
+         * bilinmiyordur ve null döner — uydurma zaman yazılmaz.
+         */
+        arrivesAt: sonraki === null ? null
+          : new Date(sonraki.getTime() + Math.max(0, kalanTur - 1) * TICK_MINUTES * 60_000)
+            .toISOString(),
         status: s.status,
       };
     });

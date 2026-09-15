@@ -7,7 +7,7 @@ import {
 } from '@kapital/db';
 import { prepareTestDb, truncateGameState } from '@kapital/db/testing';
 import { runTick } from '@kapital/engine';
-import { money, qty } from '@kapital/shared';
+import { money, qty, TICK_MINUTES } from '@kapital/shared';
 import { AppModule } from './app.module.js';
 import { DomainErrorFilter } from './common/domain-error.filter.js';
 
@@ -244,6 +244,17 @@ describe('★ şehirler arası ticaret (A3)', () => {
     expect(inTransit.body).toHaveLength(1);
     expect(inTransit.body[0].ticksRemaining).toBe(3);
     expect(inTransit.body[0].quantityFormatted).toBe('300 kg');
+    // Nereye geldiği KİMLİKLE de verilir: ekran tesise göre gruplayabilsin.
+    expect(inTransit.body[0].toFacilityId).toBe(buyer.facilityId);
+
+    /*
+     * ★ VARIŞ SAATİ: sıradaki tur `sonraki`de düşer, kalan 3 tur ise varış
+     * `sonraki + 2 × tur süresi`. Tur sayısı değil SAAT gönderilir; geri
+     * sayımı istemci sayar (bkz. `GeriSayim`).
+     */
+    const saat = await call('/tick');
+    expect(new Date(inTransit.body[0].arrivesAt as string).getTime())
+      .toBe(new Date(saat.body.sonraki as string).getTime() + 2 * TICK_MINUTES * 60_000);
 
     // Mal henüz alıcının stoğunda değil
     const early = await call(`/facilities/${buyer.facilityId}/stock`, { token: buyer.token });
@@ -255,6 +266,54 @@ describe('★ şehirler arası ticaret (A3)', () => {
     expect(arrived.body.products[0].total).toBe(qty(300).toString());
     expect((await call('/market/shipments', { token: buyer.token })).body).toHaveLength(0);
     expect((await checkInvariants(sql)).ok).toBe(true);
+  });
+
+  /*
+   * ★★★★ BEKLEYEN TUR KALAN SÜREYİ KISALTMAZ (R97).
+   *
+   * Uç önce `currentTickSeq` okuyordu ve o MAX(seq)'tir: planlanmış ama
+   * KOŞMAMIŞ turu da sayar. Bir bekleyen satır varken kalan tur bir eksik
+   * görünüyordu — yani mal, gerçekte varacağından bir tur ERKEN gösteriliyordu.
+   * Aynı tuzağa `/tick` ucunda da düşmüştük; ikisi de artık son TAMAMLANAN
+   * turu okuyor.
+   */
+  it('★ bekleyen tur satırı kalan süreyi KISALTMAZ', async () => {
+    const seller = await player({ cityCode: 'KON' });
+    const buyer = await player({ cityCode: 'IST' });
+    await stockUp(seller.facilityId, IRON, qty(100));
+    await call('/market/orders', {
+      method: 'POST', token: seller.token,
+      body: { side: 'SELL', facilityId: seller.facilityId, productCode: 'IRON', quantity: 100, pricePerUnit: 25 },
+    });
+    await call('/market/orders', {
+      method: 'POST', token: buyer.token,
+      body: { side: 'BUY', facilityId: buyer.facilityId, productCode: 'IRON', quantity: 100, pricePerUnit: 40 },
+    });
+    await runTick(sql);
+
+    const once = await call('/market/shipments', { token: buyer.token });
+    expect(once.body[0].ticksRemaining).toBe(3);
+
+    // Zamanlayıcı sıradaki turu PLANLAR ama henüz koşmaz.
+    const [son] = await sql<{ seq: bigint }[]>`SELECT MAX(seq) AS seq FROM economic_ticks`;
+    await sql`
+      INSERT INTO economic_ticks (seq, scheduled_at, status, rng_seed)
+      VALUES (${son!.seq + 1n}, NOW() + INTERVAL '15 minutes', 'PENDING', 1)`;
+
+    const sonra = await call('/market/shipments', { token: buyer.token });
+    expect(sonra.body[0].ticksRemaining).toBe(3);
+
+    /*
+     * ★ VARIŞ SAATİ DEĞİŞEBİLİR, KALAN TUR DEĞİŞMEZ — ikisi ayrı şeyler.
+     *
+     * Bekleyen satır zamanlayıcının AÇIKLADIĞI takvimdir; `nextTickAt` artık
+     * onun `scheduled_at`ini okur, "son tamamlanan + tur süresi" tahminini
+     * değil. Yani saat kayabilir ve kayması doğrudur. Sabit kalması gereken,
+     * kaç TUR kaldığıdır; hatanın kendisi oradaydı.
+     */
+    const saat = await call('/tick');
+    expect(new Date(sonra.body[0].arrivesAt as string).getTime())
+      .toBe(new Date(saat.body.sonraki as string).getTime() + 2 * TICK_MINUTES * 60_000);
   });
 });
 

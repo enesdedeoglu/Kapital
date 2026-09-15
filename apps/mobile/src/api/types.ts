@@ -404,3 +404,33 @@ export interface Uretim {
     readonly haltedReason: string | null;
   }[];
 }
+
+/**
+ * Yoldaki mal — `GET /market/shipments`.
+ *
+ * Alış emri dolduktan sonra mal transit süresince buradadır: emir listeden
+ * düşmüş, depoya da girmemiştir. Bu aradaki boşluk ekranda görünmeyince
+ * oyuncunun gördüğü tek şey "para gitti, mal yok" oluyordu (R97).
+ */
+export interface Sevkiyat {
+  readonly id: string;
+  readonly product: { readonly code: string; readonly name: string; readonly unit: string };
+  readonly seller: string;
+  /** Hangi tesise geliyor — tesise göre gruplamak için kimlik. */
+  readonly toFacilityId: string;
+  /** "Manav · İstanbul" — okunur hâli. */
+  readonly destination: string;
+  readonly quantity: string;
+  readonly quantityFormatted: string;
+  readonly delivered: string;
+  readonly quality: number;
+  readonly unitCost: string;
+  readonly unitCostFormatted: string;
+  readonly shippingCost: string;
+  readonly shippingCostFormatted: string;
+  readonly arrivalTick: string;
+  readonly ticksRemaining: number;
+  /** Varış SAATİ; geri sayımı istemci sayar. Tur hiç işlememişse null. */
+  readonly arrivesAt: string | null;
+  readonly status: string;
+}

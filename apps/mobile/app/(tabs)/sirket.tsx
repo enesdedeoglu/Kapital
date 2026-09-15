@@ -7,7 +7,7 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
-import type { Lot, Raf, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Uretim, Urun } from '~/api/types';
+import type { Lot, Raf, Sevkiyat, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Uretim, Urun } from '~/api/types';
 import { Etiket, Kart, tesisIkonu } from '~/ui/parcalar';
 import { LotPaneli } from '~/ui/LotPaneli';
 import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
@@ -16,12 +16,14 @@ import { TesisPaneli, type KurmaGirdisi } from '~/ui/TesisPaneli';
 import { YukseltmePaneli } from '~/ui/YukseltmePaneli';
 import { OtomatikPaneli, type KuralGirdisi } from '~/ui/OtomatikPaneli';
 import { UretimPaneli } from '~/ui/UretimPaneli';
+import { YoldaOzet } from '~/ui/YoldakiMal';
 
 export default function Sirketim() {
   const { iste } = useOturum();
   const kenar = useSafeAreaInsets();
   const [tesisler, setTesisler] = useState<Tesis[] | null>(null);
   const [stoklar, setStoklar] = useState<Record<string, TesisStok>>({});
+  const [yolda, setYolda] = useState<Sevkiyat[]>([]);
   const [acik, setAcik] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [yenileniyor, setYenileniyor] = useState(false);
@@ -88,6 +90,13 @@ export default function Sirketim() {
       );
       setStoklar(Object.fromEntries(stok));
       setAcik((a) => a ?? liste[0]?.id ?? null);
+      // Yoldaki mal tesis kartında gösterilir: "depo boş" ile "boş ama
+      // geliyor" aynı şey değil.
+      try {
+        setYolda(await iste<Sevkiyat[]>('/market/shipments'));
+      } catch {
+        setYolda([]);
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setTesisler([]);
       else setHata(e instanceof ApiError ? e.message : 'Sunucuya ulaşılamadı');
@@ -415,6 +424,8 @@ export default function Sirketim() {
                   <MCI name="chevron-right" size={18} color={renk.artı} />
                 </Pressable>
               )}
+
+              {acikMi && <YoldaOzet sevkiyatlar={yolda.filter((v) => v.toFacilityId === t.id)} />}
 
               {acikMi && stok && (
                 stok.products.length === 0

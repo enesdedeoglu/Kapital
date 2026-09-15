@@ -7,9 +7,10 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
-import type { AcikEmir, Defter, Sirket, Tesis, Urun } from '~/api/types';
+import type { AcikEmir, Defter, Sevkiyat, Sirket, Tesis, Urun } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
 import { EmirPaneli, type EmirGirdisi } from '~/ui/EmirPaneli';
+import { YoldakiMal } from '~/ui/YoldakiMal';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 export default function Piyasa() {
@@ -26,6 +27,7 @@ export default function Piyasa() {
   const [bildirim, setBildirim] = useState<string | null>(null);
   const [seviye, setSeviye] = useState(1);
   const [emirler, setEmirler] = useState<AcikEmir[]>([]);
+  const [yolda, setYolda] = useState<Sevkiyat[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -60,6 +62,17 @@ export default function Piyasa() {
       setEmirler(await iste<AcikEmir[]>('/market/orders'));
     } catch {
       setEmirler([]);
+    }
+    /*
+     * ★ YOLDAKİ MAL EMİRLERLE BİRLİKTE ÇEKİLİR, ayrı değil. İkisi aynı
+     * hikâyenin iki hâli: emir dolunca listeden düşer ve mal yola çıkar.
+     * Ayrı tazelenselerdi emrin kaybolduğu an ile malın göründüğü an
+     * arasında yine boşluk kalırdı — kapatmaya çalıştığımız boşluğun aynısı.
+     */
+    try {
+      setYolda(await iste<Sevkiyat[]>('/market/shipments'));
+    } catch {
+      setYolda([]);
     }
   }, [iste]);
 
@@ -226,6 +239,8 @@ export default function Piyasa() {
           ))}
         </Kart>
       )}
+
+      <YoldakiMal sevkiyatlar={yolda} />
 
       {yukleniyor && !defter && (
         <View style={s.orta}><ActivityIndicator color={renk.altin} /></View>
