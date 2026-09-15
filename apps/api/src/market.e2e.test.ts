@@ -376,3 +376,87 @@ describe('★ emir defteri TOPLAM maliyete göre sıralanır (madde 16)', () => 
     expect(mallar).not.toEqual(malSirali);
   });
 });
+
+/**
+ * ★ Satıcıya kalan, alıcının tavanı DEĞİLDİR.
+ *
+ * Defterin ALIŞ tarafı `price_per_unit`'i olduğu gibi gösteriyordu; oysa o,
+ * alıcının NAKLİYE DAHİL tavanı (`matching.ts`: `satış + nakliye <= alış`).
+ * Satıcı cebine gireceği tutar sanıyordu. Satış tarafında aynı hatayı bir kez
+ * yapıp düzeltmiştik (toplam maliyete göre sıralama) — bu onun eşi.
+ */
+describe('★ defterin ALIŞ tarafı nakliyeyi düşer (madde 16)', () => {
+  it('uzak ve YÜKSEK tavanlı alıcı, yakın ve düşük tavanlının ALTINA düşer', async () => {
+    /*
+     * IST→KON nakliyesi demir için 2,31 ₺ (ağırlık 1 × mesafe 6,6 × 3500).
+     * Ayrışma için TAVAN FARKI nakliyeden KÜÇÜK olmalı: 1 ₺ < 2,31 ₺.
+     *   yakın: tavan 26,00 − 0,00 = 26,00  ← mala kalanı yüksek
+     *   uzak : tavan 27,00 − 2,31 = 24,69  ← tavanı yüksek
+     * Ham tavana göre sıralarsak uzak önce gelir; mala kalana göre yakın.
+     */
+    const yakinAlici = await player({ cityCode: 'IST' });
+    await call('/market/orders', {
+      method: 'POST', token: yakinAlici.token,
+      body: { side: 'BUY', facilityId: yakinAlici.facilityId, productCode: 'IRON',
+              quantity: 200, pricePerUnit: 26 },
+    });
+
+    const uzakAlici = await player({ cityCode: 'KON' });
+    await call('/market/orders', {
+      method: 'POST', token: uzakAlici.token,
+      body: { side: 'BUY', facilityId: uzakAlici.facilityId, productCode: 'IRON',
+              quantity: 200, pricePerUnit: 27 },
+    });
+
+    const satici = await player({ cityCode: 'IST' });
+    const book = await call('/market/book/IRON?city=IST', { token: satici.token });
+    expect(book.status).toBe(200);
+
+    const satirlar = book.body.buy as {
+      cityCode: string; maxTotalPerUnit: string; shippingPerUnit: string;
+      goodsCeilingPerUnit: string; reachable: boolean;
+    }[];
+    expect(satirlar.length).toBe(2);
+
+    // Mala kalan AZALAN sırada olmalı.
+    const kalanlar = satirlar.map((r) => BigInt(r.goodsCeilingPerUnit));
+    for (let i = 1; i < kalanlar.length; i++) {
+      expect(kalanlar[i]! <= kalanlar[i - 1]!).toBe(true);
+    }
+
+    // ★ İlk satırın TAVANI en yüksek OLMAYABİLİR — mala kalanı en yüksek olmalı.
+    expect(satirlar[0]!.cityCode).toBe('IST');
+    const tavanlar = satirlar.map((r) => BigInt(r.maxTotalPerUnit));
+    expect(BigInt(satirlar[0]!.maxTotalPerUnit)).not.toBe(
+      tavanlar.reduce((a, b) => (b > a ? b : a)),
+    );
+
+    // Aritmetik tutarlı: tavan = mala kalan + nakliye.
+    for (const r of satirlar) {
+      expect(BigInt(r.goodsCeilingPerUnit) + BigInt(r.shippingPerUnit))
+        .toBe(BigInt(r.maxTotalPerUnit));
+      expect(r.reachable).toBe(true);
+    }
+
+    // Kurgu gerçekten ayrışıyor mu: ham tavan sıralaması mala kalandan farklı.
+    expect(tavanlar).not.toEqual([...tavanlar].sort((a, b) => (a > b ? -1 : a < b ? 1 : 0)));
+  });
+
+  it('nakliye tavanı yiyorsa alıcı ULAŞILAMAZ işaretlenir, eksi fiyat gösterilmez', async () => {
+    // Tavan 2 ₺ < nakliye 2,31 ₺ → hiçbir satış fiyatı uygunluk kuralını geçemez.
+    const uzakAlici = await player({ cityCode: 'KON' });
+    await call('/market/orders', {
+      method: 'POST', token: uzakAlici.token,
+      body: { side: 'BUY', facilityId: uzakAlici.facilityId, productCode: 'IRON',
+              quantity: 100, pricePerUnit: 2 },
+    });
+
+    const satici = await player({ cityCode: 'IST' });
+    const book = await call('/market/book/IRON?city=IST', { token: satici.token });
+    const [satir] = book.body.buy as { goodsCeilingPerUnit: string; reachable: boolean }[];
+
+    expect(satir!.reachable).toBe(false);
+    // Eksiye düşmez: "-0,31 ₺" diye bir fiyat yoktur.
+    expect(satir!.goodsCeilingPerUnit).toBe('0');
+  });
+});

@@ -101,8 +101,19 @@ export interface Defter {
     readonly buyer: string;
     readonly cityCode: string;
     readonly wanted: string;
+    /** Alıcının NAKLİYE DAHİL tavanı — satıcının eline geçecek tutar DEĞİL. */
     readonly maxTotalPerUnit: string;
     readonly maxTotalPerUnitFormatted: string;
+    /** Benim şehrimden alıcının şehrine birim nakliye. */
+    readonly shippingPerUnit: string;
+    readonly shippingPerUnitFormatted: string;
+    /** Tavan − nakliye: mala kalan, yani verebileceğim en yüksek fiyat. */
+    readonly goodsCeilingPerUnit: string;
+    readonly goodsCeilingPerUnitFormatted: string;
+    /** false ise nakliye tavanı yiyor; bu alıcıya buradan satılamaz. */
+    readonly reachable: boolean;
+    readonly distanceIndex: number;
+    readonly transitTicks: number;
     readonly minQuality: number;
   }[];
 }

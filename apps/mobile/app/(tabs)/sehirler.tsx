@@ -143,13 +143,20 @@ export default function Sehirler() {
               vurgu={c.sehir.industrialBonus > c.sehir.agricultureBonus}
             />
             <Ikili ikon="home-city-outline" ad="arsa" deger={c.sehir.landCostIndex} dusukIyi />
-            {/* Lojistik çarpanı çoğu şehirde 1 — sapmayanı göstermek gürültü. */}
-            {c.sehir.logisticsModifier !== 1 && (
-              <Ikili
-                ikon="truck-fast-outline" ad="nakliye"
-                deger={c.sehir.logisticsModifier} dusukIyi
-              />
-            )}
+            {/*
+             * ★ `logisticsModifier` BİLEREK gösterilmiyor.
+             *
+             * `cities.logistics_modifier` sütunu dolu (Konya 1,05) ve
+             * `shippingPerUnit` onun için bir `cityModifier` parametresi
+             * taşıyor — ama o parametreyi HİÇBİR ÇAĞIRAN geçmiyor (motor da,
+             * API de). Yani bugün hiçbir nakliye ücretini değiştirmiyor.
+             * Önce burada "nakliye ×1,05" yazıyordu: karşılığı olmayan bir
+             * sayı, bu ekranın tam da kaçındığı şey.
+             *
+             * Bağlamak nakliye maliyetini değiştirir, yani ekonomi davranışı
+             * değişikliğidir ve kapıdan geçmesi gerekir (5 tohum × 14 ölçüt).
+             * Ayrı ve bilinçli bir iş; bağlanınca burası da geri gelsin.
+             */}
           </View>
         </Kart>
       ))}

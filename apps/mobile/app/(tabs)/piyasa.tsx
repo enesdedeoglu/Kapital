@@ -268,22 +268,62 @@ export default function Piyasa() {
             <Etiket ikon="cart-outline" yazi="ALIM TALEBİ" ton={renk.mavi} />
             {defter.buy.length === 0
               ? <Text style={s.bos}>Bu üründe alış emri yok.</Text>
-              : defter.buy.slice(0, 8).map((o) => (
-                <View key={o.orderId} style={s.satir}>
-                  <View style={s.solSutun}>
-                    <Text style={s.satici} numberOfLines={1}>{o.buyer}</Text>
-                    <Text style={s.kucuk}>{o.cityCode} · min kal {o.minQuality.toFixed(0)}</Text>
+              : (
+                <>
+                  {/*
+                    ★ Sütun "tavan" değil "MALA KALAN": alıcının verdiği fiyat
+                    nakliye dahil tavandır, satıcının eline geçen ondan nakliye
+                    düşülmüş hâlidir. Tavanı göstermek satıcıya olmayan bir
+                    gelir vaat ediyordu.
+                  */}
+                  <View style={s.basSatir}>
+                    <Text style={[s.basYazi, s.solSutun]}>alıcı</Text>
+                    <Text style={[s.basYazi, s.saySutun]}>nakliye</Text>
+                    <Text style={[s.basYazi, s.alisSutun, s.toplamBas]}>mala kalan</Text>
                   </View>
-                  <Text style={[s.sayi, s.alisSutun]}>{kisalt(o.maxTotalPerUnitFormatted)}</Text>
-                </View>
-              ))}
+                  {defter.buy.slice(0, 8).map((o, i) => (
+                    <View
+                      key={o.orderId}
+                      style={[s.satir, i === 0 && o.reachable && s.enIyi, !o.reachable && s.ulasilmaz]}
+                    >
+                      <View style={s.solSutun}>
+                        <Text style={s.satici} numberOfLines={1}>{o.buyer}</Text>
+                        <View style={s.altBilgi}>
+                          <Text style={s.kucuk}>{o.cityCode}</Text>
+                          {o.transitTicks > 0 && (
+                            <Text style={s.kucuk}>· {o.transitTicks} tur yol</Text>
+                          )}
+                          <Text style={s.kucuk}>· min kal {o.minQuality.toFixed(0)}</Text>
+                        </View>
+                      </View>
+                      <Text style={[s.sayi, s.saySutun, s.nakliye]}>
+                        {kisalt(o.shippingPerUnitFormatted)}
+                      </Text>
+                      {o.reachable
+                        ? (
+                          <Text style={[s.sayi, s.alisSutun, s.toplam]}>
+                            {kisalt(o.goodsCeilingPerUnitFormatted)}
+                          </Text>
+                        )
+                        : (
+                          <Text style={[s.sayi, s.alisSutun, s.ulasilmazYazi]}>
+                            ulaşılmaz
+                          </Text>
+                        )}
+                    </View>
+                  ))}
+                </>
+              )}
           </Kart>
 
           <View style={s.notSatir}>
             <MCI name="information-outline" size={13} color={renk.cokSoluk} />
             <Text style={s.not}>
-              Toplam = mal + nakliye. Liste toplama göre sıralı; en üstteki
-              gerçekten en ucuzdur.
+              Alırken toplam = mal + nakliye; liste toplama göre sıralı.
+              Satarken alıcının fiyatı nakliye dahil tavandır — sana kalan
+              ondan nakliye düşülmüş hâlidir, liste de ona göre sıralı.
+              Eşleşince fiyat senin verdiğin fiyatla bu tavanın ortasında
+              oluşur, yani yüksek istemek işine yarar.
             </Text>
           </View>
         </>
@@ -299,11 +339,16 @@ export default function Piyasa() {
         tesisler={tesisler}
         /*
          * İpucu: ALIŞTA en ucuz TOPLAM (nakliye dahil tavan o mantıkla girilir),
-         * SATIŞTA en iyi alıcı teklifi. Taraf değişince anlam da değişir.
+         * SATIŞTA en iyi alıcının MALA KALANI.
+         *
+         * ★ Satış ipucu tavanı gösteriyordu ve bu fiyatla emir vermek
+         * eşleşmezdi: uygunluk kuralı `satış + nakliye <= tavan`, yani tavanın
+         * kendisi nakliye kadar YÜKSEK kalıyordu. Oyuncu ipucunu olduğu gibi
+         * girip emrinin neden hiç eşleşmediğini anlamıyordu.
          */
         ipucuFiyat={emirTarafi === 'BUY'
           ? kurusaVirgul(defter?.sell[0]?.totalPerUnit)
-          : kurusaVirgul(defter?.buy[0]?.maxTotalPerUnit)}
+          : kurusaVirgul(defter?.buy.find((o) => o.reachable)?.goodsCeilingPerUnit)}
         kapat={() => setEmirTarafi(null)}
         gonder={emirGonder}
       />
@@ -411,6 +456,9 @@ const s = StyleSheet.create({
   },
   // En ucuz satır işaretli: göz taramadan bulsun.
   enUcuz: { backgroundColor: 'rgba(255,194,75,0.06)' },
+  enIyi: { backgroundColor: 'rgba(78,161,255,0.07)' },
+  ulasilmaz: { opacity: 0.5 },
+  ulasilmazYazi: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
   solSutun: { flex: 1 },
   saySutun: { width: 58, textAlign: 'right' },
   alisSutun: { width: 76, textAlign: 'right' },

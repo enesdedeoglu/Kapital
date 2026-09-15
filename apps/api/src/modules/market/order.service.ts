@@ -154,15 +154,27 @@ export class OrderService {
         AND o.status IN ('OPEN','PARTIAL') AND o.remaining_quantity > 0
       ORDER BY o.price_per_unit LIMIT 100`;
 
+    /*
+     * ★ Alış emirlerinde de nakliye hesaplanır — YÖNÜ TERSTİR.
+     *
+     * Satışta mal SATICIDAN BANA gelir; burada BENDEN ALICIYA gider. Mesafe
+     * tablosu bugün simetrik (ölçüldü: 25 çiftin 0'ı asimetrik) ama sorgu
+     * anlamına göre yazılır: simetri bir veri tesadüfüdür, kural değil.
+     */
     const buys = await this.sql<{
       id: bigint; company_name: string; city_code: string;
       remaining_quantity: bigint; price_per_unit: bigint; min_quality: string;
+      distance_index: number; transit_ticks: number;
     }[]>`
       SELECT o.id, co.name AS company_name, c.code AS city_code,
-             o.remaining_quantity, o.price_per_unit, o.min_quality::text
+             o.remaining_quantity, o.price_per_unit, o.min_quality::text,
+             COALESCE(d.distance_index, 0) AS distance_index,
+             COALESCE(d.transit_ticks, 0) AS transit_ticks
       FROM market_orders o
       JOIN companies co ON co.id = o.company_id
       JOIN cities c ON c.id = o.city_id
+      LEFT JOIN city_distances d ON d.origin_city_id = ${targetCity.id}
+                                AND d.destination_city_id = o.city_id
       WHERE o.product_id = ${product.id} AND o.side = 'BUY'
         AND o.status IN ('OPEN','PARTIAL') AND o.remaining_quantity > 0
       ORDER BY o.price_per_unit DESC LIMIT 100`;
@@ -211,15 +223,56 @@ export class OrderService {
         };
       }).sort((a, b) => (BigInt(a.totalPerUnit) < BigInt(b.totalPerUnit) ? -1
         : BigInt(a.totalPerUnit) > BigInt(b.totalPerUnit) ? 1 : 0)),
-      buy: buys.map((b) => ({
-        orderId: b.id.toString(),
-        buyer: b.company_name,
-        cityCode: b.city_code,
-        wanted: b.remaining_quantity.toString(),
-        maxTotalPerUnit: b.price_per_unit.toString(),
-        maxTotalPerUnitFormatted: formatMoney(asMoney(b.price_per_unit)),
-        minQuality: Number(b.min_quality),
-      })),
+      /*
+       * ★★ SATICIYA KALAN, ALICININ TAVANI DEĞİLDİR.
+       *
+       * `price_per_unit` alıcının NAKLİYE DAHİL tavanıdır (`matching.ts`:
+       * uygunluk kuralı `satış + nakliye <= alış`). Ekran bunu olduğu gibi
+       * gösterince satıcı cebine gireceği tutar sanıyordu; oysa önce nakliye
+       * düşer. Defterin SATIŞ tarafında aynı hatayı bir kez yaptık ve
+       * düzelttik (sıralama toplam maliyete göre) — burası onun eşiydi.
+       *
+       * `goodsCeilingPerUnit` = tavan - nakliye: MALA kalan en yüksek tutar,
+       * yani satıcının verebileceği en yüksek fiyat. Motor buna
+       * `buyerGoodsCeiling` diyor, aynı ad kullanıldı.
+       *
+       * Eşleşen fiyat bu tavan DEĞİL, satıcının fiyatı ile tavanın ORTA
+       * NOKTASIDIR (`matching.ts`: `(sell + buyerGoodsCeiling) / 2`). O yüzden
+       * burada tek bir "net" sayısı uydurulmuyor: orta nokta satıcının henüz
+       * girmediği fiyata bağlı. Tavan ise kesin ve karar aldırır.
+       *
+       * Tavan <= 0 ise o alıcıya bu şehirden satmak İMKÂNSIZDIR: nakliye
+       * tavanın tamamını yiyor, hiçbir fiyat uygunluk kuralını geçemez.
+       */
+      buy: buys.map((b) => {
+        const ceiling = asMoney(b.price_per_unit);
+        const ship = shippingPerUnit({
+          weightPerUnit: product.weight_per_unit,
+          distanceIndex: b.distance_index,
+          baseRate,
+          logisticsModifier: company.logisticsModifier,
+        });
+        const goods = (ceiling as bigint) - (ship as bigint);
+        const goodsCeiling = asMoney(goods > 0n ? goods : 0n);
+        return {
+          orderId: b.id.toString(),
+          buyer: b.company_name,
+          cityCode: b.city_code,
+          wanted: b.remaining_quantity.toString(),
+          maxTotalPerUnit: ceiling.toString(),
+          maxTotalPerUnitFormatted: formatMoney(ceiling),
+          shippingPerUnit: ship.toString(),
+          shippingPerUnitFormatted: formatMoney(ship),
+          goodsCeilingPerUnit: goodsCeiling.toString(),
+          goodsCeilingPerUnitFormatted: formatMoney(goodsCeiling),
+          /** Nakliye tavanı yiyorsa bu alıcıya buradan satılamaz. */
+          reachable: goods > 0n,
+          distanceIndex: b.distance_index,
+          transitTicks: b.transit_ticks,
+          minQuality: Number(b.min_quality),
+        };
+      }).sort((a, b) => (BigInt(a.goodsCeilingPerUnit) > BigInt(b.goodsCeilingPerUnit) ? -1
+        : BigInt(a.goodsCeilingPerUnit) < BigInt(b.goodsCeilingPerUnit) ? 1 : 0)),
     };
   }
 
