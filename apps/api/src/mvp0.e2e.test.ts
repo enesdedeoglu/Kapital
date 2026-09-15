@@ -118,8 +118,8 @@ describe('MVP-0 — Domates Döngüsü', () => {
       body: { prices: [{ productCode: 'TOMATO', sellingPrice: 22, enabled: true }] },
     });
     expect(priced.status).toBe(200);
-    expect(priced.body[0].sellingPriceFormatted).toBe('22,00 ₺');
-    expect(priced.body[0].aboveCeiling).toBe(false); // 22 < 15×3
+    expect(priced.body.offers[0].sellingPriceFormatted).toBe('22,00 ₺');
+    expect(priced.body.offers[0].aboveCeiling).toBe(false); // 22 < 15×3
 
     // 6) Ekonomik tur çalışır → NPC tüketiciler satın alır
     const tick2 = await runTick(sql);

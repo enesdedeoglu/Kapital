@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { checkInvariants, createSql, runInTransaction, transfer, type Sql } from '@kapital/db';
 import { prepareTestDb, truncateGameState } from '@kapital/db/testing';
+import { runTick } from '@kapital/engine';
 import { asMoney, formatMoney, money, qty } from '@kapital/shared';
 import { AppModule } from './app.module.js';
 import { DomainErrorFilter } from './common/domain-error.filter.js';
@@ -388,5 +389,92 @@ describe('★ tesis yükseltme önizlemesi', () => {
     const res = await call(`/facilities/${tesis.id}/upgrade`, { method: 'POST', token: p.token });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('VALIDATION');
+  });
+});
+
+/*
+ * ★★★★ KURULAN TESİS ÜRETİYOR MU (R96).
+ *
+ * `active_recipe_id` NULL ile kuruluyordu ve üretim fazı tam da o alan
+ * üzerinden JOIN yapıyor: reçetesiz tesis sorgunun DIŞINDA kalıyor, üretim
+ * kaydı açılmıyor, `halted_reason` yazılmıyor. Yani tesis ÇALIŞIR GÖRÜNÜP
+ * hiçbir şey üretmiyordu ve mobil uygulamada reçete atayan ekran da yoktu.
+ *
+ * Bu testler o boşluğun ikisini birden tutar: alan doldurulmuş MU, ve
+ * dolduğu için gerçekten ÜRETİYOR MU.
+ */
+describe('★ üretim: kurulan tesis tarifiyle gelir', () => {
+  it('üretim tesisi RUNNING durumunda ve ürünü belli olarak kurulur', async () => {
+    const p = await player();
+    await moveCash(p.companyId, money(200_000), 'in');
+
+    const fac = await call('/facilities', {
+      method: 'POST', token: p.token,
+      body: { facilityTypeCode: 'VEG_GARDEN', cityCode: 'IST' },
+    });
+    expect(fac.status, JSON.stringify(fac.body)).toBe(201);
+    expect(fac.body.productionState).toBe('RUNNING');
+    expect(fac.body.producedProduct.code).toBe('TOMATO');
+  });
+
+  it('★ inşaat bitince GERÇEKTEN üretir — depo dolar', async () => {
+    const p = await player();
+    await moveCash(p.companyId, money(200_000), 'in');
+    const fac = await call('/facilities', {
+      method: 'POST', token: p.token,
+      body: { facilityTypeCode: 'VEG_GARDEN', cityCode: 'IST' },
+    });
+    const id = fac.body.id as string;
+    const insaat = fac.body.ticksRemaining as number;
+    expect(insaat).toBeGreaterThan(0);
+
+    // İnşaat sürerken üretim YOK: tesis henüz yok sayılır.
+    await runTick(sql);
+    const erken = await call(`/facilities/${id}/stock`, { token: p.token });
+    expect(erken.body.products).toEqual([]);
+
+    for (let i = 0; i < insaat; i++) await runTick(sql);
+
+    const stok = await call(`/facilities/${id}/stock`, { token: p.token });
+    expect(stok.body.products).toHaveLength(1);
+    expect(stok.body.products[0].code).toBe('TOMATO');
+    expect(BigInt(stok.body.products[0].total)).toBeGreaterThan(0n);
+
+    const uretim = await call(`/facilities/${id}/production`, { token: p.token });
+    expect(uretim.body.recipe.outputProduct.code).toBe('TOMATO');
+    expect(uretim.body.recentTicks.length).toBeGreaterThan(0);
+    expect((await checkInvariants(sql)).ok).toBe(true);
+  });
+
+  it('perakende tesisi üretmez: durum NONE, ürün null', async () => {
+    const p = await player();
+    const liste = await call('/facilities', { token: p.token });
+    const manav = liste.body.find((f: { type: { code: string } }) => f.type.code === 'GREENGROCER');
+    expect(manav.productionState).toBe('NONE');
+    expect(manav.producedProduct).toBeNull();
+  });
+
+  it('★ durdurulan tesis PAUSED olur ve üretimi durur', async () => {
+    const p = await player();
+    await moveCash(p.companyId, money(200_000), 'in');
+    const fac = await call('/facilities', {
+      method: 'POST', token: p.token,
+      body: { facilityTypeCode: 'VEG_GARDEN', cityCode: 'IST' },
+    });
+    const id = fac.body.id as string;
+    for (let i = 0; i <= (fac.body.ticksRemaining as number); i++) await runTick(sql);
+
+    const durdur = await call(`/facilities/${id}/recipe`, {
+      method: 'POST', token: p.token,
+      body: { outputProductCode: 'TOMATO', enabled: false },
+    });
+    expect(durdur.body.productionState).toBe('PAUSED');
+    // Ürün bilgisi KALIR: durdurmak tarifi silmez, yalnız duraklatır.
+    expect(durdur.body.producedProduct.code).toBe('TOMATO');
+
+    const once = await call(`/facilities/${id}/stock`, { token: p.token });
+    await runTick(sql);
+    const sonra = await call(`/facilities/${id}/stock`, { token: p.token });
+    expect(sonra.body.products[0].total).toBe(once.body.products[0].total);
   });
 });

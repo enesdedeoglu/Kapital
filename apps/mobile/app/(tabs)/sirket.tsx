@@ -7,7 +7,7 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
-import type { Lot, RafTeklifi, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Urun } from '~/api/types';
+import type { Lot, Raf, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Uretim, Urun } from '~/api/types';
 import { Etiket, Kart, tesisIkonu } from '~/ui/parcalar';
 import { LotPaneli } from '~/ui/LotPaneli';
 import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
@@ -15,6 +15,7 @@ import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 import { TesisPaneli, type KurmaGirdisi } from '~/ui/TesisPaneli';
 import { YukseltmePaneli } from '~/ui/YukseltmePaneli';
 import { OtomatikPaneli, type KuralGirdisi } from '~/ui/OtomatikPaneli';
+import { UretimPaneli } from '~/ui/UretimPaneli';
 
 export default function Sirketim() {
   const { iste } = useOturum();
@@ -31,8 +32,16 @@ export default function Sirketim() {
 
   // Raf paneli
   const [rafTesis, setRafTesis] = useState<Tesis | null>(null);
-  const [teklifler, setTeklifler] = useState<RafTeklifi[] | null>(null);
+  const [raf, setRaf] = useState<Raf | null>(null);
   const [bildirim, setBildirim] = useState<string | null>(null);
+
+  /*
+   * Üretim paneli. Tesis kurulunca reçetesi kendiliğinden atanıyor (R96), yani
+   * burada "ne üreteyim" diye sorulmuyor; panel ÜRETİYOR MU sorusunu
+   * cevaplıyor: tur başına kaç birim, girdiler yetiyor mu, neden durdu.
+   */
+  const [uretimTesis, setUretimTesis] = useState<Tesis | null>(null);
+  const [uretim, setUretim] = useState<Uretim | null>(null);
 
   /*
    * Kurma paneli. Tür ve şehir listesi TEMBEL çekilir: sekme her açıldığında
@@ -188,13 +197,44 @@ export default function Sirketim() {
 
   const rafiAc = useCallback(async (t: Tesis) => {
     setRafTesis(t);
-    setTeklifler(null);
+    setRaf(null);
     try {
-      setTeklifler(await iste<RafTeklifi[]>(`/retail/${t.id}`));
+      setRaf(await iste<Raf>(`/retail/${t.id}`));
     } catch {
-      setTeklifler([]);
+      setRaf({ offers: [], addable: [] });
     }
   }, [iste]);
+
+  const uretimiAc = useCallback(async (t: Tesis) => {
+    setUretimTesis(t);
+    setUretim(null);
+    try {
+      setUretim(await iste<Uretim>(`/facilities/${t.id}/production`));
+    } catch (e) {
+      setUretimTesis(null);
+      setHata(e instanceof ApiError ? e.message : 'Üretim bilgisi alınamadı');
+    }
+  }, [iste]);
+
+  /*
+   * Üretimi aç/kapat. Uç reçeteyi de alır (`outputProductCode`): panel onu
+   * zaten biliyor, ayrı bir "duraklat" ucu açmaya gerek yok.
+   */
+  const uretimiDegistir = useCallback(
+    async (tesisId: string, urunKodu: string, acik: boolean): Promise<string | null> => {
+      try {
+        await iste(`/facilities/${tesisId}/recipe`, {
+          method: 'POST', body: { outputProductCode: urunKodu, enabled: acik },
+        });
+        setUretim(await iste<Uretim>(`/facilities/${tesisId}/production`));
+        // Rozet `productionState`e bakıyor; tesis listesi de tazelenmeli.
+        setTesisler(await iste<Tesis[]>('/facilities'));
+        setBildirim(acik ? 'Üretim başlatıldı.' : 'Üretim durduruldu.');
+        return null;
+      } catch (e) {
+        return e instanceof ApiError ? e.message : 'Üretim durumu değiştirilemedi';
+      }
+    }, [iste]);
 
   const rafKaydet = useCallback(async (girdi: RafGirdisi[]): Promise<string | null> => {
     if (!rafTesis) return 'Tesis seçili değil';
@@ -272,13 +312,29 @@ export default function Sirketim() {
                   />
                 </View>
 
-                {/* Durum rozetleri: inşaat / üretim durumu tek bakışta. */}
+                {/*
+                  Durum rozetleri: inşaat / üretim durumu tek bakışta.
+
+                  ★ ROZET `productionState`e BAKAR, `productionEnabled`e DEĞİL.
+                  O sütunun varsayılanı TRUE ve tarifi olmayan tesiste de TRUE
+                  kalıyordu: hiçbir şey üretmeyen Sebze Bahçesi'ne yeşil
+                  "çalışıyor" yazıyorduk (R96). Ölçüldü — kurulumdan 7 tur
+                  sonra depo boş, rozet yeşil.
+
+                  ★ Üretmeyen tesise (manav, büfe, liman) üretim rozeti
+                  BASILMAZ: "durdu" demek, olmayan bir yeteneği arızalı gibi
+                  göstermekti.
+                */}
                 <View style={s.rozetSatir}>
                   {t.isUnderConstruction
                     ? <Rozet ikon="hammer-wrench" yazi={`${t.ticksRemaining} tur inşaat`} ton={renk.uyari} />
-                    : t.productionEnabled
-                      ? <Rozet ikon="play-circle" yazi="çalışıyor" ton={renk.artı} />
-                      : <Rozet ikon="pause-circle" yazi="durdu" ton={renk.eksi} />}
+                    : t.productionState === 'RUNNING' && t.producedProduct
+                      ? <Rozet ikon="play-circle" yazi={`${t.producedProduct.name} üretiyor`} ton={renk.artı} />
+                      : t.productionState === 'PAUSED'
+                        ? <Rozet ikon="pause-circle" yazi="üretim durdu" ton={renk.eksi} />
+                        : t.productionState === 'NO_RECIPE'
+                          ? <Rozet ikon="alert-circle-outline" yazi="tarif yok" ton={renk.eksi} />
+                          : null}
                   <Rozet ikon="heart-pulse" yazi={`durum %${Number(t.condition).toFixed(0)}`} />
                 </View>
 
@@ -302,6 +358,21 @@ export default function Sirketim() {
               </Pressable>
 
               {/*
+                ★ Üretim düğmesi YALNIZ üreten tesiste. İNŞAAT SIRASINDA DA
+                görünür (yükseltmenin aksine): "bu şey bir şey yapacak mı"
+                sorusu en çok o sırada sorulur ve panel tam onu cevaplıyor.
+              */}
+              {acikMi && t.productionState !== 'NONE' && (
+                <Pressable style={s.uretimDugme} onPress={() => void uretimiAc(t)}>
+                  <MCI name="factory" size={16} color={renk.mavi} />
+                  <Text style={s.uretimYazi}>
+                    {t.producedProduct ? `Üretim · ${t.producedProduct.name}` : 'Üretim'}
+                  </Text>
+                  <MCI name="chevron-right" size={18} color={renk.mavi} />
+                </Pressable>
+              )}
+
+              {/*
                 ★ Raf fiyatı YALNIZ perakende tesisinde anlamlı: fabrikanın
                 rafı yoktur, malını toptan piyasada satar. Düğmeyi her tesise
                 koymak "neden çalışmıyor" sorusunu doğururdu.
@@ -309,7 +380,7 @@ export default function Sirketim() {
               {acikMi && t.type.category === 'RETAIL' && (
                 <Pressable style={s.rafDugme} onPress={() => void rafiAc(t)}>
                   <MCI name="tag-multiple-outline" size={16} color={renk.altin} />
-                  <Text style={s.rafDugmeYazi}>Raf fiyatları</Text>
+                  <Text style={s.rafDugmeYazi}>Raf ve fiyatlar</Text>
                   <MCI name="chevron-right" size={18} color={renk.altin} />
                 </Pressable>
               )}
@@ -432,9 +503,16 @@ export default function Sirketim() {
       <RafPaneli
         acik={rafTesis !== null}
         tesisAdi={rafTesis?.name ?? ''}
-        teklifler={teklifler}
-        kapat={() => { setRafTesis(null); setTeklifler(null); }}
+        raf={raf}
+        kapat={() => { setRafTesis(null); setRaf(null); }}
         kaydet={rafKaydet}
+      />
+
+      <UretimPaneli
+        tesis={uretimTesis}
+        uretim={uretim}
+        kapat={() => { setUretimTesis(null); setUretim(null); }}
+        degistir={uretimiDegistir}
       />
 
       <LotPaneli
@@ -484,6 +562,13 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,194,75,0.35)',
   },
   rafDugmeYazi: { color: renk.altin, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
+  uretimDugme: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: bosluk.m,
+    paddingVertical: 10, paddingHorizontal: bosluk.m, borderRadius: yuvarlak.m,
+    backgroundColor: 'rgba(90,160,255,0.10)', borderWidth: 1,
+    borderColor: 'rgba(90,160,255,0.35)',
+  },
+  uretimYazi: { color: renk.mavi, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
 
   otomatikDugme: {
     flexDirection: 'row', alignItems: 'center', gap: 7,

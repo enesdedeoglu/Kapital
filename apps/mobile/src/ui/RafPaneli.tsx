@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Switch, Text, TextInput, View,
@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
-import type { RafTeklifi } from '~/api/types';
+import type { Raf } from '~/api/types';
 import { bosluk, golge, gradyan, renk, yaziTipi, yuvarlak } from './tema';
 
 export interface RafGirdisi {
@@ -15,48 +15,100 @@ export interface RafGirdisi {
   enabled: boolean;
 }
 
+/** Rafta olan ve olabilecek ürünler AYNI satır biçimiyle çizilir. */
+interface Satir {
+  kod: string;
+  ad: string;
+  birim: string;
+  stok: string;
+  piyasa: string;
+  tavanFormatli: string;
+  tavan: number;
+  /** Bu oturumda rafa eklendi — kaydedilmeden önce işaretli durur. */
+  yeni: boolean;
+}
+
+const kurusa = (metin: string) => Number(metin.replace(',', '.'));
+const gosterim = (kurus: string) => (Number(kurus) / 10_000).toFixed(2).replace('.', ',');
+
 /**
- * Raf fiyatı paneli — dükkânda ne, kaça satılıyor.
+ * Raf paneli — dükkânda ne, kaça satılıyor ve rafa ne konabilir.
  *
  * ★ İKİ SAYI FİYATIN ANLAMINI VERİR, tek başına fiyat vermez:
  *   PİYASA  → referans fiyat; rakiplerin civarı.
  *   TAVAN   → müşterinin rezervasyon fiyatı. ÜSTÜNDE HİÇ KİMSE ALMAZ.
  * Tavanı göstermezsek oyuncu "yüksek fiyat = çok kâr" sanıp rafı hiç
  * satmayan bir fiyata koyar ve neden satmadığını anlayamaz.
+ *
+ * ★★★★ EKLEME BÖLÜMÜ BİR ÇIKMAZI KAPATIYOR (R96). Panel eskiden yalnız
+ * MEVCUT teklifleri düzenleyebiliyordu ve raf boşken şunu yazıyordu:
+ * "piyasadan perakende ürün alınca burada fiyat belirleyebilirsin". Oysa
+ * satın almak rafa teklif EKLEMİYOR — ölçüldü: manava 100 kg domates vardı,
+ * `GET /retail/:id` yine boş döndü. Yani oyuncu tarif edilen şeyi yapıyor,
+ * hiçbir şey değişmiyordu. Rafa ürün koyan tek yol `PUT .../prices` idi ve
+ * onu yeni ürünle çağıran hiçbir ekran yoktu: al → gelir → satamazsın.
  */
-export function RafPaneli({ acik, tesisAdi, teklifler, kapat, kaydet }: {
+export function RafPaneli({ acik, tesisAdi, raf, kapat, kaydet }: {
   acik: boolean;
   tesisAdi: string;
-  teklifler: readonly RafTeklifi[] | null;
+  /** null = yükleniyor. */
+  raf: Raf | null;
   kapat: () => void;
   kaydet: (g: RafGirdisi[]) => Promise<string | null>;
 }) {
   const kenar = useSafeAreaInsets();
   const [taslak, setTaslak] = useState<Record<string, { fiyat: string; acik: boolean }>>({});
+  const [eklenen, setEklenen] = useState<readonly string[]>([]);
   const [hata, setHata] = useState<string | null>(null);
   const [bekliyor, setBekliyor] = useState(false);
 
   useEffect(() => {
-    if (!acik || !teklifler) return;
+    if (!acik || !raf) return;
     setHata(null);
-    setTaslak(Object.fromEntries(teklifler.map((t) => [t.productCode, {
-      fiyat: (Number(t.sellingPrice) / 10_000).toFixed(2).replace('.', ','),
-      acik: t.enabled,
+    setEklenen([]);
+    setTaslak(Object.fromEntries(raf.offers.map((t) => [t.productCode, {
+      fiyat: gosterim(t.sellingPrice), acik: t.enabled,
     }])));
-  }, [acik, teklifler]);
+  }, [acik, raf]);
+
+  const satirlar = useMemo<Satir[]>(() => {
+    if (!raf) return [];
+    const rafta: Satir[] = raf.offers.map((t) => ({
+      kod: t.productCode, ad: t.productName, birim: t.unit,
+      stok: t.availableStock, piyasa: t.referencePriceFormatted,
+      tavanFormatli: t.reservationCeilingFormatted,
+      tavan: Number(t.reservationCeiling) / 10_000, yeni: false,
+    }));
+    const yeniler: Satir[] = raf.addable
+      .filter((a) => eklenen.includes(a.productCode))
+      .map((a) => ({
+        kod: a.productCode, ad: a.productName, birim: a.unit,
+        stok: a.availableStock, piyasa: a.referencePriceFormatted,
+        tavanFormatli: a.reservationCeilingFormatted,
+        tavan: Number(a.reservationCeiling) / 10_000, yeni: true,
+      }));
+    return [...yeniler, ...rafta];
+  }, [raf, eklenen]);
+
+  const kalanEklenebilir = (raf?.addable ?? []).filter((a) => !eklenen.includes(a.productCode));
+
+  function rafaEkle(kod: string, onerilenKurus: string) {
+    setEklenen((p) => [...p, kod]);
+    // Fiyat ÖNERİYLE dolu gelir: boş alan, oyuncuyu rastgele sayıya iter.
+    setTaslak((p) => ({ ...p, [kod]: { fiyat: gosterim(onerilenKurus), acik: true } }));
+  }
 
   async function gonder() {
-    if (!teklifler) return;
     const girdi: RafGirdisi[] = [];
-    for (const t of teklifler) {
-      const d = taslak[t.productCode];
+    for (const satir of satirlar) {
+      const d = taslak[satir.kod];
       if (!d) continue;
-      const f = Number(d.fiyat.replace(',', '.'));
+      const f = kurusa(d.fiyat);
       if (!Number.isFinite(f) || f <= 0) {
-        setHata(`${t.productName} için geçerli bir fiyat gir.`);
+        setHata(`${satir.ad} için geçerli bir fiyat gir.`);
         return;
       }
-      girdi.push({ productCode: t.productCode, sellingPrice: f, enabled: d.acik });
+      girdi.push({ productCode: satir.kod, sellingPrice: f, enabled: d.acik });
     }
     if (girdi.length === 0) return;
     setBekliyor(true);
@@ -73,41 +125,41 @@ export function RafPaneli({ acik, tesisAdi, teklifler, kapat, kaydet }: {
           <View style={s.tutamak} />
           <View style={s.baslikSatir}>
             <MCI name="tag-multiple-outline" size={19} color={renk.altin} />
-            <Text style={s.baslik}>Raf fiyatları · {tesisAdi}</Text>
+            <Text style={s.baslik}>Raf · {tesisAdi}</Text>
             <View style={s.bosluk} />
             <Pressable onPress={kapat} hitSlop={12}>
               <MCI name="close" size={22} color={renk.soluk} />
             </Pressable>
           </View>
 
-          {teklifler === null
+          {raf === null
             ? <View style={s.orta}><ActivityIndicator color={renk.altin} /></View>
-            : teklifler.length === 0
-              ? (
-                <Text style={s.bos}>
-                  Bu dükkânda henüz raf ürünü yok. Piyasadan perakende ürün alınca
-                  burada fiyat belirleyebilirsin.
-                </Text>
-              )
-              : (
+            : (
+              <>
                 <ScrollView keyboardShouldPersistTaps="handled">
-                  {teklifler.map((t) => {
-                    const d = taslak[t.productCode] ?? { fiyat: '', acik: t.enabled };
-                    const f = Number(d.fiyat.replace(',', '.'));
-                    const tavan = Number(t.reservationCeiling) / 10_000;
-                    const tavanUstu = Number.isFinite(f) && f > tavan;
+                  {satirlar.length === 0 && kalanEklenebilir.length === 0 && (
+                    <Text style={s.bos}>
+                      Bu dükkâna konabilecek perakende ürünü yok.
+                    </Text>
+                  )}
+
+                  {satirlar.map((t) => {
+                    const d = taslak[t.kod] ?? { fiyat: '', acik: true };
+                    const f = kurusa(d.fiyat);
+                    const tavanUstu = Number.isFinite(f) && f > t.tavan;
                     return (
-                      <View key={t.productCode} style={s.urun}>
+                      <View key={t.kod} style={s.urun}>
                         <View style={s.urunUst}>
-                          <Text style={s.urunAd}>{t.productName}</Text>
+                          <Text style={s.urunAd}>{t.ad}</Text>
+                          {t.yeni && <Text style={s.yeniPul}>yeni</Text>}
                           <Text style={s.stok}>
-                            {(Number(t.availableStock) / 1000).toFixed(0)} {t.unit} rafta
+                            {(Number(t.stok) / 1000).toFixed(0)} {t.birim} depoda
                           </Text>
                           <View style={s.bosluk} />
                           <Switch
                             value={d.acik}
                             onValueChange={(v) => setTaslak((p) => ({
-                              ...p, [t.productCode]: { ...d, acik: v },
+                              ...p, [t.kod]: { ...d, acik: v },
                             }))}
                             trackColor={{ false: renk.kenar, true: 'rgba(61,220,151,0.5)' }}
                             thumbColor={d.acik ? renk.artı : renk.soluk}
@@ -119,17 +171,16 @@ export function RafPaneli({ acik, tesisAdi, teklifler, kapat, kaydet }: {
                             style={[s.giris, tavanUstu && s.girisUyari]}
                             value={d.fiyat} keyboardType="decimal-pad"
                             onChangeText={(v) => setTaslak((p) => ({
-                              ...p, [t.productCode]: { ...d, fiyat: v },
+                              ...p, [t.kod]: { ...d, fiyat: v },
                             }))}
                             placeholder="0,00" placeholderTextColor={renk.cokSoluk}
                           />
-                          <Text style={s.birim}>₺ / {t.unit}</Text>
+                          <Text style={s.birim}>₺ / {t.birim}</Text>
                         </View>
 
                         <View style={s.ipucuSatir}>
-                          <Ipucu etiket="piyasa" deger={t.referencePriceFormatted} />
-                          <Ipucu etiket="tavan" deger={t.reservationCeilingFormatted}
-                            ton={renk.uyari} />
+                          <Ipucu etiket="piyasa" deger={t.piyasa} />
+                          <Ipucu etiket="tavan" deger={t.tavanFormatli} ton={renk.uyari} />
                         </View>
 
                         {tavanUstu && (
@@ -144,6 +195,27 @@ export function RafPaneli({ acik, tesisAdi, teklifler, kapat, kaydet }: {
                     );
                   })}
 
+                  {kalanEklenebilir.length > 0 && (
+                    <>
+                      <Text style={s.altBaslik}>RAFA EKLE</Text>
+                      <View style={s.ekleSerit}>
+                        {kalanEklenebilir.map((a) => (
+                          <Pressable
+                            key={a.productCode} style={s.eklePul}
+                            onPress={() => rafaEkle(a.productCode, a.suggestedPrice)}
+                          >
+                            <MCI name="plus" size={14} color={renk.altin} />
+                            <Text style={s.ekleAd}>{a.productName}</Text>
+                            {/* Stok sayısı seçimi yönlendirir: elindeki mal önce. */}
+                            {Number(a.availableStock) > 0 && (
+                              <Text style={s.ekleStok}>{a.availableStockFormatted}</Text>
+                            )}
+                          </Pressable>
+                        ))}
+                      </View>
+                    </>
+                  )}
+
                   {hata && (
                     <View style={s.uyariSatir}>
                       <MCI name="alert-circle-outline" size={15} color={renk.eksi} />
@@ -151,6 +223,19 @@ export function RafPaneli({ acik, tesisAdi, teklifler, kapat, kaydet }: {
                     </View>
                   )}
 
+                  <Text style={s.not}>
+                    Satış her turda müşteri talebine göre olur. Kapalı ürün rafta
+                    durur ama satılmaz.
+                  </Text>
+                </ScrollView>
+
+                {/*
+                  ★ KAYDET DÜĞMESİ KAYDIRMA ALANININ DIŞINDA. İçeride olduğunda
+                  ürün sayısı arttıkça ekranın altına kayıyor ve oyuncu
+                  fiyatları girip kaydedemiyordu — aynı hatayı TesisPaneli ve
+                  OtomatikPaneli'nde de yapmıştım.
+                */}
+                {satirlar.length > 0 && (
                   <Pressable disabled={bekliyor} onPress={() => void gonder()}>
                     <LinearGradient
                       colors={bekliyor ? [renk.kenar, renk.kenar] : gradyan.altin}
@@ -162,13 +247,9 @@ export function RafPaneli({ acik, tesisAdi, teklifler, kapat, kaydet }: {
                         : <Text style={s.dugmeYazi}>Fiyatları kaydet</Text>}
                     </LinearGradient>
                   </Pressable>
-
-                  <Text style={s.not}>
-                    Satış her turda müşteri talebine göre olur. Kapalı ürün rafta
-                    durur ama satılmaz.
-                  </Text>
-                </ScrollView>
-              )}
+                )}
+              </>
+            )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -205,6 +286,11 @@ const s = StyleSheet.create({
   urun: { paddingVertical: bosluk.m, borderTopWidth: 1, borderTopColor: renk.kenar },
   urunUst: { flexDirection: 'row', alignItems: 'center', gap: bosluk.s },
   urunAd: { color: renk.metin, fontSize: 16, fontFamily: yaziTipi.baslikOrta },
+  yeniPul: {
+    color: renk.altin, fontSize: 10.5, fontFamily: yaziTipi.baslikOrta,
+    backgroundColor: 'rgba(212,175,55,0.14)', borderRadius: yuvarlak.s,
+    paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
+  },
   stok: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
 
   fiyatSatir: { flexDirection: 'row', alignItems: 'center', gap: bosluk.s, marginTop: bosluk.s },
@@ -221,12 +307,26 @@ const s = StyleSheet.create({
   ipucuEtiket: { color: renk.cokSoluk, fontSize: 11, fontFamily: yaziTipi.govde },
   ipucuDeger: { fontSize: 13, fontFamily: yaziTipi.rakam },
 
+  altBaslik: {
+    color: renk.cokSoluk, fontSize: 11, fontFamily: yaziTipi.govde,
+    letterSpacing: 0.5, marginTop: bosluk.l, marginBottom: bosluk.s,
+  },
+  ekleSerit: { flexDirection: 'row', flexWrap: 'wrap', gap: bosluk.s },
+  eklePul: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderWidth: 1, borderColor: 'rgba(212,175,55,0.4)', borderRadius: yuvarlak.tam,
+    backgroundColor: 'rgba(212,175,55,0.08)',
+    paddingHorizontal: bosluk.m, paddingVertical: bosluk.s,
+  },
+  ekleAd: { color: renk.metin, fontSize: 14, fontFamily: yaziTipi.govde },
+  ekleStok: { color: renk.cokSoluk, fontSize: 11.5, fontFamily: yaziTipi.rakam },
+
   uyariSatir: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 7 },
   uyari: { color: renk.eksi, fontSize: 12.5, flex: 1, fontFamily: yaziTipi.govde },
 
   dugme: {
     alignItems: 'center', justifyContent: 'center', borderRadius: yuvarlak.m,
-    paddingVertical: bosluk.l, marginTop: bosluk.l,
+    paddingVertical: bosluk.l, marginTop: bosluk.m,
   },
   dugmeYazi: { color: '#3D2A00', fontSize: 16, fontFamily: yaziTipi.baslik, letterSpacing: 0.5 },
   not: { color: renk.cokSoluk, fontSize: 12, lineHeight: 18, marginTop: bosluk.m, fontFamily: yaziTipi.govde },

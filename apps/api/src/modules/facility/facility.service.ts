@@ -29,6 +29,26 @@ export interface FacilityView {
   usedCapacity: string;
   storageUsedPct: number;
   productionEnabled: boolean;
+  /**
+   * Rozetin bakacağı TEK alan — dört hâl, sunucuda karara bağlanmış.
+   *
+   *   'NONE'      → bu tesis üretmez (perakende, liman): rozet gösterilmez
+   *   'NO_RECIPE' → üretebilir ama tarifi yok; HİÇBİR ŞEY üretmiyor
+   *   'PAUSED'    → tarifi var, oyuncu durdurmuş
+   *   'RUNNING'   → üretiyor
+   *
+   * ★ NEDEN SUNUCUDA: 'NONE' ile 'NO_RECIPE' ayrımı, tesis TÜRÜNÜN reçetesi
+   * olup olmadığını bilmeyi gerektirir; istemcide bu bilgi yok. İkisini
+   * ayırmazsak Liman ile tarifsiz Fırın aynı görünür.
+   *
+   * ★ `productionEnabled` TEK BAŞINA YALAN SÖYLÜYORDU: sütunun varsayılanı
+   * TRUE ve tarifsiz tesiste de TRUE kalıyor. Şirket sekmesi ona bakıp yeşil
+   * "çalışıyor" rozeti basıyordu; hiçbir şey üretmeyen tesis sağlıklı
+   * görünüyordu (R96).
+   */
+  productionState: 'NONE' | 'NO_RECIPE' | 'PAUSED' | 'RUNNING';
+  /** Tarif atanmışsa ürettiği ürün; yoksa null. */
+  producedProduct: { code: string; name: string; unit: string } | null;
   isUnderConstruction: boolean;
   readyAtTick: string;
   ticksRemaining: number;
@@ -105,6 +125,7 @@ export class FacilityService {
     }
 
     const tickSeq = await currentTickSeq(this.sql);
+    const recipeId = await this.tekRecete(type.id);
 
     const facilityId = await runInTransaction(this.sql, async (tx) => {
       const [sink] = await tx<{ id: string }[]>`
@@ -118,11 +139,13 @@ export class FacilityService {
         SELECT COUNT(*)::text AS n FROM facilities WHERE company_id = ${company.id}::uuid`;
       const [facility] = await tx<{ id: string }[]>`
         INSERT INTO facilities (id, company_id, facility_type_id, city_id, name,
-                                storage_capacity, construction_complete_at_tick)
+                                storage_capacity, construction_complete_at_tick,
+                                active_recipe_id)
         VALUES (${deterministicUuid('facility', company.id, tickSeq, type.id, sayi!.n)}::uuid,
                 ${company.id}::uuid, ${type.id}, ${city.id},
                 ${dto.name ?? type.name}, ${type.storage_capacity},
-                ${tickSeq + BigInt(type.construction_ticks)})
+                ${tickSeq + BigInt(type.construction_ticks)},
+                ${recipeId})
         RETURNING id`;
 
       await transfer(tx, {
@@ -173,6 +196,25 @@ export class FacilityService {
    *
    * null = yükseltme yok (eğride sonraki seviye tanımsız ya da tavan aşıldı).
    */
+  /**
+   * Üretim hâli — `productionState` alanının gerekçesi orada yazılı.
+   *
+   * ★ İnşaat hâli BURADA ELENMEZ: `isUnderConstruction` ayrı bir alan ve
+   * arayüz önce ona bakıyor. İki yere yazmak, birinin unutulup çelişmesi
+   * demek olurdu.
+   */
+  private uretimDurumu(input: {
+    typeProduces: boolean; enabled: boolean;
+    outputCode: string | null; outputName: string | null; outputUnit: string | null;
+  }): { durum: FacilityView['productionState']; urun: FacilityView['producedProduct'] } {
+    if (!input.typeProduces) return { durum: 'NONE', urun: null };
+    if (input.outputCode === null) return { durum: 'NO_RECIPE', urun: null };
+    return {
+      durum: input.enabled ? 'RUNNING' : 'PAUSED',
+      urun: { code: input.outputCode, name: input.outputName!, unit: input.outputUnit! },
+    };
+  }
+
   private yukseltmeKarari(input: {
     level: number; baseCost: bigint; baseStorage: bigint;
     nextMultiplier: number | null; cfg: UpgradeConfig;
@@ -261,6 +303,35 @@ export class FacilityService {
         producedInTick: b.produced_in_tick ? (b.produced_in_tick as unknown as bigint).toString() : null,
       };
     });
+  }
+
+  /**
+   * Tesis TÜRÜNÜN tek reçetesi — yoksa ya da birden çoksa null.
+   *
+   * ★ NEDEN KURULUMDA ATANIYOR (R96): `active_recipe_id` NULL kalınca üretim
+   * fazı tesisi hiç görmüyor (`p1-produce.ts` o alan üzerinden JOIN yapar),
+   * dolayısıyla üretim kaydı da `halted_reason` da yazılmıyor — tesis
+   * ÇALIŞIR GÖRÜNÜYOR ama hiçbir şey üretmiyor. Ölçüldü: Sebze Bahçesi,
+   * inşaattan sonra 7 tur, üretim sıfır; reçete atanınca üç turda 45,8 kg.
+   *
+   * ★ BİRDEN ÇOK REÇETE VARSA SEÇİM YAPILMAZ. Bugün her üretim türünün tek
+   * reçetesi var, yani "ne üretmek istersin" sorusunun tek cevabı var ve
+   * sormak karar değil engeldir. Ama ikinci bir reçete eklenirse seçim
+   * GERÇEK bir karar olur ve oyuncuya aittir: burada sessizce biri
+   * seçilmez, null döner ve `/production` "tarif yok" der.
+   *
+   * ★ Seviye kilidi atlanmaz: reçetenin `unlock_level`i tesis türününkinden
+   * büyükse atanmaz. Bugün on türün onunda da eşit — şart yine de yazılı,
+   * çünkü veri kayarsa atama sessizce kilit aşmamalı.
+   */
+  private async tekRecete(facilityTypeId: number): Promise<number | null> {
+    const rows = await this.sql<{ id: number; unlock_level: number }[]>`
+      SELECT r.id, r.unlock_level
+        FROM production_recipes r
+        JOIN facility_types ft ON ft.id = r.facility_type_id
+       WHERE r.facility_type_id = ${facilityTypeId} AND r.is_active
+         AND r.unlock_level <= ft.unlock_level`;
+    return rows.length === 1 ? rows[0]!.id : null;
   }
 
   /** Tesisin üreteceği ürünü seçer. Perakende tesislerinin reçetesi yoktur. */
@@ -457,13 +528,20 @@ export class FacilityService {
              c.id AS city_id, c.code AS city_code, c.name AS city_name,
              COALESCE(i.used_capacity, 0) AS used_capacity,
              COALESCE(cur.capacity_multiplier, 1) AS level_multiplier,
-             nxt.capacity_multiplier AS next_multiplier
+             nxt.capacity_multiplier AS next_multiplier,
+             rp.code AS output_code, rp.name AS output_name, rp.unit AS output_unit,
+             -- Tesis TÜRÜ üretebiliyor mu: 'üretmez' ile 'tarifi yok'u ayırır.
+             EXISTS (SELECT 1 FROM production_recipes pr
+                      WHERE pr.facility_type_id = f.facility_type_id AND pr.is_active)
+               AS type_produces
       FROM facilities f
       JOIN facility_types ft ON ft.id = f.facility_type_id
       JOIN cities c ON c.id = f.city_id
       LEFT JOIN inventories i ON i.facility_id = f.id
       LEFT JOIN facility_level_curve cur ON cur.level = f.level
-      LEFT JOIN facility_level_curve nxt ON nxt.level = f.level + 1`;
+      LEFT JOIN facility_level_curve nxt ON nxt.level = f.level + 1
+      LEFT JOIN production_recipes r ON r.id = f.active_recipe_id AND r.is_active
+      LEFT JOIN products rp ON rp.id = r.output_product_id`;
   }
 
   private toView(
@@ -474,6 +552,14 @@ export class FacilityService {
     const used = f.used_capacity as unknown as bigint;
     const readyAt = f.construction_complete_at_tick as unknown as bigint;
     const remaining = readyAt > tickSeq ? Number(readyAt - tickSeq) : 0;
+
+    const uretim = this.uretimDurumu({
+      typeProduces: f.type_produces as unknown as boolean,
+      enabled: f.production_enabled as unknown as boolean,
+      outputCode: f.output_code as unknown as string | null,
+      outputName: f.output_name as unknown as string | null,
+      outputUnit: f.output_unit as unknown as string | null,
+    });
 
     const karar = this.yukseltmeKarari({
       level: f.level as unknown as number,
@@ -501,6 +587,8 @@ export class FacilityService {
       usedCapacity: used.toString(),
       storageUsedPct: capacity > 0n ? Number((used * 10000n) / capacity) / 100 : 0,
       productionEnabled: f.production_enabled as unknown as boolean,
+      productionState: uretim.durum,
+      producedProduct: uretim.urun,
       isUnderConstruction: remaining > 0,
       readyAtTick: readyAt.toString(),
       ticksRemaining: remaining,

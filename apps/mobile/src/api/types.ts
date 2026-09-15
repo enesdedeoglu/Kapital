@@ -130,6 +130,17 @@ export interface Tesis {
   readonly usedCapacity: string;
   readonly storageUsedPct: number;
   readonly productionEnabled: boolean;
+  /**
+   * Üretim hâli — rozet BUNA bakar, `productionEnabled`e değil.
+   *
+   * `productionEnabled` sütununun varsayılanı TRUE ve tarifi olmayan tesiste
+   * de TRUE kalıyor: ona bakan rozet, hiçbir şey üretmeyen tesise yeşil
+   * "çalışıyor" diyordu (R96).
+   */
+  readonly productionState: 'NONE' | 'NO_RECIPE' | 'PAUSED' | 'RUNNING';
+  readonly producedProduct:
+    | { readonly code: string; readonly name: string; readonly unit: string }
+    | null;
   readonly isUnderConstruction: boolean;
   readonly ticksRemaining: number;
   /**
@@ -203,6 +214,29 @@ export interface AcikEmir {
 }
 
 /** Raf teklifi — `GET /retail/:facilityId`, `PUT /retail/:facilityId/prices`. */
+/** Rafa konabilecek ürün — `GET /retail/:id` yanıtının `addable` yarısı. */
+export interface EklenebilirUrun {
+  readonly productCode: string;
+  readonly productName: string;
+  readonly unit: string;
+  /** Bu dükkânın deposunda bekleyen miktar; 0 olabilir. */
+  readonly availableStock: string;
+  readonly availableStockFormatted: string;
+  readonly referencePrice: string;
+  readonly referencePriceFormatted: string;
+  readonly reservationCeiling: string;
+  readonly reservationCeilingFormatted: string;
+  /** Önerilen açılış fiyatı (referans × perakende marjı) — sunucuda hesaplanır. */
+  readonly suggestedPrice: string;
+  readonly suggestedPriceFormatted: string;
+}
+
+/** `GET /retail/:id` ve `PUT /retail/:id/prices` — rafta olan ve olabilecek. */
+export interface Raf {
+  readonly offers: readonly RafTeklifi[];
+  readonly addable: readonly EklenebilirUrun[];
+}
+
 export interface RafTeklifi {
   readonly productCode: string;
   readonly productName: string;
@@ -338,4 +372,35 @@ export interface OtomatikKural {
   readonly lastRunTick: string | null;
   /** Kuralın ne yapacağını anlatan düz cümle — sunucu kurar, ekran gösterir. */
   readonly explanation: string;
+}
+
+/** `GET /facilities/:id/production` — tesis ne üretiyor, nasıl gidiyor. */
+export interface Uretim {
+  readonly facilityId: string;
+  readonly productionEnabled: boolean;
+  readonly haltedReason: string | null;
+  readonly condition: number;
+  readonly level: number;
+  /** Tur başına üretebileceği miktar (ondalıklı metin). */
+  readonly capacityPerTick: string;
+  readonly recipe: {
+    readonly outputProduct: { readonly code: string; readonly name: string; readonly unit: string };
+    readonly outputQuantity: string;
+    readonly cycleTicks: number;
+    readonly inputs: readonly {
+      readonly code: string;
+      readonly name: string;
+      readonly unit: string;
+      readonly quantity: string;
+      readonly quantityFormatted: string;
+      readonly minQuality: number;
+    }[];
+  } | null;
+  readonly recentTicks: readonly {
+    readonly tickSeq: string;
+    readonly capacity: string;
+    readonly produced: string;
+    readonly outputQuality: number;
+    readonly haltedReason: string | null;
+  }[];
 }
