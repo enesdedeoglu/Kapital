@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asQty, money, qty, type Money } from '@kapital/shared';
+import { asQty, money, mulMoney, qty, type Money } from '@kapital/shared';
 import { fxConversion, foreignPrices, nextFxRate, worldPriceUsd } from './fx.js';
 import {
   matchBuyOrder, bookDepth, scarcityRation, type BookOrder, type MatchCandidate,
@@ -10,7 +10,7 @@ import { valuateStock } from './valuation.js';
 const RATE = money(0.35); // 0,35 ₺ / kg / mesafe birimi
 
 describe('nakliye (madde 17)', () => {
-  const base = { weightPerUnit: 1, baseRate: RATE, logisticsModifier: 1 };
+  const base = { weightPerUnit: 1, baseRate: RATE, logisticsModifier: 1, cityModifier: 1 };
 
   it('aynı şehirde nakliye yoktur', () => {
     expect(shippingCost({ ...base, quantity: qty(100), distanceIndex: 0 })).toBe(0n);
@@ -38,6 +38,25 @@ describe('nakliye (madde 17)', () => {
 
   it('birim başına nakliye UI için ayrı hesaplanır (madde 16)', () => {
     expect(shippingPerUnit({ ...base, distanceIndex: 4.5 })).toBe(money(1.575));
+  });
+
+  /*
+   * ★ Şehir çarpanı HEDEFİN. Kaynak şehrin çarpanı geçilirse ücret yanlış
+   * çıkar ve iki yön aynı görünür — bağlarken tam bu hataya açıktık.
+   */
+  it('hedef şehrin lojistik çarpanı maliyeti çarpar (Konya 1,05)', () => {
+    const duz = shippingCost({ ...base, quantity: qty(100), distanceIndex: 6.6 });
+    const konyaya = shippingCost({
+      ...base, quantity: qty(100), distanceIndex: 6.6, cityModifier: 1.05,
+    });
+    expect(konyaya).toBe(mulMoney(duz, 1.05).value);
+  });
+
+  it('aynı şehirde çarpan da devreye girmez — mesafe 0', () => {
+    expect(shippingCost({
+      ...base, quantity: qty(100), distanceIndex: 0, cityModifier: 1.05,
+    })).toBe(0n);
+    expect(shippingPerUnit({ ...base, distanceIndex: 0, cityModifier: 1.05 })).toBe(0n);
   });
 });
 

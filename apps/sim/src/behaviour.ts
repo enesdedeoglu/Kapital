@@ -154,7 +154,8 @@ export async function loadDecisionContext(
 /**
  * Şehir × ürün navlun payı — NPC tarafındaki (`p6-govern`) ile aynı kural.
  * Alıcı hangi satıcıyla eşleşeceğini bilmez, şehrinin MEDYAN mesafesini
- * bütçeler.
+ * bütçeler. `cityId` alıcının kendi şehri, yani TESLİM şehridir: şehir
+ * lojistik çarpanı da oradan gelir.
  */
 async function buildFreightTable(sql: Sql) {
   const [cfg] = await sql<{ value: { baseRatePerKgDistance: string } }[]>`
@@ -176,6 +177,10 @@ async function buildFreightTable(sql: Sql) {
     SELECT id, weight_per_unit FROM products`;
   const weight = new Map(products.map((p) => [p.id, Number(p.weight_per_unit)]));
 
+  const cityRows = await sql<{ id: number; logistics_modifier: number }[]>`
+    SELECT id, logistics_modifier FROM cities ORDER BY id`;
+  const cityModifier = new Map(cityRows.map((c) => [c.id, Number(c.logistics_modifier)]));
+
   const cache = new Map<string, Money>();
   return (cityId: number, productId: number): Money => {
     const key = `${cityId}:${productId}`;
@@ -185,6 +190,7 @@ async function buildFreightTable(sql: Sql) {
       weightPerUnit: weight.get(productId) ?? 1,
       distanceIndex: median.get(cityId) ?? 0,
       baseRate, logisticsModifier: 1,
+      cityModifier: cityModifier.get(cityId) ?? 1,
     });
     cache.set(key, value);
     return value;

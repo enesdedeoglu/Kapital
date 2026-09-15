@@ -55,6 +55,8 @@ export default function Sehirler() {
   useTurDegisince(() => { void yukle(); });
 
   const veri = useMemo(() => hesapla(sehirler, mesafeler, evKodu), [sehirler, mesafeler, evKodu]);
+  // Nakliye notu, karşılığı olan bir satır ekranda varsa anlamlı.
+  const nakliyeSapmasiVar = veri.some((c) => c.sehir.logisticsModifier !== 1);
 
   return (
     <ScrollView
@@ -147,19 +149,29 @@ export default function Sehirler() {
             />
             <Ikili ikon="home-city-outline" ad="arsa" deger={c.sehir.landCostIndex} dusukIyi />
             {/*
-             * ★ `logisticsModifier` BİLEREK gösterilmiyor.
+             * ★ NAKLİYE GERİ GELDİ — artık karşılığı var.
              *
-             * `cities.logistics_modifier` sütunu dolu (Konya 1,05) ve
-             * `shippingPerUnit` onun için bir `cityModifier` parametresi
-             * taşıyor — ama o parametreyi HİÇBİR ÇAĞIRAN geçmiyor (motor da,
-             * API de). Yani bugün hiçbir nakliye ücretini değiştirmiyor.
-             * Önce burada "nakliye ×1,05" yazıyordu: karşılığı olmayan bir
-             * sayı, bu ekranın tam da kaçındığı şey.
+             * Bu satır bir kez KALDIRILMIŞTI ve gerekçesi doğruydu:
+             * `cities.logistics_modifier` dolu olmasına rağmen (Konya 1,05)
+             * `shippingPerUnit`'in `cityModifier` parametresini hiçbir çağıran
+             * geçmiyordu, yani ekranda hiçbir ücreti değiştirmeyen bir sayı
+             * duruyordu — bu ekranın tam da kaçındığı şey.
              *
-             * Bağlamak nakliye maliyetini değiştirir, yani ekonomi davranışı
-             * değişikliğidir ve kapıdan geçmesi gerekir (5 tohum × 14 ölçüt).
-             * Ayrı ve bilinçli bir iş; bağlanınca burası da geri gelsin.
+             * Parametre motorda ve API'de bağlandı, kapı da geçti (5 tohum ×
+             * 700 tur, 14/14 medyan + çoğunluk). Ölçüldü: gerçekten tahsil
+             * edilen 34.061 sevkiyatta çarpanı 1 olan şehirlerde türetilen
+             * taban oran 3500, Konya'ya teslimde 3675 — tam ×1,05. Sayı artık
+             * ödenen ücreti anlatıyor.
+             *
+             * Yalnız 1'den sapan şehirde çizilir; bugün sapan tek şehir Konya
+             * ve her kartta "×1,00" yazmak gürültü olurdu.
              */}
+            {c.sehir.logisticsModifier !== 1 && (
+              <Ikili
+                ikon="truck-outline" ad="nakliye"
+                deger={c.sehir.logisticsModifier} dusukIyi
+              />
+            )}
           </View>
         </Kart>
       ))}
@@ -181,8 +193,16 @@ export default function Sehirler() {
           </Text>
           <Text style={s.not}>
             <Text style={s.notVurgu}>Tur yol</Text> malın oraya varması için
-            geçmesi gereken tur sayısı; nakliye ücretini de mesafe belirler.
+            geçmesi gereken tur sayısı; nakliye ücretinin tabanını da mesafe
+            belirler.
           </Text>
+          {nakliyeSapmasiVar && (
+            <Text style={s.not}>
+              <Text style={s.notVurgu}>Nakliye</Text> çarpanı malın VARDIĞI
+              şehre aittir: oraya taşımak o kadar pahalıdır, oradan taşımak
+              değil. Yalnız 1'den sapan şehirde gösterilir.
+            </Text>
+          )}
         </View>
       )}
     </ScrollView>

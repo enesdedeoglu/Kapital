@@ -58,6 +58,7 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
   const out = result as { -readonly [K in keyof ExchangePhaseResult]: ExchangePhaseResult[K] };
 
   const distances = await loadDistances(sql);
+  const cityModifiers = await loadCityModifiers(sql);
   const [sink] = await sql<{ id: string }[]>`SELECT id FROM companies WHERE system_code = 'SYS_SINK'`;
   // Kıtlık tayını: asgari lot, payın anlamsız küçüklüğe inmesini engeller.
   const rationCfg = configValue<{ minLot: number }>(tick, 'economy.rationing', { minLot: 10 });
@@ -140,6 +141,9 @@ export async function runExchangePhase(sql: Sql, tick: EngineTick): Promise<Exch
               distanceIndex: link.distance,
               baseRate,
               logisticsModifier: buyRow.logistics_modifier,
+              // ★ Teslim şehri ALICININ şehridir — mal oraya gider. Satıcının
+              //   şehri kaynaktır ve maliyeti belirlemez (shipping.ts).
+              cityModifier: cityModifiers.get(buyRow.city_id) ?? 1,
             }),
             distanceIndex: link.distance,
             transitTicks: link.transit,
@@ -436,6 +440,13 @@ function toBookOrder(row: OrderRow, remaining: bigint): BookOrder {
     maxDeliveryDistance: row.max_delivery_distance,
     createdAt: row.created_epoch,
   };
+}
+
+/** Şehir → `cities.logistics_modifier`. Beş satır; tur başına tek sorgu. */
+async function loadCityModifiers(sql: Sql): Promise<Map<number, number>> {
+  const rows = await sql<{ id: number; logistics_modifier: number }[]>`
+    SELECT id, logistics_modifier FROM cities ORDER BY id`;
+  return new Map(rows.map((r) => [r.id, Number(r.logistics_modifier)]));
 }
 
 async function loadDistances(sql: Sql): Promise<Map<string, { distance: number; transit: number }>> {

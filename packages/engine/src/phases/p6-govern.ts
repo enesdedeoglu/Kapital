@@ -680,7 +680,10 @@ async function loadOpenOrders(sql: Sql, companyIds: string[]): Promise<OpenOrder
  *
  * NPC teklifini verirken hangi satıcıyla eşleşeceğini bilmez, bu yüzden
  * şehrinin diğer şehirlere olan MEDYAN mesafesini kullanır. Beş şehir için
- * tabloyu bir kerede kurmak, tur başına iki küçük sorgu demektir.
+ * tabloyu bir kerede kurmak, tur başına üç küçük sorgu demektir.
+ *
+ * `cityId` NPC'nin ALIŞ yaptığı tesisin şehridir, yani teslim yeri: şehir
+ * lojistik çarpanı da ondan okunur (shipping.ts — çarpan HEDEF şehrindir).
  */
 async function buildFreightTable(
   sql: Sql, tick: EngineTick,
@@ -705,6 +708,12 @@ async function buildFreightTable(
     SELECT id, weight_per_unit FROM products`;
   const weight = new Map<number, number>(productRows.map((r) => [r.id, Number(r.weight_per_unit)]));
 
+  const cityRows = await sql<{ id: number; logistics_modifier: number }[]>`
+    SELECT id, logistics_modifier FROM cities ORDER BY id`;
+  const cityModifier = new Map<number, number>(
+    cityRows.map((r) => [r.id, Number(r.logistics_modifier)]),
+  );
+
   const cache = new Map<string, Money>();
   return (cityId, productId) => {
     const key = `${cityId}:${productId}`;
@@ -715,6 +724,7 @@ async function buildFreightTable(
       distanceIndex: median.get(cityId) ?? 0,
       baseRate,
       logisticsModifier: 1,
+      cityModifier: cityModifier.get(cityId) ?? 1,
     });
     cache.set(key, value);
     return value;

@@ -150,6 +150,77 @@ describe('emir defteri', () => {
     expect(BigInt(offer.totalPerUnit)).toBe(BigInt(offer.goodsPrice) + BigInt(offer.shippingPerUnit));
     expect(offer.transitTicks).toBe(3);
   });
+
+  /*
+   * ★ ŞEHİR LOJİSTİK ÇARPANI HEDEFTEN OKUNUR — birim testi bunu KANITLAMAZ.
+   *
+   * `shippingCost` çarpanı hep uygulamıştı; eksik olan onu GEÇMEKti ve o eksik
+   * yalnız uçtan uca görünür. Kurgu tek değişkene indirgenmiştir: İstanbul ile
+   * Konya arası mesafe iki yönde de 6,6 (`city_distances` bugün simetrik) ve
+   * iki şirketin de kendi `logistics_modifier`'ı 1. Geriye tek fark kalır:
+   * hangi şehre TESLİM edildiği.
+   *
+   *   KON → IST teslim:  1 kg × 6,6 × 0,35 ₺ × 1,00 = 2,3100 ₺
+   *   IST → KON teslim:  1 kg × 6,6 × 0,35 ₺ × 1,05 = 2,4255 ₺
+   *
+   * Kaynak şehrin çarpanı kullanılsaydı iki sayı YER DEĞİŞTİRİRDİ; hiç
+   * geçilmeseydi İKİSİ DE 2,31 ₺ olurdu. Test her iki hatayı da yakalar.
+   */
+  it('★ nakliye çarpanı HEDEF şehrin — aynı mesafede iki yön farklı ücretlenir', async () => {
+    const konyaliSatici = await player({ cityCode: 'KON' });
+    await stockUp(konyaliSatici.facilityId, IRON, qty(500));
+    await call('/market/orders', {
+      method: 'POST', token: konyaliSatici.token,
+      body: { side: 'SELL', facilityId: konyaliSatici.facilityId, productCode: 'IRON',
+              quantity: 500, pricePerUnit: 25 },
+    });
+
+    const istanbulluSatici = await player({ cityCode: 'IST' });
+    await stockUp(istanbulluSatici.facilityId, IRON, qty(500));
+    await call('/market/orders', {
+      method: 'POST', token: istanbulluSatici.token,
+      body: { side: 'SELL', facilityId: istanbulluSatici.facilityId, productCode: 'IRON',
+              quantity: 500, pricePerUnit: 25 },
+    });
+
+    const alici = await player({ cityCode: 'IST' });
+
+    // İstanbul'a teslim: çarpan 1,00 — Konya'dan gelen satırın nakliyesi.
+    const istanbulaBook = await call('/market/book/IRON?city=IST', { token: alici.token });
+    const konyadanGelen = istanbulaBook.body.sell
+      .find((o: { city: { code: string } }) => o.city.code === 'KON');
+    expect(konyadanGelen.shippingPerUnit).toBe('23100');
+
+    // Konya'ya teslim: çarpan 1,05 — İstanbul'dan gidenin nakliyesi. Mesafe aynı.
+    const konyayaBook = await call('/market/book/IRON?city=KON', { token: alici.token });
+    const istanbuldanGiden = konyayaBook.body.sell
+      .find((o: { city: { code: string } }) => o.city.code === 'IST');
+    expect(istanbuldanGiden.shippingPerUnit).toBe('24255');
+
+    // Oran tam olarak Konya'nın çarpanı — ne eksik, ne fazla.
+    expect(BigInt(istanbuldanGiden.shippingPerUnit) * 100n
+      / BigInt(konyadanGelen.shippingPerUnit)).toBe(105n);
+
+    /*
+     * Defterin ALIŞ tarafı da aynı çarpanı taşımalı. Bu yönde hedef ALICININ
+     * şehridir: İstanbul'daki satıcı Konya'daki alıcıya gönderirken Konya'nın
+     * çarpanını öder ve tavanından o kadar düşülür.
+     */
+    const konyaliAlici = await player({ cityCode: 'KON' });
+    await call('/market/orders', {
+      method: 'POST', token: konyaliAlici.token,
+      body: { side: 'BUY', facilityId: konyaliAlici.facilityId, productCode: 'IRON',
+              quantity: 100, pricePerUnit: 40 },
+    });
+
+    const saticininDefteri = await call('/market/book/IRON?city=IST', { token: istanbulluSatici.token });
+    const konyaliSatir = saticininDefteri.body.buy
+      .find((r: { cityCode: string }) => r.cityCode === 'KON');
+    expect(konyaliSatir.shippingPerUnit).toBe('24255');
+    // Tavan − nakliye = mala kalan; çarpan buradan da geçiyor.
+    expect(BigInt(konyaliSatir.goodsCeilingPerUnit))
+      .toBe(BigInt(konyaliSatir.maxTotalPerUnit) - 24255n);
+  });
 });
 
 describe('★ şehirler arası ticaret (A3)', () => {

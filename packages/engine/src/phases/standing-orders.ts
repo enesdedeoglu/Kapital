@@ -188,7 +188,12 @@ async function loadOpenOrders(sql: Sql, facilityIds: string[]): Promise<Set<stri
   return new Set(rows.map((r) => `${r.facility_id}:${r.product_id}:${r.side}`));
 }
 
-/** Şehir × ürün navlun payı — NPC ve oyuncu tarafındakiyle aynı kural (R20). */
+/**
+ * Şehir × ürün navlun payı — NPC ve oyuncu tarafındakiyle aynı kural (R20).
+ *
+ * Buradaki `cityId` ALIŞ emrini veren tesisin şehridir, yani malın TESLİM
+ * edileceği yer: hem medyan mesafe hem şehir lojistik çarpanı ondan okunur.
+ */
 async function buildFreightTable(sql: Sql, tick: EngineTick) {
   const baseRate = asMoney(BigInt(configValue<{ baseRatePerKgDistance: string }>(
     tick, 'economy.shipping', { baseRatePerKgDistance: '3500' },
@@ -208,6 +213,10 @@ async function buildFreightTable(sql: Sql, tick: EngineTick) {
     SELECT id, weight_per_unit FROM products`;
   const weight = new Map(products.map((p) => [p.id, Number(p.weight_per_unit)]));
 
+  const cityRows = await sql<{ id: number; logistics_modifier: number }[]>`
+    SELECT id, logistics_modifier FROM cities ORDER BY id`;
+  const cityModifier = new Map(cityRows.map((c) => [c.id, Number(c.logistics_modifier)]));
+
   const cache = new Map<string, Money>();
   return (cityId: number, productId: number): Money => {
     const key = `${cityId}:${productId}`;
@@ -217,6 +226,7 @@ async function buildFreightTable(sql: Sql, tick: EngineTick) {
       weightPerUnit: weight.get(productId) ?? 1,
       distanceIndex: median.get(cityId) ?? 0,
       baseRate, logisticsModifier: 1,
+      cityModifier: cityModifier.get(cityId) ?? 1,
     });
     cache.set(key, value);
     return value;
