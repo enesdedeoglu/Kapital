@@ -106,3 +106,55 @@ export interface Defter {
     readonly minQuality: number;
   }[];
 }
+
+/** Tesis — `GET /facilities`. */
+export interface Tesis {
+  readonly id: string;
+  readonly name: string;
+  readonly type: { readonly code: string; readonly name: string; readonly category: string };
+  readonly city: { readonly id: number; readonly code: string; readonly name: string };
+  readonly level: number;
+  readonly condition: string;
+  readonly storageCapacity: string;
+  readonly usedCapacity: string;
+  readonly storageUsedPct: number;
+  readonly productionEnabled: boolean;
+  readonly isUnderConstruction: boolean;
+  readonly ticksRemaining: number;
+}
+
+/** Tesis stoğu — `GET /facilities/:id/stock`. */
+export interface TesisStok {
+  readonly facilityId: string;
+  readonly capacity: string;
+  readonly usedCapacity: string;
+  readonly freeCapacity: string;
+  readonly products: readonly {
+    readonly productId: number;
+    readonly code: string;
+    readonly name: string;
+    readonly unit: string;
+    readonly total: string;
+    readonly totalFormatted: string;
+    readonly available: string;
+    readonly reserved: string;
+    readonly avgQuality: number;
+    readonly weightedAvgCost: string;
+    readonly weightedAvgCostFormatted: string;
+    readonly batchCount: number;
+  }[];
+}
+
+/** Lot — `GET /facilities/:id/batches?productId=`. */
+export interface Lot {
+  readonly id: string;
+  readonly product: { readonly id: number; readonly code: string; readonly name: string; readonly unit: string };
+  readonly quantity: string;
+  readonly quantityFormatted: string;
+  readonly reserved: string;
+  readonly quality: number;
+  readonly unitCost: string;
+  readonly unitCostFormatted: string;
+  readonly expiresAtTick: string | null;
+  readonly producedInTick: string | null;
+}
