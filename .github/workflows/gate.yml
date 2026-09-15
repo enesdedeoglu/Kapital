@@ -134,12 +134,31 @@ jobs:
           # sessizce yalnız teşhis dosyalarını yükledi.
           # --bekle: eksik tohumla karar verilmesin (R92). Matris beş iş koşar;
           # biri artefakt yükleyemezse birleştirme dörtle karar verirdi.
+          #
+          # ★★★★ `pipefail` ZORUNLU — BU SATIRIN YOKLUĞU KAPIYI SUSTURUYORDU.
+          #
+          # Birleştirme, kapı geçmediğinde 1 ile çıkar; kararın TAMAMI bu çıkış
+          # kodudur. Ama komut `| tee` ile borulanmıştı ve bir borunun çıkış
+          # kodu SON komuta aittir: `tee` her zaman 0 döndü. GitHub'ın
+          # varsayılan kabuğu `bash -e` (pipefail YOK), dolayısıyla adım
+          # başarılı sayıldı ve koşum yeşil tik aldı.
+          #
+          # Ölçülen sonuç: koşum 34989846528 raporunda "✗ KAPI GEÇİLMEDİ"
+          # yazarken Actions sayfasında ✅ görünüyordu. Yani kapının yeşili
+          # hiçbir şey kanıtlamıyordu — raporu açmayan biri geçmiş sanırdı.
+          # (Tohum işlerindeki `set +e` BİLEREK öyle: orada 1, "bu dünyada
+          # tutmadı" demektir ve geçerli bir sonuçtur; kararı burası verir.)
+          set -o pipefail
+          durum=0
           pnpm --filter @kapital/sim exec tsx src/cli/aggregate.ts \
             "$GITHUB_WORKSPACE"/ham/*.json --bekle 5 \
             --json "$GITHUB_WORKSPACE/kapi.json" \
-            | tee "$GITHUB_WORKSPACE/rapor.txt"
+            | tee "$GITHUB_WORKSPACE/rapor.txt" || durum=$?
           # Adım özetine de yaz: Actions sayfasında tıklamadan görünsün.
-          { echo '```'; cat rapor.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # ★ Çıkıştan ÖNCE yazılır: raporun asıl gerekli olduğu an, kapının
+          # düştüğü andır. `exit` yukarıya taşınsa özet boş kalırdı.
+          { echo '```'; cat "$GITHUB_WORKSPACE/rapor.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $durum
 
       - name: Teşhisleri özete ekle
         if: always()
@@ -150,7 +169,11 @@ jobs:
               cat "$f"; echo '```'; echo '</details>'; } >> "$GITHUB_STEP_SUMMARY"
           done
 
+      # ★ `always()`: kapı DÜŞTÜĞÜNDE de yüklenir. Artık birleştirme adımı
+      # gerçekten düşüyor (pipefail), yükleme koşulsuz olmasa rapor tam da
+      # okunması gereken koşumlarda kaybolurdu.
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: kapi-raporu
           path: |
