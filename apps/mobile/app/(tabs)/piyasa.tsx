@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { ApiError } from '~/api/client';
-import type { Defter, Urun } from '~/api/types';
+import type { AcikEmir, Defter, Sirket, Tesis, Urun } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
+import { EmirPaneli, type EmirGirdisi } from '~/ui/EmirPaneli';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 export default function Piyasa() {
@@ -19,6 +20,11 @@ export default function Piyasa() {
   const [hata, setHata] = useState<string | null>(null);
   const [yukleniyor, setYukleniyor] = useState(false);
   const [yenileniyor, setYenileniyor] = useState(false);
+  const [tesisler, setTesisler] = useState<Tesis[]>([]);
+  const [emirTarafi, setEmirTarafi] = useState<'BUY' | 'SELL' | null>(null);
+  const [bildirim, setBildirim] = useState<string | null>(null);
+  const [seviye, setSeviye] = useState(1);
+  const [emirler, setEmirler] = useState<AcikEmir[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -29,8 +35,34 @@ export default function Piyasa() {
       } catch (e) {
         setHata(e instanceof ApiError ? e.message : 'Ürünler alınamadı');
       }
+      // Emir verirken tesis seçilecek; şimdiden alınır ki panel anında açılsın.
+      try {
+        const [t, sirket] = await Promise.all([
+          iste<Tesis[]>('/facilities'),
+          iste<Sirket>('/company'),
+        ]);
+        setTesisler(t);
+        setSeviye(sirket.level);
+      } catch {
+        setTesisler([]);
+      }
     })();
   }, [iste]);
+
+  /*
+   * Açık emirler AYRI çekilir çünkü defterden bağımsızdır: oyuncunun başka
+   * ürünlerdeki emirleri de burada görünmeli. Emir verildikten sonra
+   * yenilenir — yoksa oyuncu emrini verip kaybediyor, var mı yok mu bilemiyor.
+   */
+  const emirleriYukle = useCallback(async () => {
+    try {
+      setEmirler(await iste<AcikEmir[]>('/market/orders'));
+    } catch {
+      setEmirler([]);
+    }
+  }, [iste]);
+
+  useEffect(() => { void emirleriYukle(); }, [emirleriYukle]);
 
   const defteriYukle = useCallback(async (kod: string) => {
     setYukleniyor(true);
@@ -46,9 +78,44 @@ export default function Piyasa() {
   }, [iste]);
 
   useEffect(() => { if (secili) void defteriYukle(secili); }, [secili, defteriYukle]);
+  const emirIptal = useCallback(async (id: string) => {
+    try {
+      await iste(`/market/orders/${id}`, { method: 'DELETE' });
+      setBildirim('Emir iptal edildi.');
+      void emirleriYukle();
+      if (secili) void defteriYukle(secili);
+    } catch (e) {
+      setHata(e instanceof ApiError ? e.message : 'Emir iptal edilemedi');
+    }
+  }, [iste, emirleriYukle, secili, defteriYukle]);
+
+
+  /*
+   * Emri gönderir. Hata MESAJI döner (null = başarılı) — panel kendi
+   * hatasını kendi gösterir, ekran onun yerine karar vermez.
+   */
+  const emirGonder = useCallback(async (g: EmirGirdisi): Promise<string | null> => {
+    try {
+      await iste('/market/orders', { method: 'POST', body: g });
+      setBildirim(g.side === 'BUY' ? 'Alış emri verildi.' : 'Satış emri verildi.');
+      void emirleriYukle();
+      if (secili) void defteriYukle(secili);
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Emir verilemedi';
+    }
+  }, [iste, secili, defteriYukle, emirleriYukle]);
+
+  // Bildirim kendiliğinden söner: kapatma düğmesi bir dokunuş fazla olurdu.
+  useEffect(() => {
+    if (!bildirim) return;
+    const t = setTimeout(() => setBildirim(null), 3000);
+    return () => clearTimeout(t);
+  }, [bildirim]);
 
   return (
-    <ScrollView
+    <>
+      <ScrollView
       contentContainerStyle={[s.icerik, { paddingTop: kenar.top + 56 }]}
       refreshControl={
         <RefreshControl
@@ -68,19 +135,84 @@ export default function Piyasa() {
       >
         {urunler.map((u) => {
           const aktif = u.code === secili;
+          /*
+           * ★ Kilitli ürün GÖRÜNÜR olmalı, tıklanabilir de.
+           * Defteri görmek serbest — piyasayı izlemek oyunun bir parçası.
+           * Kilitli olan yalnız EMİR VERMEK; o yüzden ürün gizlenmez, kilit
+           * simgesiyle işaretlenir. Aksi hâlde oyuncu formu doldurup
+           * "seviye 5 gerekli" hatasına çarpıyordu.
+           */
+          const kilitli = (u.unlockLevel ?? 1) > seviye;
           return (
             <Pressable key={u.code} onPress={() => setSecili(u.code)}
-              style={[s.pul, aktif && s.pulAktif]}>
-              <Text style={[s.pulYazi, aktif && s.pulYaziAktif]}>{u.name}</Text>
+              style={[s.pul, aktif && s.pulAktif, kilitli && s.pulKilitli]}>
+              {kilitli && <MCI name="lock" size={12} color={renk.cokSoluk} />}
+              <Text style={[s.pulYazi, aktif && s.pulYaziAktif, kilitli && s.pulYaziKilitli]}>
+                {u.name}
+              </Text>
             </Pressable>
           );
         })}
       </ScrollView>
 
+      {bildirim && (
+        <View style={s.bildirim}>
+          <MCI name="check-circle-outline" size={16} color={renk.artı} />
+          <Text style={s.bildirimYazi}>{bildirim}</Text>
+        </View>
+      )}
+
       {hata && (
         <Kart style={s.hataKart}>
           <Etiket ikon="wifi-off" yazi="HATA" ton={renk.eksi} />
           <Text style={s.hata}>{hata}</Text>
+        </Kart>
+      )}
+
+      {defter && tesisler.length > 0 && kilitliMi(urunler, secili, seviye) && (
+        <View style={s.kilitKart}>
+          <MCI name="lock-outline" size={16} color={renk.uyari} />
+          <Text style={s.kilitYazi}>
+            Bu ürünün ticareti için seviye {gerekenSeviye(urunler, secili)} gerekli.
+            Defteri izleyebilirsin ama emir veremezsin.
+          </Text>
+        </View>
+      )}
+
+      {defter && tesisler.length > 0 && !kilitliMi(urunler, secili, seviye) && (
+        <View style={s.eylemSatir}>
+          <Pressable style={[s.eylem, s.alisEylem]} onPress={() => setEmirTarafi('BUY')}>
+            <MCI name="cart-arrow-down" size={17} color={renk.mavi} />
+            <Text style={[s.eylemYazi, { color: renk.mavi }]}>Al</Text>
+          </Pressable>
+          <Pressable style={[s.eylem, s.satisEylem]} onPress={() => setEmirTarafi('SELL')}>
+            <MCI name="cart-arrow-up" size={17} color={renk.altin} />
+            <Text style={[s.eylemYazi, { color: renk.altin }]}>Sat</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {emirler.length > 0 && (
+        <Kart>
+          <Etiket ikon="clipboard-list-outline" yazi="AÇIK EMİRLERİM" ton={renk.artı} />
+          {emirler.map((e) => (
+            <View key={e.id} style={s.emirSatir}>
+              <View style={[s.yonPul, e.side === 'BUY' ? s.alisPul : s.satisPul]}>
+                <Text style={[s.yonYazi, { color: e.side === 'BUY' ? renk.mavi : renk.altin }]}>
+                  {e.side === 'BUY' ? 'AL' : 'SAT'}
+                </Text>
+              </View>
+              <View style={s.emirOrta}>
+                <Text style={s.emirUrun}>{e.product.name}</Text>
+                <Text style={s.emirAlt}>
+                  {e.remainingFormatted} · {e.pricePerUnitFormatted} · {e.city.code}
+                </Text>
+              </View>
+              <Pressable onPress={() => void emirIptal(e.id)} hitSlop={10} style={s.iptal}>
+                <MCI name="close-circle-outline" size={20} color={renk.eksi} />
+              </Pressable>
+            </View>
+          ))}
         </Kart>
       )}
 
@@ -156,13 +288,53 @@ export default function Piyasa() {
           </View>
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+
+      <EmirPaneli
+        acik={emirTarafi !== null}
+        taraf={emirTarafi ?? 'BUY'}
+        urunKodu={defter?.product.code ?? ''}
+        urunAdi={defter?.product.name ?? ''}
+        birim={defter?.product.unit ?? ''}
+        tesisler={tesisler}
+        /*
+         * İpucu: ALIŞTA en ucuz TOPLAM (nakliye dahil tavan o mantıkla girilir),
+         * SATIŞTA en iyi alıcı teklifi. Taraf değişince anlam da değişir.
+         */
+        ipucuFiyat={emirTarafi === 'BUY'
+          ? kurusaVirgul(defter?.sell[0]?.totalPerUnit)
+          : kurusaVirgul(defter?.buy[0]?.maxTotalPerUnit)}
+        kapat={() => setEmirTarafi(null)}
+        gonder={emirGonder}
+      />
+    </>
   );
+}
+
+/** Seçili ürün oyuncunun seviyesine kilitli mi? */
+function kilitliMi(urunler: Urun[], kod: string | null, seviye: number): boolean {
+  const u = urunler.find((x) => x.code === kod);
+  return (u?.unlockLevel ?? 1) > seviye;
+}
+
+function gerekenSeviye(urunler: Urun[], kod: string | null): number {
+  return urunler.find((x) => x.code === kod)?.unlockLevel ?? 1;
 }
 
 /** "23,22 ₺" → "23,22" — sütun başlığı birimi zaten söylüyor, tekrar etmesin. */
 function kisalt(bicimli: string): string {
   return bicimli.replace(' ₺', '');
+}
+
+/**
+ * Kuruşu forma girilebilir metne çevirir: 187500 → "18,75".
+ * ★ VİRGÜL, nokta değil: alan Türkçe ondalık bekliyor ve `toFixed` nokta
+ * üretiyor. Ön-dolgu noktayla gelince oyuncu silip virgülle yazmak zorunda
+ * kalıyordu — ya da noktayı bırakıp tuhaf bir sayı gönderiyordu.
+ */
+function kurusaVirgul(kurus: string | undefined): string | null {
+  if (kurus === undefined) return null;
+  return (Number(kurus) / 10_000).toFixed(2).replace('.', ',');
 }
 
 const s = StyleSheet.create({
@@ -172,12 +344,55 @@ const s = StyleSheet.create({
   serit: { marginHorizontal: -bosluk.l },
   seritIcerik: { paddingHorizontal: bosluk.l, gap: bosluk.s },
   pul: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: bosluk.l, paddingVertical: 9, borderRadius: yuvarlak.tam,
     backgroundColor: renk.kart, borderWidth: 1, borderColor: renk.kenar,
   },
+  pulKilitli: { opacity: 0.55 },
+  pulYaziKilitli: { color: renk.cokSoluk },
+
+  kilitKart: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
+    backgroundColor: 'rgba(255,180,84,0.10)', borderWidth: 1,
+    borderColor: 'rgba(255,180,84,0.35)', borderRadius: yuvarlak.m,
+    paddingHorizontal: bosluk.m, paddingVertical: bosluk.m,
+  },
+  kilitYazi: { color: renk.uyari, fontSize: 13, lineHeight: 19, flex: 1, fontFamily: yaziTipi.govde },
   pulAktif: { backgroundColor: 'rgba(255,194,75,0.16)', borderColor: renk.altin },
   pulYazi: { color: renk.soluk, fontSize: 13, fontFamily: yaziTipi.govdeOrta },
   pulYaziAktif: { color: renk.altin, fontFamily: yaziTipi.baslikOrta },
+
+  bildirim: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(61,220,151,0.12)', borderWidth: 1,
+    borderColor: 'rgba(61,220,151,0.35)', borderRadius: yuvarlak.m,
+    paddingHorizontal: bosluk.m, paddingVertical: 10,
+  },
+  bildirimYazi: { color: renk.artı, fontSize: 13, fontFamily: yaziTipi.govdeOrta },
+
+  emirSatir: {
+    flexDirection: 'row', alignItems: 'center', gap: bosluk.m,
+    paddingVertical: 9, borderTopWidth: 1, borderTopColor: renk.kenar,
+  },
+  yonPul: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: yuvarlak.s, borderWidth: 1,
+  },
+  alisPul: { backgroundColor: 'rgba(78,161,255,0.12)', borderColor: 'rgba(78,161,255,0.4)' },
+  satisPul: { backgroundColor: 'rgba(255,194,75,0.12)', borderColor: 'rgba(255,194,75,0.4)' },
+  yonYazi: { fontSize: 10, letterSpacing: 0.8, fontFamily: yaziTipi.etiket },
+  emirOrta: { flex: 1 },
+  emirUrun: { color: renk.metin, fontSize: 14, fontFamily: yaziTipi.govdeOrta },
+  emirAlt: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
+  iptal: { padding: 2 },
+
+  eylemSatir: { flexDirection: 'row', gap: bosluk.m },
+  eylem: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: bosluk.m, borderRadius: yuvarlak.m, borderWidth: 1,
+  },
+  alisEylem: { backgroundColor: 'rgba(78,161,255,0.10)', borderColor: 'rgba(78,161,255,0.4)' },
+  satisEylem: { backgroundColor: 'rgba(255,194,75,0.10)', borderColor: 'rgba(255,194,75,0.4)' },
+  eylemYazi: { fontSize: 15, fontFamily: yaziTipi.baslikOrta },
 
   hataKart: { borderColor: renk.eksi },
   hata: { color: renk.eksi, fontSize: 14, fontFamily: yaziTipi.govde },

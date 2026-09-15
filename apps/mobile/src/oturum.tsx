@@ -47,18 +47,24 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
       return await request<T>(path, { ...options, token: jeton.access });
     } catch (e) {
       /*
-       * ★ API süresi dolmuş jeton için 403 döner, 401 DEĞİL.
+       * ★★ JETON SORUNU DURUMA DEĞİL, KODA BAKILARAK ANLAŞILIR.
        *
-       * `jwt.guard.ts` → `DomainError('FORBIDDEN', 'Oturum geçersiz veya
-       * süresi dolmuş')` → 403. Yalnız 401 yakalanınca yenileme hiç
-       * tetiklenmiyordu: oyuncu ana sayfada "oturum geçersiz" kartına
-       * bakıp kalıyordu, uygulama kendi kendini toparlayamıyordu.
+       * API süresi dolmuş jeton için 403 döner (401 değil): `jwt.guard.ts` →
+       * `DomainError('FORBIDDEN', 'Oturum geçersiz veya süresi dolmuş')`.
+       * Ama 403'ü OYUN KURALLARI da kullanır: `LEVEL_LOCKED` ("Buğday
+       * ticareti için seviye 5 gerekli") de 403'tür.
        *
-       * İkisi de denenir. Gerçek bir YETKİ hatasında (kimlik doğru ama izin
-       * yok) yenileme başarılı olur, tekrar denenen istek yine 403 döner ve
-       * hata olduğu gibi yukarı çıkar — oturum boşuna kapatılmaz.
+       * Önce sadece duruma bakıyordum ve seviye kilidi yüzünden jeton
+       * yenilemeye çalışıyordum; yenileme tutmayınca oyuncu NORMAL BİR OYUN
+       * KURALI yüzünden oturumdan atılıyordu. Simülatörde buğday almaya
+       * çalışınca giriş ekranına düştük.
+       *
+       * Kod `FORBIDDEN` ise kimlik sorunudur, yenilenir. `LEVEL_LOCKED`,
+       * `INSUFFICIENT_STOCK` gibi kodlar oyunun cevabıdır — olduğu gibi
+       * ekrana çıkar.
        */
-      const jetonSorunu = e instanceof ApiError && (e.status === 401 || e.status === 403);
+      const jetonSorunu = e instanceof ApiError
+        && (e.status === 401 || (e.status === 403 && e.code === 'FORBIDDEN'));
       if (!jetonSorunu) throw e;
       try {
         const taze = await yenile(jeton.refresh);

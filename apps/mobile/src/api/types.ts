@@ -158,3 +158,18 @@ export interface Lot {
   readonly expiresAtTick: string | null;
   readonly producedInTick: string | null;
 }
+
+/** Oyuncunun açık emri — `GET /market/orders`. */
+export interface AcikEmir {
+  readonly id: string;
+  readonly side: 'BUY' | 'SELL';
+  readonly status: string;
+  readonly product: { readonly code: string; readonly name: string; readonly unit: string };
+  readonly city: { readonly code: string; readonly name: string };
+  readonly quantity: string;
+  readonly remaining: string;
+  readonly remainingFormatted: string;
+  readonly pricePerUnit: string;
+  readonly pricePerUnitFormatted: string;
+  readonly expiresAtTick: string | null;
+}
