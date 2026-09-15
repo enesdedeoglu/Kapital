@@ -61,6 +61,15 @@ export async function runRetailPhase(sql: Sql, tick: EngineTick): Promise<Retail
       cycleAmplitude: 0.12, dailyRhythmAmplitude: 0.10,
     },
   );
+  /*
+   * ★ Buradaki `?? 1.15` SEED'DEKİ 1,15 İLE AYNI OLMAK ZORUNDA (R95).
+   *
+   * `configValue`in geri düşüşü ANAHTAR bazındadır, alan bazında değil:
+   * config'te `economy.retail` var ama içinde `budgetSlack` yoksa hiçbir
+   * nesne varsayılanı devreye girmez, yalnız bu `??` kalır. Değer artık
+   * tohumda açıkça yazılı (`seed/data.ts`); orayı değiştiren buraya da
+   * bakmalı, yoksa config'siz ortam sessizce başka bir dünya koşar.
+   */
   const budgetSlack = configValue<{ budgetSlack?: number }>(tick, 'economy.retail', {}).budgetSlack ?? 1.15;
   const seasonTable = configValue<Record<string, number[]> | undefined>(tick, 'economy.season', undefined);
 

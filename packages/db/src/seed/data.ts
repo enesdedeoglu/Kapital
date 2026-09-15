@@ -335,7 +335,43 @@ export const gameConfigs: { key: string; value: unknown }[] = [
   { key: 'economy.retail',   value: { redistributionRounds: 3, noiseMin: 0.97, noiseMax: 1.03, cycleAmplitude: 0.12, retailMarkup: 1.35,
                                      // ★ Günlük talep ritmi (R72): piyasa günden güne kıpırdasın.
                                      // Tur gürültüsü günde ortalaması alınıp kaybolur, bu kalır.
-                                     dailyRhythmAmplitude: 0.10 } },
+                                     dailyRhythmAmplitude: 0.10,
+                                     /*
+                                      * ★★★★ TÜKETİCİ BÜTÇE PAYI — DEĞER DEĞİŞMEDİ, YERİ DEĞİŞTİ (R95).
+                                      *
+                                      * Tüketicinin bir ürüne ayırdığı bütçe `çıpa × bu pay`dır
+                                      * (`formulas/demand.ts`). Bu sayı buraya kadar YALNIZ KODDA bir
+                                      * varsayılandı: `p3-retail.ts` içinde `?? 1.15`. Yani dünyanın
+                                      * talep hacmini belirleyen çarpan, config'in hiçbir yerinde
+                                      * görünmüyordu — kalibre edilecek bir kolun sessiz bir
+                                      * varsayılan olarak saklanmasıydı. 1,15 yazmak davranışı
+                                      * DEĞİŞTİRMEZ, yalnız kolu görünür kılar.
+                                      *
+                                      * ★★★★ VE BURASI BİR ÖLÇÜM KAYDI: 1,25 DENENDİ, KAPI DÜŞTÜ.
+                                      *
+                                      * Navlun payının fiyata sızmasını kapatmak (R93) oyuncunun
+                                      * gelirini düşürüyordu; telafiyi bu koldan vermeyi denedim,
+                                      * 1,15 → 1,25. Hacim tahmini birebir çıktı: karşılanma oranı
+                                      * %84,2 → %91,6 (beklenen %93). Yanlış olan tahmin değil,
+                                      * "hiçbir ölçütü takas etmez" iddiasıydı:
+                                      *
+                                      *   `retail_fulfilment` ölçütü "mal yok"u "pahalı"dan AYIRIR —
+                                      *   bir ürün ancak karşılanma <%85 VE bütçe engeli <%15 ise
+                                      *   kıtlık sayılır (`metrics.ts`). Bütçe payını büyütmek
+                                      *   `budget_limited_units`i düşürür, yani AÇIKLAMAYI kaldırır:
+                                      *   aynı eksik mal, "pahalıydı"dan "yoktu"ya geçer. Üstüne
+                                      *   talep de büyüdüğü için raf gerçekten boşalır.
+                                      *
+                                      * Ölçülen: 5 tohumun 3'ünde bir perakende ürünü kıtlığa düştü
+                                      * (kapı koşumu 34989846528, `mal bulunamayan 1/4`, 2/5 tuttu).
+                                      * Bu bir ölçüt oyunu değil, dünyaya dair bir bulgu: bütçe
+                                      * engeli, üretim zincirinin fiziksel sınırını maskeliyordu.
+                                      *
+                                      * Telafi gerekirse önce burası denenecek — ama 1,25 değil, ve
+                                      * ancak oyuncu geliri ölçütleri GERÇEKTEN sarktığında: bu
+                                      * koşumda navlun düzeltmesi yalnız başına ölçülüyor.
+                                      */
+                                     budgetSlack: 1.15 } },
   { key: 'economy.pricing',  value: { emaAlpha: 0.25, trimLowPct: 0.10, trimHighPct: 0.90, shockClampPct: 0.15, referenceWindowTicks: 96 } },
   // Kıtlık tayını (F8): arz talebi karşılamıyorsa alıcı başına tur tavanı
   // konur. `minLot` payın anlamsız küçüklüğe inmesini engeller — 50 alıcıya
