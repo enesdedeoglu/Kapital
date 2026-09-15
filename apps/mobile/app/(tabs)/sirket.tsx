@@ -7,13 +7,14 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
-import type { Lot, RafTeklifi, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru } from '~/api/types';
+import type { Lot, RafTeklifi, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Urun } from '~/api/types';
 import { Etiket, Kart, tesisIkonu } from '~/ui/parcalar';
 import { LotPaneli } from '~/ui/LotPaneli';
 import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 import { TesisPaneli, type KurmaGirdisi } from '~/ui/TesisPaneli';
 import { YukseltmePaneli } from '~/ui/YukseltmePaneli';
+import { OtomatikPaneli, type KuralGirdisi } from '~/ui/OtomatikPaneli';
 
 export default function Sirketim() {
   const { iste } = useOturum();
@@ -49,6 +50,15 @@ export default function Sirketim() {
    * çekiliyor; bu yüzden şirket künyesi tesislerle BİRLİKTE alınır.
    */
   const [yukseltilecek, setYukseltilecek] = useState<Tesis | null>(null);
+
+  /*
+   * Otomatik sipariş paneli. Kurallar ve ürün listesi TEMBEL çekilir —
+   * panel açılmadan ihtiyaç yok; sekme açılışını yavaşlatmasın.
+   */
+  const [otomatikTesis, setOtomatikTesis] = useState<Tesis | null>(null);
+  const [kurallar, setKurallar] = useState<OtomatikKural[]>([]);
+  const [urunler, setUrunler] = useState<Urun[]>([]);
+  const [otomatikYukleniyor, setOtomatikYukleniyor] = useState(false);
 
   const yukle = useCallback(async () => {
     try {
@@ -123,6 +133,48 @@ export default function Sirketim() {
       return e instanceof ApiError ? e.message : 'Yükseltme yapılamadı';
     }
   }, [iste, yukle]);
+
+  const kurallariYukle = useCallback(async () => {
+    setKurallar(await iste<OtomatikKural[]>('/standing-orders'));
+  }, [iste]);
+
+  const otomatigiAc = useCallback(async (t: Tesis) => {
+    setOtomatikTesis(t);
+    setOtomatikYukleniyor(true);
+    try {
+      const [u] = await Promise.all([
+        iste<Urun[]>('/products'),
+        kurallariYukle(),
+      ]);
+      setUrunler(u);
+    } catch (e) {
+      setHata(e instanceof ApiError ? e.message : 'Kurallar alınamadı');
+      setOtomatikTesis(null);
+    } finally {
+      setOtomatikYukleniyor(false);
+    }
+  }, [iste, kurallariYukle]);
+
+  const kuralKaydet = useCallback(async (g: KuralGirdisi): Promise<string | null> => {
+    try {
+      await iste('/standing-orders', { method: 'PUT', body: g });
+      setBildirim('Otomatik sipariş kuralı kaydedildi.');
+      await kurallariYukle();
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Kural kaydedilemedi';
+    }
+  }, [iste, kurallariYukle]);
+
+  const kuralSil = useCallback(async (id: string): Promise<string | null> => {
+    try {
+      await iste(`/standing-orders/${id}`, { method: 'DELETE' });
+      await kurallariYukle();
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Kural silinemedi';
+    }
+  }, [iste, kurallariYukle]);
 
   const lotlariAc = useCallback(async (tesisId: string, urunId: number, ad: string, birim: string) => {
     setLotBaslik({ ad, birim });
@@ -279,6 +331,20 @@ export default function Sirketim() {
                 </Pressable>
               )}
 
+              {/*
+                ★ Otomatik sipariş HER tesiste anlamlı (rafın aksine): fabrika
+                da girdisini otomatik alabilir, fazlasını otomatik satabilir.
+                İnşaattayken gizli — henüz üretmeyen tesise kural kurmak
+                oyuncuyu şaşırtır.
+              */}
+              {acikMi && !t.isUnderConstruction && (
+                <Pressable style={s.otomatikDugme} onPress={() => void otomatigiAc(t)}>
+                  <MCI name="autorenew" size={16} color={renk.artı} />
+                  <Text style={s.otomatikYazi}>Otomatik sipariş</Text>
+                  <MCI name="chevron-right" size={18} color={renk.artı} />
+                </Pressable>
+              )}
+
               {acikMi && stok && (
                 stok.products.length === 0
                   ? <Text style={s.bosStok}>Depo boş.</Text>
@@ -333,6 +399,17 @@ export default function Sirketim() {
           </Pressable>
         )}
       </ScrollView>
+
+      <OtomatikPaneli
+        tesis={otomatikTesis}
+        kurallar={kurallar}
+        urunler={urunler}
+        seviye={sirket?.level ?? 1}
+        yukleniyor={otomatikYukleniyor}
+        kapat={() => setOtomatikTesis(null)}
+        kaydet={kuralKaydet}
+        sil={kuralSil}
+      />
 
       <YukseltmePaneli
         tesis={yukseltilecek}
@@ -407,6 +484,14 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,194,75,0.35)',
   },
   rafDugmeYazi: { color: renk.altin, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
+
+  otomatikDugme: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingVertical: 10, paddingHorizontal: bosluk.m, marginTop: bosluk.s,
+    borderRadius: yuvarlak.m, borderWidth: 1, borderColor: 'rgba(61,220,151,0.4)',
+    backgroundColor: 'rgba(61,220,151,0.08)',
+  },
+  otomatikYazi: { color: renk.artı, fontSize: 14, fontFamily: yaziTipi.govdeOrta, flex: 1 },
 
   yukseltDugme: {
     flexDirection: 'row', alignItems: 'center', gap: 7,

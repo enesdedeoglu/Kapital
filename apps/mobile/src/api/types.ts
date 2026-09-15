@@ -323,3 +323,19 @@ export interface Rapor {
     readonly urunAdi: string | null; readonly sehirAdi: string | null;
   }[];
 }
+
+/** Kalıcı emir — "ben yokken şirketim şunu yapsın" (`GET /standing-orders`). */
+export interface OtomatikKural {
+  readonly id: string;
+  readonly facilityId: string;
+  readonly product: { readonly code: string; readonly name: string };
+  /** RESTOCK: hedefin altına düşünce al · SELL_SURPLUS: hedefin üstünü sat. */
+  readonly kind: 'RESTOCK' | 'SELL_SURPLUS';
+  readonly targetQuantity: string;
+  readonly maxPricePerUnit: string | null;
+  readonly minPricePerUnit: string | null;
+  readonly enabled: boolean;
+  readonly lastRunTick: string | null;
+  /** Kuralın ne yapacağını anlatan düz cümle — sunucu kurar, ekran gösterir. */
+  readonly explanation: string;
+}
