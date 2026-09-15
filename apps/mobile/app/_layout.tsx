@@ -1,10 +1,20 @@
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import {
+  ChakraPetch_600SemiBold, ChakraPetch_700Bold,
+} from '@expo-google-fonts/chakra-petch';
+import { Sora_400Regular, Sora_500Medium, Sora_600SemiBold } from '@expo-google-fonts/sora';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { OturumSaglayici, useOturum } from '~/oturum';
 import { gradyan, renk } from '~/ui/tema';
+
+// Yazı tipleri yüklenene kadar açılış ekranı durur: biçimsiz yazı yanıp
+// sönmesin (FOUT). Yükleme bitince elle kapatılır.
+void SplashScreen.preventAutoHideAsync();
 
 function Kapi() {
   const { hazir, girisli } = useOturum();
@@ -50,10 +60,21 @@ const saydamTema = {
 };
 
 export default function KokDuzen() {
+  const [fontHazir] = useFonts({
+    ChakraPetch_600SemiBold, ChakraPetch_700Bold,
+    Sora_400Regular, Sora_500Medium, Sora_600SemiBold,
+  });
+
+  const cizildi = useCallback(() => {
+    if (fontHazir) void SplashScreen.hideAsync();
+  }, [fontHazir]);
+
+  if (!fontHazir) return null;
+
   return (
     // Zemin gradyanı KÖKTE: her ekran üstüne saydam biner, düz yüzey hissi kalkar.
     <LinearGradient colors={gradyan.zemin} style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }} onLayout={cizildi}>
         <ThemeProvider value={saydamTema}>
           <OturumSaglayici>
             <StatusBar style="light" />

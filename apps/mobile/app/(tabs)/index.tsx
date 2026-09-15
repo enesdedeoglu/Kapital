@@ -8,7 +8,7 @@ import { useOturum } from '~/oturum';
 import type { Sirket } from '~/api/types';
 import { ApiError } from '~/api/client';
 import { Etiket, Kart, Kasa, Kutu, SeviyeRozeti } from '~/ui/parcalar';
-import { bosluk, kisaPara, paraBicimle, renk, yuvarlak } from '~/ui/tema';
+import { bosluk, kisaPara, paraBicimle, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 export default function AnaSayfa() {
   const { iste } = useOturum();
@@ -130,26 +130,26 @@ const s = StyleSheet.create({
   icerik: { padding: bosluk.l, paddingBottom: 110, gap: bosluk.m },
 
   hataKart: { borderColor: renk.eksi },
-  hata: { color: renk.eksi, fontSize: 14 },
+  hata: { color: renk.eksi, fontSize: 14, fontFamily: yaziTipi.govde },
 
   hosgeldin: { alignItems: 'center', gap: bosluk.xs, paddingVertical: bosluk.xl },
-  hosBaslik: { color: renk.metin, fontSize: 26, fontWeight: '800' },
-  hosAlt: { color: renk.soluk, fontSize: 14, textAlign: 'center', paddingHorizontal: bosluk.xl },
+  hosBaslik: { color: renk.metin, fontSize: 26, fontFamily: yaziTipi.baslik },
+  hosAlt: { color: renk.soluk, fontSize: 14, textAlign: 'center', paddingHorizontal: bosluk.xl, fontFamily: yaziTipi.govde, lineHeight: 21 },
 
   adim: { flexDirection: 'row', alignItems: 'center', gap: bosluk.m, paddingVertical: 5 },
   adimNo: {
     width: 24, height: 24, borderRadius: yuvarlak.tam, backgroundColor: 'rgba(255,194,75,0.16)',
     borderWidth: 1, borderColor: 'rgba(255,194,75,0.4)', alignItems: 'center', justifyContent: 'center',
   },
-  adimNoYazi: { color: renk.altin, fontSize: 12, fontWeight: '800' },
-  adimYazi: { color: renk.metin, fontSize: 15 },
+  adimNoYazi: { color: renk.altin, fontSize: 12, fontFamily: yaziTipi.rakam },
+  adimYazi: { color: renk.metin, fontSize: 15, fontFamily: yaziTipi.govdeOrta },
 
   kimlik: { gap: bosluk.m },
   kimlikAlt: { flexDirection: 'row', alignItems: 'center', gap: bosluk.xs, flexWrap: 'wrap' },
-  kimlikYazi: { color: renk.soluk, fontSize: 13, marginRight: bosluk.s },
+  kimlikYazi: { color: renk.soluk, fontSize: 13, marginRight: bosluk.s, fontFamily: yaziTipi.govde },
 
   satir: { flexDirection: 'row', gap: bosluk.m },
 
   bekleyen: { borderStyle: 'dashed', borderColor: renk.kenarIsik },
-  bekleyenYazi: { color: renk.soluk, fontSize: 13, lineHeight: 20 },
+  bekleyenYazi: { color: renk.soluk, fontSize: 13, lineHeight: 21, fontFamily: yaziTipi.govde },
 });

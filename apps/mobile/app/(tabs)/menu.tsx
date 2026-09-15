@@ -4,7 +4,7 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { apiBaseUrl } from '~/api/client';
 import { Etiket, Kart } from '~/ui/parcalar';
-import { bosluk, renk, yuvarlak } from '~/ui/tema';
+import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 export default function Menu() {
   const { cikisYap } = useOturum();
@@ -38,11 +38,11 @@ export default function Menu() {
 
 const s = StyleSheet.create({
   icerik: { padding: bosluk.l, gap: bosluk.m },
-  deger: { color: renk.metin, fontSize: 15 },
+  deger: { color: renk.metin, fontSize: 15, fontFamily: yaziTipi.govde },
   cikis: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: bosluk.s,
     borderColor: 'rgba(255,107,107,0.4)', borderWidth: 1, borderRadius: yuvarlak.m,
     backgroundColor: 'rgba(255,107,107,0.08)', padding: bosluk.l, marginTop: bosluk.s,
   },
-  cikisYazi: { color: renk.eksi, fontSize: 16, fontWeight: '700' },
+  cikisYazi: { color: renk.eksi, fontSize: 16, fontFamily: yaziTipi.baslikOrta },
 });

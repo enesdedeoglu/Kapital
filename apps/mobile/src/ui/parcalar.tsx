@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
-import { bosluk, golge, gradyan, renk, yuvarlak } from './tema';
+import { bosluk, golge, gradyan, renk, yaziTipi, yuvarlak } from './tema';
 
 type IkonAdi = ComponentProps<typeof MCI>['name'];
 
@@ -128,26 +128,26 @@ const s = StyleSheet.create({
     padding: bosluk.l, gap: bosluk.xs,
   },
   etiketSatir: { flexDirection: 'row', alignItems: 'center', gap: bosluk.xs },
-  etiket: { fontSize: 11, letterSpacing: 1.1, fontWeight: '700' },
+  etiket: { fontSize: 11, letterSpacing: 1.1, fontFamily: yaziTipi.etiket },
 
   kasa: { borderRadius: yuvarlak.xl, padding: bosluk.xl, gap: 2 },
   kasaUst: { flexDirection: 'row', alignItems: 'center', gap: bosluk.xs },
-  kasaEtiket: { color: '#6B4A00', fontSize: 11, letterSpacing: 1.4, fontWeight: '800' },
+  kasaEtiket: { color: '#6B4A00', fontSize: 11, letterSpacing: 1.4, fontFamily: yaziTipi.etiket },
   kasaTutarSatir: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  kasaTutar: { color: '#3D2A00', fontSize: 40, fontWeight: '800', letterSpacing: -1 },
-  kasaBirim: { color: '#6B4A00', fontSize: 22, fontWeight: '700', marginBottom: 5 },
-  kasaAlt: { color: '#7A5600', fontSize: 13, fontWeight: '600' },
+  kasaTutar: { color: '#3D2A00', fontSize: 40, fontFamily: yaziTipi.rakam, letterSpacing: -0.5 },
+  kasaBirim: { color: '#6B4A00', fontSize: 22, fontFamily: yaziTipi.rakam, marginBottom: 6 },
+  kasaAlt: { color: '#7A5600', fontSize: 13, fontFamily: yaziTipi.govdeOrta },
 
   kutu: { flex: 1, gap: bosluk.xs },
-  kutuDeger: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
-  kutuAlt: { color: renk.cokSoluk, fontSize: 12 },
+  kutuDeger: { fontSize: 22, fontFamily: yaziTipi.rakam, letterSpacing: -0.3 },
+  kutuAlt: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
 
   rozetSatir: { flexDirection: 'row', alignItems: 'center', gap: bosluk.m },
   rozet: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
-  rozetSeviye: { color: renk.metin, fontSize: 22, fontWeight: '800' },
+  rozetSeviye: { color: renk.metin, fontSize: 22, fontFamily: yaziTipi.rakam },
   rozetYazi: { flex: 1 },
-  rozetUnvan: { color: renk.metin, fontSize: 17, fontWeight: '700' },
-  rozetAlt: { color: renk.soluk, fontSize: 13 },
+  rozetUnvan: { color: renk.metin, fontSize: 17, fontFamily: yaziTipi.baslik },
+  rozetAlt: { color: renk.soluk, fontSize: 13, fontFamily: yaziTipi.govde },
 
   yakindaZemin: {
     flex: 1, alignItems: 'center', paddingHorizontal: bosluk.xl,
@@ -158,9 +158,9 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(139,92,246,0.14)', borderWidth: 1, borderColor: 'rgba(139,92,246,0.35)',
     alignItems: 'center', justifyContent: 'center',
   },
-  yakindaBaslik: { color: renk.metin, fontSize: 22, fontWeight: '800', marginTop: bosluk.s },
-  yakindaAlt: { color: renk.soluk, fontSize: 13, marginBottom: bosluk.m },
+  yakindaBaslik: { color: renk.metin, fontSize: 22, fontFamily: yaziTipi.baslik, marginTop: bosluk.s },
+  yakindaAlt: { color: renk.soluk, fontSize: 13, fontFamily: yaziTipi.govde, marginBottom: bosluk.m },
   yakindaKart: { alignSelf: 'stretch', gap: bosluk.xs },
   yakindaMadde: { flexDirection: 'row', alignItems: 'flex-start', gap: 2 },
-  yakindaMetin: { color: renk.soluk, fontSize: 14, lineHeight: 21, flex: 1 },
+  yakindaMetin: { color: renk.soluk, fontSize: 14, lineHeight: 22, flex: 1, fontFamily: yaziTipi.govde },
 });

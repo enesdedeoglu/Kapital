@@ -12,6 +12,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@expo-google-fonts/chakra-petch": "^0.4.1",
+    "@expo-google-fonts/sora": "^0.4.2",
     "@expo/vector-icons": "^15.1.1",
     "@kapital/shared": "workspace:*",
     "expo": "~57.0.22",
@@ -21,6 +23,7 @@
     "expo-linking": "~57.0.10",
     "expo-router": "~57.0.21",
     "expo-secure-store": "~57.0.4",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3",

@@ -8,7 +8,7 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { girisYap, kayitOl } from '~/api/session';
 import { ApiError } from '~/api/client';
 import { useOturum } from '~/oturum';
-import { bosluk, golge, gradyan, renk, yuvarlak } from '~/ui/tema';
+import { bosluk, golge, gradyan, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 /*
  * ★ Geliştirmede kimlik ön-doldurma.
@@ -134,8 +134,8 @@ const s = StyleSheet.create({
     width: 76, height: 76, borderRadius: yuvarlak.xl,
     alignItems: 'center', justifyContent: 'center', marginBottom: bosluk.s,
   },
-  baslik: { color: renk.metin, fontSize: 36, fontWeight: '900', letterSpacing: 4 },
-  slogan: { color: renk.soluk, fontSize: 14, textAlign: 'center' },
+  baslik: { color: renk.metin, fontSize: 36, fontFamily: yaziTipi.baslik, letterSpacing: 5 },
+  slogan: { color: renk.soluk, fontSize: 14, textAlign: 'center', fontFamily: yaziTipi.govde },
 
   form: { gap: bosluk.m },
   alan: {
@@ -143,19 +143,19 @@ const s = StyleSheet.create({
     backgroundColor: renk.kart, borderColor: renk.kenar, borderWidth: 1,
     borderRadius: yuvarlak.m, paddingHorizontal: bosluk.l,
   },
-  giris: { flex: 1, paddingVertical: bosluk.l, color: renk.metin, fontSize: 16 },
+  giris: { flex: 1, paddingVertical: bosluk.l, color: renk.metin, fontSize: 16, fontFamily: yaziTipi.govde },
 
   hataSatir: { flexDirection: 'row', alignItems: 'center', gap: bosluk.xs },
-  hata: { color: renk.eksi, fontSize: 14, flex: 1 },
+  hata: { color: renk.eksi, fontSize: 14, flex: 1, fontFamily: yaziTipi.govde },
 
   dugme: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: bosluk.s,
     borderRadius: yuvarlak.m, paddingVertical: bosluk.l, marginTop: bosluk.xs,
   },
   basili: { opacity: 0.85, transform: [{ scale: 0.99 }] },
-  dugmeYazi: { color: '#3D2A00', fontSize: 16, fontWeight: '800' },
+  dugmeYazi: { color: '#3D2A00', fontSize: 16, fontFamily: yaziTipi.baslik, letterSpacing: 0.5 },
   dugmeYaziPasif: { color: renk.cokSoluk },
 
   gecisAlan: { paddingVertical: bosluk.s },
-  gecis: { color: renk.mavi, textAlign: 'center', fontSize: 14, fontWeight: '600' },
+  gecis: { color: renk.mavi, textAlign: 'center', fontSize: 14, fontFamily: yaziTipi.govdeOrta },
 });

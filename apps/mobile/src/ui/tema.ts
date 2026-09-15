@@ -47,6 +47,28 @@ export const gradyan = {
   yesil: ['#4EEBA8', '#22B573'] as const,
 } as const;
 
+/**
+ * ★ İKİ YAZI TİPİ, İKİ İŞ.
+ *
+ * Sistem fontu her uygulamada aynı görünür; bir OYUNUN kimliği olmaz.
+ *
+ *  · CHAKRA PETCH — köşeli, teknik. Başlıklar, etiketler, RAKAMLAR ve
+ *    düğmeler. HUD gibi okunur; kasadaki sayının karakteri buradan gelir.
+ *  · SORA — yumuşak geometrik sans. Paragraf ve açıklama metni. Chakra Petch
+ *    uzun metinde yorucu olur; okunurluk gövdede öncelik.
+ *
+ * İkisi de Latin Extended kapsar, yani Türkçe glifler (ğ ş ı İ ö ü ç) tam.
+ */
+export const yaziTipi = {
+  baslik: 'ChakraPetch_700Bold',
+  baslikOrta: 'ChakraPetch_600SemiBold',
+  etiket: 'ChakraPetch_600SemiBold',
+  rakam: 'ChakraPetch_700Bold',
+  govde: 'Sora_400Regular',
+  govdeOrta: 'Sora_500Medium',
+  govdeKalin: 'Sora_600SemiBold',
+} as const;
+
 export const bosluk = { xs: 4, s: 8, m: 12, l: 16, xl: 24, xxl: 32 } as const;
 export const yuvarlak = { s: 10, m: 14, l: 20, xl: 28, tam: 999 } as const;
 
