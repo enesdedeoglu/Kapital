@@ -2,10 +2,15 @@
  * Oturum bağlamı: jeton nerede duruyorsa orada kalsın, ekranlar bilmesin.
  * Erişim jetonu süresi dolarsa TEK yerde yenilenir (client.ts'e sarmalanır).
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, request, type RequestOptions } from './api/client';
 import { oturumuOku, oturumuSil, oturumuYaz, yenile } from './api/session';
+import { tekUcus } from './tekUcus';
+
+interface Jeton { readonly access: string; readonly refresh: string }
 
 interface OturumDurumu {
   readonly hazir: boolean;
@@ -20,31 +25,59 @@ const Baglam = createContext<OturumDurumu | null>(null);
 
 export function OturumSaglayici({ children }: { children: ReactNode }) {
   const [hazir, setHazir] = useState(false);
-  const [jeton, setJeton] = useState<{ access: string; refresh: string } | null>(null);
+  const [girisli, setGirisli] = useState(false);
+  /*
+   * ★★★★ JETONUN DOĞRULUK KAYNAĞI REF, STATE DEĞİL.
+   *
+   * Jetonu yalnızca state'te tutarken `iste` onu KAPANIŞTA yakalıyordu. Yenileme
+   * bittikten sonra React yeniden çizene kadar geçen aralıkta başlayan her istek
+   * hâlâ ESKİ erişim jetonunu kullanıyor, 403 alıyor ve ROTASYONLA İPTAL EDİLMİŞ
+   * yenileme jetonuyla ikinci bir yenilemeye kalkıyordu — yenileme "geçerli
+   * oturum yok" deyince oyuncu atılıyordu. Şirketim sekmesi tam bu deseni
+   * üretiyor: önce `/facilities`, sonra tesis başına `/stock`.
+   *
+   * Ref her istekte ANINDA okunur; render beklemez. State yalnızca "girişli mi"
+   * sorusunu çizime taşır.
+   */
+  const jetonRef = useRef<Jeton | null>(null);
+
+  const jetonuKur = useCallback((yeni: Jeton | null) => {
+    jetonRef.current = yeni;
+    setGirisli(yeni !== null);
+  }, []);
+
+  /**
+   * Yenileme kapısı: paralel isteklerin hepsi TEK yenilemeye biner.
+   * Neden şart olduğu ve neyi önlediği `tekUcus.ts`'te anlatılıyor.
+   */
+  // useRef ile: useMemo'yu React teoride atabilir, kapı ise atılırsa garanti çöker.
+  const yenilemeKapisi = useRef(tekUcus<Jeton>());
 
   useEffect(() => {
     void (async () => {
-      setJeton(await oturumuOku());
+      const kayitli = await oturumuOku();
+      jetonuKur(kayitli);
       setHazir(true);
     })();
-  }, []);
+  }, [jetonuKur]);
 
   const girisOldu = useCallback(async (access: string, refresh: string) => {
     await oturumuYaz({ accessToken: access, refreshToken: refresh });
-    setJeton({ access, refresh });
-  }, []);
+    jetonuKur({ access, refresh });
+  }, [jetonuKur]);
 
   const cikisYap = useCallback(async () => {
     await oturumuSil();
-    setJeton(null);
-  }, []);
+    jetonuKur(null);
+  }, [jetonuKur]);
 
   const iste = useCallback(async <T,>(
     path: string, options: Omit<RequestOptions, 'token'> = {},
   ): Promise<T> => {
-    if (!jeton) return request<T>(path, options);
+    const kullanilan = jetonRef.current;
+    if (!kullanilan) return request<T>(path, options);
     try {
-      return await request<T>(path, { ...options, token: jeton.access });
+      return await request<T>(path, { ...options, token: kullanilan.access });
     } catch (e) {
       /*
        * ★★ JETON SORUNU DURUMA DEĞİL, KODA BAKILARAK ANLAŞILIR.
@@ -66,33 +99,45 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
       const jetonSorunu = e instanceof ApiError
         && (e.status === 401 || (e.status === 403 && e.code === 'FORBIDDEN'));
       if (!jetonSorunu) throw e;
-      try {
-        const taze = await yenile(jeton.refresh);
-        setJeton({ access: taze.accessToken, refresh: taze.refreshToken });
-        return await request<T>(path, { ...options, token: taze.accessToken });
-      } catch (yenilemeHatasi) {
-        /*
-         * ★ Yenileme de başarısızsa oturum GERÇEKTEN bitmiştir.
-         *
-         * Önce bu hata olduğu gibi ekrana düşüyordu ve ana sayfada
-         * "Oturum geçersiz veya süresi dolmuş" yazan bir kart kalıyordu —
-         * oyuncu ne yapacağını bilmiyor, hiçbir düğme onu girişe götürmüyor.
-         * Yenileme jetonu bir kez kullanılınca döndüğü için (rotasyon) eski
-         * bir kopyayla açılan uygulamada bu durum normaldir.
-         *
-         * Doğru davranış: jetonu temizlemek. `_layout` girişli olmadığını
-         * görünce oyuncuyu giriş ekranına yönlendirir.
-         */
-        await oturumuSil();
-        setJeton(null);
-        throw yenilemeHatasi;
+
+      const simdiki = jetonRef.current;
+      let taze: Jeton;
+      if (simdiki && simdiki.access !== kullanilan.access) {
+        // Biz beklerken başkası yenilemiş: yenileme jetonunu boşuna harcama.
+        taze = simdiki;
+      } else {
+        try {
+          taze = await yenilemeKapisi.current(async () => {
+            const cevap = await yenile(kullanilan.refresh);
+            // `yenile` tazelenen jetonu depoya kendisi yazar (session.ts).
+            const yeni = { access: cevap.accessToken, refresh: cevap.refreshToken };
+            jetonuKur(yeni);
+            return yeni;
+          });
+        } catch (yenilemeHatasi) {
+          /*
+           * ★ Yenileme de başarısızsa oturum GERÇEKTEN bitmiştir.
+           *
+           * Önce bu hata olduğu gibi ekrana düşüyordu ve ana sayfada
+           * "Oturum geçersiz veya süresi dolmuş" yazan bir kart kalıyordu —
+           * oyuncu ne yapacağını bilmiyor, hiçbir düğme onu girişe götürmüyor.
+           * Doğru davranış: jetonu temizlemek. `_layout` girişli olmadığını
+           * görünce oyuncuyu giriş ekranına yönlendirir.
+           *
+           * Dikkat: bu yakalama YALNIZCA yenilemeyi sarar. İsteğin kendi ağ
+           * hatası buraya düşerse oyuncuyu bağlantı koptu diye atmış oluruz.
+           */
+          await cikisYap();
+          throw yenilemeHatasi;
+        }
       }
+      return await request<T>(path, { ...options, token: taze.access });
     }
-  }, [jeton]);
+  }, [jetonuKur, cikisYap]);
 
   const deger = useMemo<OturumDurumu>(
-    () => ({ hazir, girisli: jeton !== null, iste, girisOldu, cikisYap }),
-    [hazir, jeton, iste, girisOldu, cikisYap],
+    () => ({ hazir, girisli, iste, girisOldu, cikisYap }),
+    [hazir, girisli, iste, girisOldu, cikisYap],
   );
   return <Baglam.Provider value={deger}>{children}</Baglam.Provider>;
 }
