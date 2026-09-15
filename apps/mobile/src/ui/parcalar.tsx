@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
-import { bosluk, golge, gradyan, renk, yaziTipi, yuvarlak } from './tema';
+import { bosluk, golge, gradyan, kisaPara, renk, yaziTipi, yuvarlak } from './tema';
 
 type IkonAdi = ComponentProps<typeof MCI>['name'];
 
@@ -94,6 +94,109 @@ export function SeviyeRozeti({ seviye, unvan, oran }:
   );
 }
 
+/** Kâr/zarar rozeti: işaret ve renk anlamı taşır, sayı tek başına değil. */
+export function KarRozeti({ net, oran }: { net: string; oran: number | null }) {
+  const v = BigInt(net);
+  const artı = v > 0n;
+  const notr = v === 0n;
+  const ton = notr ? renk.soluk : artı ? renk.artı : renk.eksi;
+  return (
+    <Kart style={s.kutu}>
+      <Etiket ikon="chart-timeline-variant" yazi="SON 24 SAAT" />
+      <View style={s.karSatir}>
+        <MCI
+          name={notr ? 'minus' : artı ? 'trending-up' : 'trending-down'}
+          size={20} color={ton}
+        />
+        <Text style={[s.kutuDeger, { color: ton }]} numberOfLines={1} adjustsFontSizeToFit>
+          {notr ? '0' : `${artı ? '+' : ''}${kisaPara(v)}`}
+        </Text>
+      </View>
+      <Text style={s.kutuAlt}>
+        {oran === null ? '₺ kâr / zarar' : `₺ · ${(oran * 100).toFixed(1)}%`}
+      </Text>
+    </Kart>
+  );
+}
+
+/** Rafı bitmek üzere olan ürünler — "kaç tur dayanır" ölçütüyle. */
+export function KritikStok({ satirlar }: {
+  satirlar: readonly {
+    facilityId: string; facilityName: string; productCode: string;
+    productName: string; kalan: number; kalanTur: number;
+  }[];
+}) {
+  if (satirlar.length === 0) return null;
+  return (
+    <Kart>
+      <Etiket ikon="alert-outline" yazi="RAF BİTİYOR" ton={renk.uyari} />
+      {satirlar.map((r) => (
+        <View key={`${r.facilityId}:${r.productCode}`} style={s.stokSatir}>
+          <View style={s.stokSol}>
+            <Text style={s.stokUrun}>{r.productName}</Text>
+            <Text style={s.stokTesis} numberOfLines={1}>{r.facilityName}</Text>
+          </View>
+          <View style={s.stokSag}>
+            <Text style={[s.stokTur, r.kalanTur <= 4 && { color: renk.eksi }]}>
+              {r.kalanTur === 0 ? 'bitti' : `${r.kalanTur} tur`}
+            </Text>
+            <Text style={s.stokKalan}>{r.kalan.toFixed(0)} adet</Text>
+          </View>
+        </View>
+      ))}
+    </Kart>
+  );
+}
+
+/** Etkin dünya olayları — oyuncu piyasayı neyin bastırdığını görsün. */
+export function Olaylar({ satirlar }: {
+  satirlar: readonly {
+    kod: string; ad: string; aciklama: string; urunKodu: string | null;
+    kalanTur: number; talep: number; arz: number; maliyet: number;
+  }[];
+}) {
+  if (satirlar.length === 0) return null;
+  return (
+    <Kart>
+      <Etiket ikon="flash-outline" yazi="PİYASADA NE OLUYOR" ton={renk.mavi} />
+      {satirlar.map((o, i) => (
+        <View key={`${o.kod}:${o.urunKodu ?? i}`} style={s.olaySatir}>
+          <View style={s.olayUst}>
+            <Text style={s.olayAd}>{o.ad}</Text>
+            {o.urunKodu && <Text style={s.olayUrun}>{o.urunKodu}</Text>}
+            <View style={s.bosluk} />
+            <Text style={s.olayTur}>{o.kalanTur} tur</Text>
+          </View>
+          <Text style={s.olayAciklama}>{o.aciklama}</Text>
+          <View style={s.carpanSatir}>
+            <Carpan ad="talep" v={o.talep} />
+            <Carpan ad="arz" v={o.arz} />
+            <Carpan ad="maliyet" v={o.maliyet} tersRenk />
+          </View>
+        </View>
+      ))}
+    </Kart>
+  );
+}
+
+/**
+ * Çarpan etiketi. 1,00 gösterilmez: değişmeyen şey haber değildir.
+ * `tersRenk` maliyet içindir — maliyetin artması oyuncu için KÖTÜdür.
+ */
+function Carpan({ ad, v, tersRenk = false }: { ad: string; v: number; tersRenk?: boolean }) {
+  if (Math.abs(v - 1) < 0.005) return null;
+  const artı = v > 1;
+  const iyi = tersRenk ? !artı : artı;
+  return (
+    <View style={s.carpan}>
+      <Text style={s.carpanAd}>{ad}</Text>
+      <Text style={[s.carpanDeger, { color: iyi ? renk.artı : renk.eksi }]}>
+        ×{v.toFixed(2).replace('.', ',')}
+      </Text>
+    </View>
+  );
+}
+
 /** Yazılmamış sekmeler: boş ekran yerine ne geleceğini gösteren liste. */
 export function Yakinda({ ikon, baslik, maddeler }:
 { ikon: IkonAdi; baslik: string; maddeler: string[] }) {
@@ -141,6 +244,35 @@ const s = StyleSheet.create({
   kutu: { flex: 1, gap: bosluk.xs },
   kutuDeger: { fontSize: 22, fontFamily: yaziTipi.rakam, letterSpacing: -0.3 },
   kutuAlt: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
+
+  karSatir: { flexDirection: 'row', alignItems: 'center', gap: bosluk.xs },
+
+  stokSatir: {
+    flexDirection: 'row', alignItems: 'center', gap: bosluk.m,
+    paddingVertical: 7, borderTopWidth: 1, borderTopColor: renk.kenar,
+  },
+  stokSol: { flex: 1 },
+  stokUrun: { color: renk.metin, fontSize: 15, fontFamily: yaziTipi.govdeOrta },
+  stokTesis: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
+  stokSag: { alignItems: 'flex-end' },
+  stokTur: { color: renk.uyari, fontSize: 15, fontFamily: yaziTipi.rakam },
+  stokKalan: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
+
+  olaySatir: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: renk.kenar, gap: 3 },
+  olayUst: { flexDirection: 'row', alignItems: 'center', gap: bosluk.s },
+  olayAd: { color: renk.metin, fontSize: 15, fontFamily: yaziTipi.baslikOrta },
+  olayUrun: {
+    color: renk.mavi, fontSize: 10, fontFamily: yaziTipi.etiket, letterSpacing: 0.6,
+    backgroundColor: 'rgba(78,161,255,0.14)', paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: yuvarlak.s, overflow: 'hidden',
+  },
+  bosluk: { flex: 1 },
+  olayTur: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.rakam },
+  olayAciklama: { color: renk.soluk, fontSize: 13, lineHeight: 19, fontFamily: yaziTipi.govde },
+  carpanSatir: { flexDirection: 'row', gap: bosluk.l, marginTop: 2 },
+  carpan: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  carpanAd: { color: renk.cokSoluk, fontSize: 11, fontFamily: yaziTipi.govde },
+  carpanDeger: { fontSize: 13, fontFamily: yaziTipi.rakam },
 
   rozetSatir: { flexDirection: 'row', alignItems: 'center', gap: bosluk.m },
   rozet: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },

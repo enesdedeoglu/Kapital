@@ -5,15 +5,19 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
-import type { Sirket } from '~/api/types';
+import type { Ozet, Sirket } from '~/api/types';
 import { ApiError } from '~/api/client';
-import { Etiket, Kart, Kasa, Kutu, SeviyeRozeti } from '~/ui/parcalar';
+import { GeriSayim } from '~/ui/GeriSayim';
+import {
+  Etiket, KarRozeti, Kart, Kasa, KritikStok, Kutu, Olaylar, SeviyeRozeti,
+} from '~/ui/parcalar';
 import { bosluk, kisaPara, paraBicimle, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 export default function AnaSayfa() {
   const { iste } = useOturum();
   const kenar = useSafeAreaInsets();
   const [sirket, setSirket] = useState<Sirket | null>(null);
+  const [ozet, setOzet] = useState<Ozet | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [yenileniyor, setYenileniyor] = useState(false);
   /*
@@ -26,9 +30,19 @@ export default function AnaSayfa() {
   const yukle = useCallback(async () => {
     try {
       setHata(null);
-      setSirket(await iste<Sirket>('/company'));
+      /*
+       * İkisi PARALEL: şirket künyesi ile özet birbirini beklemez. Sıralı
+       * olsaydı ekran iki gidiş-dönüş kadar geç dolardı.
+       */
+      const [s, o] = await Promise.all([
+        iste<Sirket>('/company'),
+        iste<Ozet>('/dashboard'),
+      ]);
+      setSirket(s);
+      setOzet(o);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 404) setSirket(null);
+      // Şirketi olmayan oyuncu: 404 hata değil, DURUM. İkisi de 404 döner.
+      if (e instanceof ApiError && e.status === 404) { setSirket(null); setOzet(null); }
       else setHata(e instanceof ApiError ? e.message : 'Sunucuya ulaşılamadı');
     } finally {
       setYuklendi(true);
@@ -96,13 +110,19 @@ export default function AnaSayfa() {
             </View>
           </Kart>
 
+          <GeriSayim hedef={ozet?.tur.sonraki ?? null} />
+
           <Kasa tutar={paraBicimle(sirket.cash)} altYazi="kullanılabilir nakit" />
 
           <View style={s.satir}>
-            <Kutu
-              ikon="chart-areaspline" etiket="ŞİRKET DEĞERİ"
-              deger={kisaPara(sirket.companyValue)} alt="₺ toplam varlık"
-            />
+            {ozet
+              ? <KarRozeti net={ozet.kar.net} oran={ozet.kar.oran} />
+              : (
+                <Kutu
+                  ikon="chart-areaspline" etiket="ŞİRKET DEĞERİ"
+                  deger={kisaPara(sirket.companyValue)} alt="₺ toplam varlık"
+                />
+              )}
             <Kutu
               ikon="star-four-points" etiket="İTİBAR"
               deger={Number(sirket.reputation).toFixed(0)} alt="0 – 100"
@@ -110,15 +130,22 @@ export default function AnaSayfa() {
             />
           </View>
 
-          {/* Tur geri sayımı · 24s K/Z · kritik stok · son olaylar — tek bir
-              özet ucuyla gelecek (F9 planının 4. adımı). */}
-          <Kart style={s.bekleyen}>
-            <Etiket ikon="timer-sand" yazi="SIRADAKİ TUR" ton={renk.turuncu} />
-            <Text style={s.bekleyenYazi}>
-              Geri sayım, 24 saatlik kâr/zarar, kritik stok uyarıları ve son olaylar
-              buraya gelecek.
-            </Text>
-          </Kart>
+          {ozet && (
+            <View style={s.satir}>
+              <Kutu
+                ikon="chart-areaspline" etiket="ŞİRKET DEĞERİ"
+                deger={kisaPara(sirket.companyValue)} alt="₺ toplam varlık"
+              />
+              <Kutu
+                ikon="cash-plus" etiket="24S CİRO"
+                deger={kisaPara(ozet.kar.ciro)} alt="₺ gelen"
+                ton={renk.altin}
+              />
+            </View>
+          )}
+
+          {ozet && <KritikStok satirlar={ozet.kritikStok} />}
+          {ozet && <Olaylar satirlar={ozet.olaylar} />}
         </>
       )}
     </ScrollView>

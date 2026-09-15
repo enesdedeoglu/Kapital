@@ -28,3 +28,40 @@ export interface OturumYaniti {
   readonly refreshToken: string;
   readonly expiresIn?: number;
 }
+
+/** Ana sayfa özeti — `GET /dashboard`. Beş şey tek yanıtta (bkz. dashboard.service). */
+export interface Ozet {
+  readonly tur: {
+    readonly seq: string;
+    /** Sıradaki turun ISO zamanı; bekleyen tur yoksa null. */
+    readonly sonraki: string | null;
+    readonly dakika: number;
+  };
+  readonly kar: {
+    readonly net: string;
+    readonly ciro: string;
+    readonly gider: string;
+    /** Dönem başı nakde oran; karşılaştırılacak bakiye yoksa null. */
+    readonly oran: number | null;
+  };
+  readonly kritikStok: readonly {
+    readonly facilityId: string;
+    readonly facilityName: string;
+    readonly productCode: string;
+    readonly productName: string;
+    readonly kalan: number;
+    readonly turBasiSatis: number;
+    readonly kalanTur: number;
+  }[];
+  readonly olaylar: readonly {
+    readonly kod: string;
+    readonly ad: string;
+    readonly aciklama: string;
+    readonly kapsam: string;
+    readonly urunKodu: string | null;
+    readonly kalanTur: number;
+    readonly talep: number;
+    readonly arz: number;
+    readonly maliyet: number;
+  }[];
+}

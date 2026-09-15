@@ -1,7 +1,8 @@
 import { Tabs } from 'expo-router';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { ColorValue } from 'react-native';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { renk, yaziTipi } from '~/ui/tema';
 
 /**
@@ -18,6 +19,18 @@ export default function SekmeDuzeni() {
     <Tabs
       screenOptions={{
         headerTransparent: true,
+        /*
+         * ★ Şeffaf başlık İÇERİĞİ GEÇİRİR. Zemin gradyanı üstten kesilmesin
+         * diye şeffaf bırakıldı, ama kaydırılan kartlar başlığın altından
+         * görünüp "Ana Sayfa" yazısıyla çakışıyordu. Zemin rengiyle başlayıp
+         * saydama giden bir perde, gradyanı bozmadan okunurluğu kurtarır.
+         */
+        headerBackground: () => (
+          <LinearGradient
+            colors={[renk.zeminUst, 'rgba(20,26,46,0.92)', 'rgba(20,26,46,0)']}
+            style={StyleSheet.absoluteFill}
+          />
+        ),
         headerTitleStyle: { color: renk.metin, fontFamily: yaziTipi.baslik, fontSize: 17, letterSpacing: 0.5 },
         headerTitleAlign: 'center',
         sceneStyle: { backgroundColor: 'transparent' },

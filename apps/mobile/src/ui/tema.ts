@@ -36,6 +36,7 @@ export const renk = {
   mor: '#8B5CF6',
   mavi: '#4EA1FF',
   turuncu: '#FF9F45',
+  uyari: '#FFB454',
 } as const;
 
 /** Gradyanlar — `expo-linear-gradient` colors dizisi olarak kullanılır. */
