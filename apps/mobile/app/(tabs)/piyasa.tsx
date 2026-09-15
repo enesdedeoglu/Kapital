@@ -5,6 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
+import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
 import type { AcikEmir, Defter, Sirket, Tesis, Urun } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
@@ -78,6 +79,16 @@ export default function Piyasa() {
   }, [iste]);
 
   useEffect(() => { if (secili) void defteriYukle(secili); }, [secili, defteriYukle]);
+
+  /*
+   * Tur düşünce defter DE açık emirler DE tazelenir: turda eşleşme olur,
+   * oyuncunun emri dolmuş olabilir. Yalnız defteri tazelemek "emrim hâlâ
+   * duruyor" yanılgısı bırakırdı.
+   */
+  useTurDegisince(() => {
+    void emirleriYukle();
+    if (secili) void defteriYukle(secili);
+  });
   const emirIptal = useCallback(async (id: string) => {
     try {
       await iste(`/market/orders/${id}`, { method: 'DELETE' });

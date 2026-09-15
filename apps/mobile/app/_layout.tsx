@@ -10,6 +10,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { OturumSaglayici, useOturum } from '~/oturum';
+import { TurSaglayici } from '~/tur';
 import { gradyan, renk } from '~/ui/tema';
 
 // Yazı tipleri yüklenene kadar açılış ekranı durur: biçimsiz yazı yanıp
@@ -77,8 +78,11 @@ export default function KokDuzen() {
       <View style={{ flex: 1 }} onLayout={cizildi}>
         <ThemeProvider value={saydamTema}>
           <OturumSaglayici>
-            <StatusBar style="light" />
-            <Kapi />
+            {/* Tur bağlamı oturumun İÇİNDE: çıkış yapılınca yoklama da dursun. */}
+            <TurSaglayici>
+              <StatusBar style="light" />
+              <Kapi />
+            </TurSaglayici>
           </OturumSaglayici>
         </ThemeProvider>
       </View>

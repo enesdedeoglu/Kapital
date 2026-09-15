@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { currentTickSeq, type Sql } from '@kapital/db';
+import { currentTickSeq, nextTickAt, type Sql } from '@kapital/db';
 import { NotFound, TICKS_PER_DAY, TICK_MINUTES } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 
@@ -89,12 +89,11 @@ export class DashboardService {
    * doğrudan anlatır.
    */
   private async turBilgisi(seq: bigint): Promise<OzetView['tur']> {
-    const [sonraki] = await this.sql<{ scheduled_at: Date }[]>`
-      SELECT scheduled_at FROM economic_ticks
-       WHERE status = 'PENDING' ORDER BY scheduled_at LIMIT 1`;
+    // Sorgu `@kapital/db`'de: `/tick` ucu da aynı kaynaktan okur, ikisi ayrışmasın.
+    const sonraki = await nextTickAt(this.sql);
     return {
       seq: seq.toString(),
-      sonraki: sonraki ? new Date(sonraki.scheduled_at).toISOString() : null,
+      sonraki: sonraki ? sonraki.toISOString() : null,
       dakika: TICK_MINUTES,
     };
   }

@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Param } from '@nestjs/common';
-import type { Sql } from '@kapital/db';
-import { formatMoney, asMoney, NotFound } from '@kapital/shared';
+import { lastCompletedTickSeq, nextTickAt, type Sql } from '@kapital/db';
+import { formatMoney, asMoney, NotFound, TICK_MINUTES } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import { Public } from '../auth/jwt.guard.js';
 
@@ -9,6 +9,36 @@ import { Public } from '../auth/jwt.guard.js';
 @Controller()
 export class WorldController {
   constructor(@Inject(SQL) private readonly sql: Sql) {}
+
+  /**
+   * Oyunun saati — iki sorgu, oyuncuya özel hiçbir şey yok.
+   *
+   * ★ NEDEN AYRI VE UCUZ BİR UÇ: istemci turun düşüp düşmediğini buradan
+   * yokluyor. `/dashboard` de aynı bilgiyi taşır ama yanında K/Z, kritik stok
+   * ve olayları da hesaplar; sırf "seq değişti mi" diye onu çağırmak turda
+   * bir kez gereken işi dakikada birkaç kez yaptırırdı.
+   *
+   * Oturum GEREKMEZ: tur durumu oyuncuya özel değil, oyunun ortak saati. Açık
+   * olması yoklamanın jeton yenileme trafiği üretmemesini de sağlar.
+   */
+  @Get('tick')
+  async tick() {
+    const [tamamlanan, sonraki] = await Promise.all([
+      lastCompletedTickSeq(this.sql),
+      nextTickAt(this.sql),
+    ]);
+    return {
+      /*
+       * ★ TAMAMLANAN sıra, `currentTickSeq` DEĞİL. Gerekçesi
+       * `lastCompletedTickSeq`in başında: MAX(seq) hem bekleyen turu sayar
+       * (tur koşunca sayı hiç değişmez, haber gitmez) hem de tur KOŞARKEN
+       * ilerler (istemci yarı uygulanmış dünyayı çeker).
+       */
+      tamamlanan: tamamlanan.toString(),
+      sonraki: sonraki ? sonraki.toISOString() : null,
+      dakika: TICK_MINUTES,
+    };
+  }
 
   @Get('cities')
   async cities() {

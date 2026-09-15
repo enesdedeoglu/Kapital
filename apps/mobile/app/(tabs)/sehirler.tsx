@@ -5,6 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
+import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
 import type { Mesafe, SehirBilgi, Sirket } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
@@ -50,6 +51,8 @@ export default function Sehirler() {
   }, [iste]);
 
   useEffect(() => { void yukle().finally(() => setYukleniyor(false)); }, [yukle]);
+  // Tur düşünce ekran kendini tazeler.
+  useTurDegisince(() => { void yukle(); });
 
   const veri = useMemo(() => hesapla(sehirler, mesafeler, evKodu), [sehirler, mesafeler, evKodu]);
 

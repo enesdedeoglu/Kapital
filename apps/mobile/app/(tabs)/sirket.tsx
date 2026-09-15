@@ -5,6 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
+import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
 import type { Lot, RafTeklifi, Tesis, TesisStok } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
@@ -61,6 +62,8 @@ export default function Sirketim() {
   }, [iste]);
 
   useEffect(() => { void yukle(); }, [yukle]);
+  // Tur düşünce ekran kendini tazeler.
+  useTurDegisince(() => { void yukle(); });
 
   const lotlariAc = useCallback(async (tesisId: string, urunId: number, ad: string, birim: string) => {
     setLotBaslik({ ad, birim });

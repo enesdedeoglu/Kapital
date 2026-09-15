@@ -5,6 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
+import { useTur, useTurDegisince } from '~/tur';
 import type { Ozet, Sirket } from '~/api/types';
 import { ApiError } from '~/api/client';
 import { GeriSayim } from '~/ui/GeriSayim';
@@ -15,6 +16,7 @@ import { bosluk, kisaPara, paraBicimle, renk, yaziTipi, yuvarlak } from '~/ui/te
 
 export default function AnaSayfa() {
   const { iste } = useOturum();
+  const { sonraki } = useTur();
   const kenar = useSafeAreaInsets();
   const [sirket, setSirket] = useState<Sirket | null>(null);
   const [ozet, setOzet] = useState<Ozet | null>(null);
@@ -50,6 +52,8 @@ export default function AnaSayfa() {
   }, [iste]);
 
   useEffect(() => { void yukle(); }, [yukle]);
+  // Tur düşünce ekran kendini tazeler — oyuncunun aşağı çekmesi gerekmez.
+  useTurDegisince(() => { void yukle(); });
 
   if (!yuklendi) {
     return <View style={s.orta}><ActivityIndicator color={renk.altin} /></View>;
@@ -110,7 +114,13 @@ export default function AnaSayfa() {
             </View>
           </Kart>
 
-          <GeriSayim hedef={ozet?.tur.sonraki ?? null} />
+          {/*
+            ★ Hedef TUR BAĞLAMINDAN, `/dashboard`tan değil: tur düştüğünde
+            geri sayımın yeni hedefe atlaması gerekir ve o haberi yoklayan
+            bağlam getirir. İki kaynak olsaydı geri sayım eski hedefte
+            "işleniyor…" diye asılı kalırdı.
+          */}
+          <GeriSayim hedef={sonraki ?? ozet?.tur.sonraki ?? null} />
 
           <Kasa tutar={paraBicimle(sirket.cash)} altYazi="kullanılabilir nakit" />
 

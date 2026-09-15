@@ -112,13 +112,36 @@ describe('GET /dashboard — ana sayfa özeti', () => {
     expect(new Date(res.body.tur.sonraki as string).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it('★ bekleyen tur YOKSA sonraki null olur — uydurma zaman yazılmaz', async () => {
+  /*
+   * ★ BU TEST ESKİDEN YANLIŞ KURALI SABİTLİYORDU.
+   *
+   * "Bekleyen tur yoksa null" diyordu. Oysa NORMAL İŞLEYİŞTE BEKLEYEN TUR HİÇ
+   * OLMAZ: `orchestrator` bekleyen satır bulamayınca turu kendisi açıp anında
+   * koşuyor, zamanlayıcı da (`worker/scheduler.ts` → `planCatchUp`) "ne zaman"
+   * sorusunu satır durumundan değil son TAMAMLANAN turun üstünden geçen
+   * süreden cevaplıyor. Yani kural gerçek kurulumda hep null döndürürdü ve
+   * geri sayım sonsuza dek "bekleniyor" derdi — canlı güncelleme de bu saate
+   * dayandığı için hiç çalışmazdı.
+   *
+   * Yerelde hatanın görünmemesinin tek sebebi tohumun bıraktığı PENDING
+   * satırıydı; onu gizleyen bir tesadüf.
+   *
+   * "Uydurma zaman yazılmaz" ilkesi duruyor: zamanlayıcının KENDİ ölçütünü
+   * uygulamak uydurmak değildir. Gerçekten bilinmeyen hâl — hiç tamamlanmış
+   * tur olmaması — hâlâ null döner; `packages/db` içindeki `nextTickAt`
+   * testleri o dört durumu ayrı ayrı sabitliyor.
+   */
+  it('★ bekleyen tur YOKSA son TAMAMLANAN turun üstüne tur süresi eklenir', async () => {
     const { token } = await oyuncu();
     await sql`UPDATE economic_ticks SET status = 'COMPLETED' WHERE status = 'PENDING'`;
+    const [son] = await sql<{ completed_at: Date }[]>`
+      SELECT completed_at FROM economic_ticks WHERE status = 'COMPLETED'
+       ORDER BY seq DESC LIMIT 1`;
+
     const res = await call('/dashboard', { token });
-    // Geri sayımı istemci kurar; zaman bilinmiyorsa null gelir ve istemci
-    // "bekleniyor" gösterir. Sahte bir tarih göstermekten iyidir.
-    expect(res.body.tur.sonraki).toBeNull();
+    expect(res.body.tur.sonraki).not.toBeNull();
+    expect(new Date(res.body.tur.sonraki as string).getTime())
+      .toBe(new Date(son!.completed_at).getTime() + TICK_MINUTES * 60_000);
   });
 
   it('etkin dünya olayı çarpanlarıyla birlikte listelenir', async () => {
