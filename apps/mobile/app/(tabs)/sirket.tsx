@@ -13,6 +13,7 @@ import { LotPaneli } from '~/ui/LotPaneli';
 import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 import { TesisPaneli, type KurmaGirdisi } from '~/ui/TesisPaneli';
+import { YukseltmePaneli } from '~/ui/YukseltmePaneli';
 
 export default function Sirketim() {
   const { iste } = useOturum();
@@ -43,11 +44,21 @@ export default function Sirketim() {
   const [sirket, setSirket] = useState<Sirket | null>(null);
   const [kurmaYukleniyor, setKurmaYukleniyor] = useState(false);
 
+  /*
+   * Yükseltme paneli. Kasa burada da gerekli ve kurma panelininki TEMBEL
+   * çekiliyor; bu yüzden şirket künyesi tesislerle BİRLİKTE alınır.
+   */
+  const [yukseltilecek, setYukseltilecek] = useState<Tesis | null>(null);
+
   const yukle = useCallback(async () => {
     try {
       setHata(null);
-      const liste = await iste<Tesis[]>('/facilities');
+      const [liste, sr] = await Promise.all([
+        iste<Tesis[]>('/facilities'),
+        iste<Sirket>('/company'),
+      ]);
       setTesisler(liste);
+      setSirket(sr);
       /*
        * Stoklar PARALEL: tesis sayısı kadar sıralı istek ekranı geciktirir.
        * Kimliği stokla birlikte taşırız — sonradan indeksle eşleştirmek
@@ -72,14 +83,13 @@ export default function Sirketim() {
     setKurmaAcik(true);
     setKurmaYukleniyor(true);
     try {
-      const [t, c, sr] = await Promise.all([
+      // Şirket künyesi `yukle`de zaten alındı; burada tür ve şehir listesi yeter.
+      const [t, c] = await Promise.all([
         iste<TesisTuru[]>('/facility-types'),
         iste<SehirBilgi[]>('/cities'),
-        iste<Sirket>('/company'),
       ]);
       setTurler(t);
       setSehirler(c);
-      setSirket(sr);
     } catch (e) {
       setHata(e instanceof ApiError ? e.message : 'Tesis türleri alınamadı');
       setKurmaAcik(false);
@@ -100,6 +110,17 @@ export default function Sirketim() {
       return null;
     } catch (e) {
       return e instanceof ApiError ? e.message : 'Tesis kurulamadı';
+    }
+  }, [iste, yukle]);
+
+  const yukselt = useCallback(async (tesisId: string): Promise<string | null> => {
+    try {
+      await iste(`/facilities/${tesisId}/upgrade`, { method: 'POST' });
+      setBildirim('Tesis yükseltildi.');
+      void yukle();
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Yükseltme yapılamadı';
     }
   }, [iste, yukle]);
 
@@ -241,6 +262,23 @@ export default function Sirketim() {
                 </Pressable>
               )}
 
+              {/*
+                ★ Yükseltme düğmesi HER tesiste var (rafın aksine), ama
+                inşaattayken YOK: henüz kurulmamış bir tesisi yükseltmek
+                oyuncuyu şaşırtır ve sunucu da reddeder.
+              */}
+              {acikMi && !t.isUnderConstruction && (
+                <Pressable style={s.yukseltDugme} onPress={() => setYukseltilecek(t)}>
+                  <MCI name="arrow-up-bold-hexagon-outline" size={16} color={renk.mor} />
+                  <Text style={s.yukseltYazi}>
+                    {t.upgrade.atMaxLevel
+                      ? `En yüksek seviye (Lv${t.upgrade.maxLevel})`
+                      : `Lv${t.upgrade.nextLevel}'ye yükselt · ${t.upgrade.costFormatted}`}
+                  </Text>
+                  <MCI name="chevron-right" size={18} color={renk.mor} />
+                </Pressable>
+              )}
+
               {acikMi && stok && (
                 stok.products.length === 0
                   ? <Text style={s.bosStok}>Depo boş.</Text>
@@ -295,6 +333,13 @@ export default function Sirketim() {
           </Pressable>
         )}
       </ScrollView>
+
+      <YukseltmePaneli
+        tesis={yukseltilecek}
+        nakit={sirket?.cash ?? '0'}
+        kapat={() => setYukseltilecek(null)}
+        gonder={yukselt}
+      />
 
       <TesisPaneli
         acik={kurmaAcik}
@@ -362,6 +407,14 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,194,75,0.35)',
   },
   rafDugmeYazi: { color: renk.altin, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
+
+  yukseltDugme: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingVertical: 10, paddingHorizontal: bosluk.m, marginTop: bosluk.s,
+    borderRadius: yuvarlak.m, borderWidth: 1, borderColor: 'rgba(139,92,246,0.4)',
+    backgroundColor: 'rgba(139,92,246,0.08)',
+  },
+  yukseltYazi: { color: renk.mor, fontSize: 14, fontFamily: yaziTipi.govdeOrta, flex: 1 },
 
   kurDugme: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

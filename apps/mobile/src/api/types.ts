@@ -132,6 +132,23 @@ export interface Tesis {
   readonly productionEnabled: boolean;
   readonly isUnderConstruction: boolean;
   readonly ticksRemaining: number;
+  /**
+   * Yükseltme önizlemesi. Maliyet config'teki formülle, yeni kapasite
+   * `facility_level_curve` ile bulunur — ikisi de sunucuda, istemcide
+   * hesaplanmaz.
+   */
+  readonly upgrade: {
+    readonly nextLevel: number | null;
+    readonly atMaxLevel: boolean;
+    readonly maxLevel: number;
+    readonly cost: string | null;
+    readonly costFormatted: string | null;
+    readonly nextStorageCapacity: string | null;
+    readonly levelMultiplier: number;
+    readonly nextLevelMultiplier: number | null;
+    /** Perakendede false — yükseltme orada yalnız depoyu büyütür. */
+    readonly producesGoods: boolean;
+  };
 }
 
 /** Tesis stoğu — `GET /facilities/:id/stock`. */

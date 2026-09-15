@@ -295,3 +295,98 @@ describe('stok görünümü', () => {
     expect(res.body.totalCostValueFormatted).toBe('5.800,00 ₺');
   });
 });
+
+/**
+ * ★ Yükseltme ÖNİZLEMESİ ile FİİLİ YÜKSELTME aynı karardan gelmeli.
+ *
+ * Maliyet `upgradeCost` (config'teki çarpan ve üs), yeni kapasite
+ * `facility_level_curve` ile bulunur — ikisi de sunucuda. Önizleme bunları
+ * ayrı bir yerde hesaplasaydı ekran "8.784,51 ₺" der, kasadan başka bir tutar
+ * düşerdi; ya da ekran "yükselt" der, sunucu "en yüksek seviyede" diye
+ * reddederdi. Bu testler iki tarafın tek yerden okuduğunu sabitler.
+ */
+describe('★ tesis yükseltme önizlemesi', () => {
+  it('önizlemedeki maliyet kasadan DÜŞEN tutarla birebir aynıdır', async () => {
+    const p = await player();
+    await moveCash(p.companyId, 500_000n * 10_000n, 'in');
+
+    const once = await call('/facilities', { token: p.token });
+    const tesis = once.body[0];
+    expect(tesis.upgrade.atMaxLevel).toBe(false);
+    expect(tesis.upgrade.nextLevel).toBe(tesis.level + 1);
+
+    const [kasaOnce] = await sql<{ cash: bigint }[]>`
+      SELECT cash FROM companies WHERE id = ${p.companyId}::uuid`;
+
+    const res = await call(`/facilities/${tesis.id}/upgrade`, { method: 'POST', token: p.token });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+
+    const [kasaSonra] = await sql<{ cash: bigint }[]>`
+      SELECT cash FROM companies WHERE id = ${p.companyId}::uuid`;
+
+    expect(kasaOnce!.cash - kasaSonra!.cash).toBe(BigInt(tesis.upgrade.cost));
+  });
+
+  it('önizlemedeki yeni depo kapasitesi yükseltmeden SONRAKİ ile aynıdır', async () => {
+    const p = await player();
+    await moveCash(p.companyId, 500_000n * 10_000n, 'in');
+
+    const once = await call('/facilities', { token: p.token });
+    const tesis = once.body[0];
+    const beklenen = tesis.upgrade.nextStorageCapacity;
+
+    await call(`/facilities/${tesis.id}/upgrade`, { method: 'POST', token: p.token });
+
+    const sonra = await call('/facilities', { token: p.token });
+    expect(sonra.body[0].storageCapacity).toBe(beklenen);
+    expect(sonra.body[0].level).toBe(tesis.level + 1);
+    // Sonraki adım da tazelenmeli: Lv3 Lv2'den pahalıdır.
+    expect(BigInt(sonra.body[0].upgrade.cost)).toBeGreaterThan(BigInt(tesis.upgrade.cost));
+  });
+
+  /*
+   * ★ PERAKENDE ÜRETMEZ. `facility_types.base_capacity` manav/büfe/market için
+   * 0'dır; yükseltme orada YALNIZ depoyu büyütür. Ekran bu bayrağa bakıp
+   * "üretim artar" satırını gizliyor — herkese göstermek yalan olurdu.
+   */
+  it('producesGoods perakendede false, üreten tesiste true', async () => {
+    const p = await player();
+    await moveCash(p.companyId, 500_000n * 10_000n, 'in');
+    await sql`UPDATE companies SET level = 15 WHERE id = ${p.companyId}::uuid`;
+
+    await call('/facilities', {
+      method: 'POST', token: p.token,
+      body: { facilityTypeCode: 'BAKERY', cityCode: 'IST' },
+    });
+
+    const liste = await call('/facilities', { token: p.token });
+    const manav = liste.body.find((f: { type: { code: string } }) => f.type.code === 'GREENGROCER');
+    const firin = liste.body.find((f: { type: { code: string } }) => f.type.code === 'BAKERY');
+
+    expect(manav.upgrade.producesGoods).toBe(false);
+    expect(firin.upgrade.producesGoods).toBe(true);
+  });
+
+  it('en yüksek seviyede önizleme boş gelir ve yükseltme REDDEDİLİR', async () => {
+    const p = await player();
+    await moveCash(p.companyId, 5_000_000n * 10_000n, 'in');
+    const liste = await call('/facilities', { token: p.token });
+    const tesis = liste.body[0];
+    const tavan = tesis.upgrade.maxLevel as number;
+
+    // Tesisi doğrudan tavana çek: yükseltmeyi 9 kez koşmak testi yavaşlatırdı.
+    await sql`UPDATE facilities SET level = ${tavan} WHERE id = ${tesis.id}::uuid`;
+
+    const sonra = await call('/facilities', { token: p.token });
+    const u = sonra.body[0].upgrade;
+    expect(u.atMaxLevel).toBe(true);
+    expect(u.nextLevel).toBeNull();
+    expect(u.cost).toBeNull();
+    expect(u.nextStorageCapacity).toBeNull();
+
+    // Ekran "yükselt" demiyorsa sunucu da kabul etmemeli — ikisi aynı karar.
+    const res = await call(`/facilities/${tesis.id}/upgrade`, { method: 'POST', token: p.token });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION');
+  });
+});

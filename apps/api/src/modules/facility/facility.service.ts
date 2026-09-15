@@ -12,6 +12,12 @@ import { SQL } from '../../common/db.module.js';
 import type { BuildFacilityDto } from './facility.dto.js';
 import type { SetRecipeDto } from './production.dto.js';
 
+interface UpgradeConfig {
+  readonly costMultiplier: number;
+  readonly costExponent: number;
+  readonly maxLevel: number;
+}
+
 export interface FacilityView {
   id: string;
   name: string;
@@ -27,6 +33,33 @@ export interface FacilityView {
   readyAtTick: string;
   ticksRemaining: number;
   createdAt: string;
+  /**
+   * Yükseltme önizlemesi — ekran "ne kadara, ne kazanırım" diyebilsin.
+   *
+   * ★ İSTEMCİ BUNLARI HESAPLAYAMAZ: maliyet `upgradeCost` (config'teki
+   * çarpan ve üs) ile, yeni kapasite `facility_level_curve` ile bulunur.
+   * İkisi de sunucuda; istemcide yeniden yazmak para matematiğini ikinci bir
+   * yere kopyalamak olurdu (ADR-0001).
+   */
+  upgrade: {
+    /** Yükseltilecek seviye; en üstteyse null. */
+    nextLevel: number | null;
+    atMaxLevel: boolean;
+    maxLevel: number;
+    cost: string | null;
+    costFormatted: string | null;
+    /** Yükseltmeden sonraki depo kapasitesi (Qty ölçeğinde). */
+    nextStorageCapacity: string | null;
+    /** Şu anki ve sonraki seviye çarpanı — üretim kapasitesi bununla çarpılır. */
+    levelMultiplier: number;
+    nextLevelMultiplier: number | null;
+    /**
+     * Bu tesis üretim yapıyor mu (`base_capacity > 0`).
+     * ★ PERAKENDEDE 0: manav/büfe/market üretmez, yükseltme onlarda YALNIZ
+     * depoyu büyütür. Ekran "üretim artar" derse yalan söylemiş olur.
+     */
+    producesGoods: boolean;
+  };
 }
 
 @Injectable()
@@ -118,15 +151,46 @@ export class FacilityService {
     const rows = await this.sql<Record<string, never>[]>`
       ${this.selectFacility} WHERE f.company_id = ${company.id}::uuid AND f.closed_at IS NULL
       ORDER BY f.created_at`;
-    const tickSeq = await currentTickSeq(this.sql);
-    return rows.map((r) => this.toView(r, tickSeq));
+    // Config bir KEZ: tesis başına yüklemek aynı anlık görüntüyü N kez okurdu.
+    const [tickSeq, cfg] = await Promise.all([currentTickSeq(this.sql), this.upgradeConfig()]);
+    return rows.map((r) => this.toView(r, tickSeq, cfg));
   }
 
   async getById(companyId: string, facilityId: string): Promise<FacilityView> {
     const [row] = await this.sql<Record<string, never>[]>`
       ${this.selectFacility} WHERE f.id = ${facilityId}::uuid AND f.company_id = ${companyId}::uuid`;
     if (!row) throw new NotFound('Tesis', facilityId);
-    return this.toView(row, await currentTickSeq(this.sql));
+    const [tickSeq, cfg] = await Promise.all([currentTickSeq(this.sql), this.upgradeConfig()]);
+    return this.toView(row, tickSeq, cfg);
+  }
+
+  /**
+   * Yükseltme kararı — ÖNİZLEME ile FİİLİ YÜKSELTME aynı yerden okur.
+   *
+   * ★ Kuralı iki yere yazmıştım: `toView` "yükseltilebilir" diyip `upgrade()`
+   * reddedebilirdi ve oyuncu düğmeye basıp hataya çarpardı. Karar tek yerde;
+   * iki çağıran da bunu kullanır.
+   *
+   * null = yükseltme yok (eğride sonraki seviye tanımsız ya da tavan aşıldı).
+   */
+  private yukseltmeKarari(input: {
+    level: number; baseCost: bigint; baseStorage: bigint;
+    nextMultiplier: number | null; cfg: UpgradeConfig;
+  }): { nextLevel: number; cost: Money; nextStorage: bigint } | null {
+    const nextLevel = input.level + 1;
+    if (input.nextMultiplier === null || nextLevel > input.cfg.maxLevel) return null;
+    return {
+      nextLevel,
+      cost: upgradeCost(
+        asMoney(input.baseCost), nextLevel, input.cfg.costMultiplier, input.cfg.costExponent,
+      ),
+      nextStorage: BigInt(Math.round(Number(input.baseStorage) * input.nextMultiplier)),
+    };
+  }
+
+  private async upgradeConfig(): Promise<UpgradeConfig> {
+    const snapshot = await loadConfigSnapshot(this.sql, 0n);
+    return getConfig<UpgradeConfig>(snapshot, 'economy.upgrade');
   }
 
   async getByUser(userId: string, facilityId: string): Promise<FacilityView> {
@@ -258,18 +322,17 @@ export class FacilityService {
         AND f.closed_at IS NULL`;
     if (!row) throw new NotFound('Tesis', facilityId);
 
-    const snapshot = await loadConfigSnapshot(this.sql, 0n);
-    const cfg = getConfig<{ costMultiplier: number; costExponent: number; maxLevel: number }>(
-      snapshot, 'economy.upgrade',
-    );
-    const nextLevel = row.level + 1;
-    if (nextLevel > cfg.maxLevel || row.next_multiplier === null) {
+    const cfg = await this.upgradeConfig();
+    const karar = this.yukseltmeKarari({
+      level: row.level, baseCost: row.base_cost, baseStorage: row.base_storage,
+      nextMultiplier: row.next_multiplier, cfg,
+    });
+    if (karar === null) {
       throw new DomainError('VALIDATION', `${row.type_name} en yüksek seviyede`, {
         level: row.level, maxLevel: cfg.maxLevel,
       });
     }
-
-    const cost = upgradeCost(asMoney(row.base_cost), nextLevel, cfg.costMultiplier, cfg.costExponent);
+    const { nextLevel, cost, nextStorage: newStorage } = karar;
     if (company.cash < cost) {
       throw new InsufficientFunds({
         required: cost.toString(), requiredFormatted: formatMoney(cost),
@@ -277,7 +340,6 @@ export class FacilityService {
       });
     }
 
-    const newStorage = BigInt(Math.round(Number(row.base_storage) * row.next_multiplier));
     const tickSeq = await currentTickSeq(this.sql);
 
     await runInTransaction(this.sql, async (tx) => {
@@ -391,20 +453,35 @@ export class FacilityService {
       SELECT f.id, f.name, f.level, f.condition, f.storage_capacity, f.production_enabled,
              f.construction_complete_at_tick, f.created_at,
              ft.code AS type_code, ft.name AS type_name, ft.category AS type_category,
+             ft.base_cost, ft.base_capacity, ft.storage_capacity AS type_storage,
              c.id AS city_id, c.code AS city_code, c.name AS city_name,
-             COALESCE(i.used_capacity, 0) AS used_capacity
+             COALESCE(i.used_capacity, 0) AS used_capacity,
+             COALESCE(cur.capacity_multiplier, 1) AS level_multiplier,
+             nxt.capacity_multiplier AS next_multiplier
       FROM facilities f
       JOIN facility_types ft ON ft.id = f.facility_type_id
       JOIN cities c ON c.id = f.city_id
-      LEFT JOIN inventories i ON i.facility_id = f.id`;
+      LEFT JOIN inventories i ON i.facility_id = f.id
+      LEFT JOIN facility_level_curve cur ON cur.level = f.level
+      LEFT JOIN facility_level_curve nxt ON nxt.level = f.level + 1`;
   }
 
-  private toView(row: Record<string, never>, tickSeq: bigint): FacilityView {
+  private toView(
+    row: Record<string, never>, tickSeq: bigint, cfg: UpgradeConfig,
+  ): FacilityView {
     const f = row as unknown as Record<string, never>;
     const capacity = f.storage_capacity as unknown as bigint;
     const used = f.used_capacity as unknown as bigint;
     const readyAt = f.construction_complete_at_tick as unknown as bigint;
     const remaining = readyAt > tickSeq ? Number(readyAt - tickSeq) : 0;
+
+    const karar = this.yukseltmeKarari({
+      level: f.level as unknown as number,
+      baseCost: f.base_cost as unknown as bigint,
+      baseStorage: f.type_storage as unknown as bigint,
+      nextMultiplier: f.next_multiplier as unknown as number | null,
+      cfg,
+    });
     return {
       id: f.id as unknown as string,
       name: (f.name ?? f.type_name) as unknown as string,
@@ -428,6 +505,17 @@ export class FacilityService {
       readyAtTick: readyAt.toString(),
       ticksRemaining: remaining,
       createdAt: new Date(f.created_at as unknown as string).toISOString(),
+      upgrade: {
+        nextLevel: karar?.nextLevel ?? null,
+        atMaxLevel: karar === null,
+        maxLevel: cfg.maxLevel,
+        cost: karar?.cost.toString() ?? null,
+        costFormatted: karar !== null ? formatMoney(karar.cost) : null,
+        nextStorageCapacity: karar?.nextStorage.toString() ?? null,
+        levelMultiplier: f.level_multiplier as unknown as number,
+        nextLevelMultiplier: f.next_multiplier as unknown as number | null,
+        producesGoods: (f.base_capacity as unknown as number) > 0,
+      },
     };
   }
 
