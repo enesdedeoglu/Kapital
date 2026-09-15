@@ -1,7 +1,7 @@
-import { Yerdurak } from '~/ui/Yerdurak';
+import { Yakinda } from '~/ui/parcalar';
 export default function Sehirler() {
-  return <Yerdurak baslik="Şehirler" maddeler={[
-    'Şehir listesi ve mesafeler',
+  return <Yakinda ikon="map-marker-radius" baslik="Şehirler" maddeler={[
+    'Şehir listesi ve aralarındaki mesafeler',
     'Şehir bazlı talep ve fiyat farkları',
   ]} />;
 }

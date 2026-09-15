@@ -1,23 +1,24 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { girisYap, kayitOl } from '~/api/session';
 import { ApiError } from '~/api/client';
 import { useOturum } from '~/oturum';
-import { tema } from '~/ui/tema';
+import { bosluk, golge, gradyan, renk, yuvarlak } from '~/ui/tema';
 
 /*
  * ★ Geliştirmede kimlik ön-doldurma.
  *
  * Simülatörde metin enjeksiyonu ANA MAKİNENİN klavye düzeninden geçiyor:
- * Türkçe-Q düzeninde `@` → `'`, `.` → `ç`, `i` → `ı` oluyor ve e-posta
- * yazılamıyor. Düzeni değiştirmek kullanıcının makinesine dokunmak olurdu.
+ * Türkçe-Q'da `@` → `'`, `.` → `ç`, `i` → `ı` oluyor ve e-posta yazılamıyor.
+ * Düzeni değiştirmek kullanıcının makinesine dokunmak olurdu.
  *
  * `EXPO_PUBLIC_DEV_EMAIL` / `EXPO_PUBLIC_DEV_PASSWORD` tanımlıysa ve yalnız
- * __DEV__ altındaysa alanlar dolu gelir. Üretim paketinde `__DEV__` false
- * olduğu için bu dal hiç çalışmaz.
+ * __DEV__ altındaysa alanlar dolu gelir; üretim paketinde bu dal çalışmaz.
  */
 const devEmail = __DEV__ ? (process.env.EXPO_PUBLIC_DEV_EMAIL ?? '') : '';
 const devParola = __DEV__ ? (process.env.EXPO_PUBLIC_DEV_PASSWORD ?? '') : '';
@@ -49,69 +50,112 @@ export default function Giris() {
   const gecerli = email.includes('@') && parola.length >= 8 && (!kayit || isim.trim().length >= 2);
 
   return (
-    <KeyboardAvoidingView
-      style={s.zemin}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={s.govde}>
-        <Text style={s.baslik}>Kapital</Text>
-        <Text style={s.altBaslik}>
-          {kayit ? 'Şirketini kur, piyasaya gir.' : 'Tekrar hoş geldin.'}
-        </Text>
-
-        {kayit && (
-          <TextInput
-            style={s.giris} placeholder="Görünen isim" placeholderTextColor={tema.renk.soluk}
-            value={isim} onChangeText={setIsim} autoCapitalize="words"
-          />
-        )}
-        <TextInput
-          style={s.giris} placeholder="E-posta" placeholderTextColor={tema.renk.soluk}
-          value={email} onChangeText={setEmail}
-          autoCapitalize="none" keyboardType="email-address" autoComplete="email"
-        />
-        <TextInput
-          style={s.giris} placeholder="Parola (en az 8)" placeholderTextColor={tema.renk.soluk}
-          value={parola} onChangeText={setParola} secureTextEntry
-        />
-
-        {hata && <Text style={s.hata}>{hata}</Text>}
-
-        <Pressable
-          style={[s.dugme, (!gecerli || bekliyor) && s.dugmePasif]}
-          disabled={!gecerli || bekliyor}
-          onPress={() => void gonder()}
-        >
-          {bekliyor
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={s.dugmeYazi}>{kayit ? 'Şirketi kur' : 'Giriş yap'}</Text>}
-        </Pressable>
-
-        <Pressable onPress={() => { setKayit(!kayit); setHata(null); }}>
-          <Text style={s.gecis}>
-            {kayit ? 'Zaten hesabım var' : 'Hesabım yok, kayıt olayım'}
+    <KeyboardAvoidingView style={s.zemin} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.govde} keyboardShouldPersistTaps="handled">
+        <View style={s.marka}>
+          <LinearGradient colors={gradyan.altin} style={[s.rozet, golge.altin]}>
+            <MCI name="chart-timeline-variant-shimmer" size={34} color="#3D2A00" />
+          </LinearGradient>
+          <Text style={s.baslik}>KAPİTAL</Text>
+          <Text style={s.slogan}>
+            {kayit ? 'Bir şehir. Bir dükkân. Bir imparatorluk.' : 'Piyasa seni bekliyor.'}
           </Text>
-        </Pressable>
-      </View>
+        </View>
+
+        <View style={s.form}>
+          {kayit && (
+            <Alan ikon="account-outline" placeholder="Görünen isim"
+              value={isim} onChangeText={setIsim} autoCapitalize="words" />
+          )}
+          <Alan ikon="email-outline" placeholder="E-posta"
+            value={email} onChangeText={setEmail}
+            autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+          <Alan ikon="lock-outline" placeholder="Parola (en az 8)"
+            value={parola} onChangeText={setParola} secureTextEntry />
+
+          {hata && (
+            <View style={s.hataSatir}>
+              <MCI name="alert-circle-outline" size={15} color={renk.eksi} />
+              <Text style={s.hata}>{hata}</Text>
+            </View>
+          )}
+
+          <Pressable
+            disabled={!gecerli || bekliyor}
+            onPress={() => void gonder()}
+            style={({ pressed }) => [pressed && s.basili]}
+          >
+            <LinearGradient
+              colors={gecerli && !bekliyor ? gradyan.altin : [renk.kenar, renk.kenar]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={[s.dugme, gecerli && !bekliyor && golge.altin]}
+            >
+              {bekliyor
+                ? <ActivityIndicator color="#3D2A00" />
+                : (
+                  <>
+                    <Text style={[s.dugmeYazi, !gecerli && s.dugmeYaziPasif]}>
+                      {kayit ? 'Şirketi kur' : 'Giriş yap'}
+                    </Text>
+                    <MCI name="arrow-right" size={19}
+                      color={gecerli ? '#3D2A00' : renk.cokSoluk} />
+                  </>
+                )}
+            </LinearGradient>
+          </Pressable>
+
+          <Pressable onPress={() => { setKayit(!kayit); setHata(null); }} style={s.gecisAlan}>
+            <Text style={s.gecis}>
+              {kayit ? 'Zaten hesabım var' : 'Hesabım yok, kayıt olayım'}
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+function Alan({ ikon, ...props }:
+{ ikon: React.ComponentProps<typeof MCI>['name'] } & React.ComponentProps<typeof TextInput>) {
+  return (
+    <View style={s.alan}>
+      <MCI name={ikon} size={19} color={renk.cokSoluk} />
+      <TextInput {...props} style={s.giris} placeholderTextColor={renk.cokSoluk} />
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
-  zemin: { flex: 1, backgroundColor: tema.renk.zemin },
-  govde: { flex: 1, justifyContent: 'center', padding: tema.bosluk.xl, gap: tema.bosluk.m },
-  baslik: { color: tema.renk.metin, fontSize: 34, fontWeight: '700' },
-  altBaslik: { color: tema.renk.soluk, fontSize: 15, marginBottom: tema.bosluk.l },
-  giris: {
-    backgroundColor: tema.renk.kart, borderColor: tema.renk.kartKenar, borderWidth: 1,
-    borderRadius: tema.yuvarlak.m, padding: tema.bosluk.l, color: tema.renk.metin, fontSize: 16,
+  zemin: { flex: 1 },
+  govde: { flexGrow: 1, justifyContent: 'center', padding: bosluk.xl, gap: bosluk.xxl },
+
+  marka: { alignItems: 'center', gap: bosluk.s },
+  rozet: {
+    width: 76, height: 76, borderRadius: yuvarlak.xl,
+    alignItems: 'center', justifyContent: 'center', marginBottom: bosluk.s,
   },
-  hata: { color: tema.renk.eksi, fontSize: 14 },
+  baslik: { color: renk.metin, fontSize: 36, fontWeight: '900', letterSpacing: 4 },
+  slogan: { color: renk.soluk, fontSize: 14, textAlign: 'center' },
+
+  form: { gap: bosluk.m },
+  alan: {
+    flexDirection: 'row', alignItems: 'center', gap: bosluk.m,
+    backgroundColor: renk.kart, borderColor: renk.kenar, borderWidth: 1,
+    borderRadius: yuvarlak.m, paddingHorizontal: bosluk.l,
+  },
+  giris: { flex: 1, paddingVertical: bosluk.l, color: renk.metin, fontSize: 16 },
+
+  hataSatir: { flexDirection: 'row', alignItems: 'center', gap: bosluk.xs },
+  hata: { color: renk.eksi, fontSize: 14, flex: 1 },
+
   dugme: {
-    backgroundColor: tema.renk.vurgu, borderRadius: tema.yuvarlak.m,
-    padding: tema.bosluk.l, alignItems: 'center', marginTop: tema.bosluk.s,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: bosluk.s,
+    borderRadius: yuvarlak.m, paddingVertical: bosluk.l, marginTop: bosluk.xs,
   },
-  dugmePasif: { opacity: 0.4 },
-  dugmeYazi: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  gecis: { color: tema.renk.vurgu, textAlign: 'center', marginTop: tema.bosluk.m, fontSize: 14 },
+  basili: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  dugmeYazi: { color: '#3D2A00', fontSize: 16, fontWeight: '800' },
+  dugmeYaziPasif: { color: renk.cokSoluk },
+
+  gecisAlan: { paddingVertical: bosluk.s },
+  gecis: { color: renk.mavi, textAlign: 'center', fontSize: 14, fontWeight: '600' },
 });

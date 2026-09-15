@@ -1,40 +1,48 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { apiBaseUrl } from '~/api/client';
-import { tema } from '~/ui/tema';
+import { Etiket, Kart } from '~/ui/parcalar';
+import { bosluk, renk, yuvarlak } from '~/ui/tema';
 
 export default function Menu() {
   const { cikisYap } = useOturum();
+  const kenar = useSafeAreaInsets();
   return (
-    <View style={s.zemin}>
-      <View style={s.kart}>
-        <Text style={s.etiket}>SUNUCU</Text>
+    <ScrollView contentContainerStyle={[s.icerik, { paddingTop: kenar.top + 56 }]}>
+      <Kart>
+        <Etiket ikon="server-network" yazi="SUNUCU" />
         <Text style={s.deger}>{apiBaseUrl()}</Text>
-      </View>
+      </Kart>
+
+      <Kart>
+        <Etiket ikon="information-outline" yazi="SÜRÜM" />
+        <Text style={s.deger}>Kapital 0.0.1 · geliştirme</Text>
+      </Kart>
+
       <Pressable
-        style={s.cikis}
+        style={({ pressed }) => [s.cikis, pressed && { opacity: 0.7 }]}
         onPress={() => Alert.alert('Çıkış', 'Oturumu kapat?', [
           { text: 'Vazgeç', style: 'cancel' },
           { text: 'Çıkış yap', style: 'destructive', onPress: () => void cikisYap() },
         ])}
       >
+        <MCI name="logout" size={18} color={renk.eksi} />
         <Text style={s.cikisYazi}>Çıkış yap</Text>
       </Pressable>
-    </View>
+      <View style={{ height: 80 }} />
+    </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  zemin: { flex: 1, backgroundColor: tema.renk.zemin, padding: tema.bosluk.l, gap: tema.bosluk.m },
-  kart: {
-    backgroundColor: tema.renk.kart, borderColor: tema.renk.kartKenar, borderWidth: 1,
-    borderRadius: tema.yuvarlak.l, padding: tema.bosluk.l, gap: tema.bosluk.xs,
-  },
-  etiket: { color: tema.renk.soluk, fontSize: 11, letterSpacing: 1, fontWeight: '600' },
-  deger: { color: tema.renk.metin, fontSize: 15 },
+  icerik: { padding: bosluk.l, gap: bosluk.m },
+  deger: { color: renk.metin, fontSize: 15 },
   cikis: {
-    borderColor: tema.renk.eksi, borderWidth: 1, borderRadius: tema.yuvarlak.m,
-    padding: tema.bosluk.l, alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: bosluk.s,
+    borderColor: 'rgba(255,107,107,0.4)', borderWidth: 1, borderRadius: yuvarlak.m,
+    backgroundColor: 'rgba(255,107,107,0.08)', padding: bosluk.l, marginTop: bosluk.s,
   },
-  cikisYazi: { color: tema.renk.eksi, fontSize: 16, fontWeight: '600' },
+  cikisYazi: { color: renk.eksi, fontSize: 16, fontWeight: '700' },
 });

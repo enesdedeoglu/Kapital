@@ -46,11 +46,41 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
     try {
       return await request<T>(path, { ...options, token: jeton.access });
     } catch (e) {
-      // 401 = erişim jetonu eskimiş. Bir kez yenile, bir kez daha dene.
-      if (!(e instanceof ApiError) || e.status !== 401) throw e;
-      const taze = await yenile(jeton.refresh);
-      setJeton({ access: taze.accessToken, refresh: taze.refreshToken });
-      return request<T>(path, { ...options, token: taze.accessToken });
+      /*
+       * ★ API süresi dolmuş jeton için 403 döner, 401 DEĞİL.
+       *
+       * `jwt.guard.ts` → `DomainError('FORBIDDEN', 'Oturum geçersiz veya
+       * süresi dolmuş')` → 403. Yalnız 401 yakalanınca yenileme hiç
+       * tetiklenmiyordu: oyuncu ana sayfada "oturum geçersiz" kartına
+       * bakıp kalıyordu, uygulama kendi kendini toparlayamıyordu.
+       *
+       * İkisi de denenir. Gerçek bir YETKİ hatasında (kimlik doğru ama izin
+       * yok) yenileme başarılı olur, tekrar denenen istek yine 403 döner ve
+       * hata olduğu gibi yukarı çıkar — oturum boşuna kapatılmaz.
+       */
+      const jetonSorunu = e instanceof ApiError && (e.status === 401 || e.status === 403);
+      if (!jetonSorunu) throw e;
+      try {
+        const taze = await yenile(jeton.refresh);
+        setJeton({ access: taze.accessToken, refresh: taze.refreshToken });
+        return await request<T>(path, { ...options, token: taze.accessToken });
+      } catch (yenilemeHatasi) {
+        /*
+         * ★ Yenileme de başarısızsa oturum GERÇEKTEN bitmiştir.
+         *
+         * Önce bu hata olduğu gibi ekrana düşüyordu ve ana sayfada
+         * "Oturum geçersiz veya süresi dolmuş" yazan bir kart kalıyordu —
+         * oyuncu ne yapacağını bilmiyor, hiçbir düğme onu girişe götürmüyor.
+         * Yenileme jetonu bir kez kullanılınca döndüğü için (rotasyon) eski
+         * bir kopyayla açılan uygulamada bu durum normaldir.
+         *
+         * Doğru davranış: jetonu temizlemek. `_layout` girişli olmadığını
+         * görünce oyuncuyu giriş ekranına yönlendirir.
+         */
+        await oturumuSil();
+        setJeton(null);
+        throw yenilemeHatasi;
+      }
     }
   }, [jeton]);
 

@@ -1,9 +1,9 @@
-import { Yerdurak } from '~/ui/Yerdurak';
+import { Yakinda } from '~/ui/parcalar';
 export default function Sirketim() {
-  return <Yerdurak baslik="Şirketim" maddeler={[
+  return <Yakinda ikon="factory" baslik="Şirketim" maddeler={[
     'Tesis kartları: üretim durumu, kapasite, seviye',
     'Fiyat belirleme',
-    'Stok: toplam / ortalama kalite / ağırlıklı ortalama maliyet',
+    'Stok: toplam · ortalama kalite · ağırlıklı ortalama maliyet',
     'Lot detayı (alttan açılır panel)',
   ]} />;
 }

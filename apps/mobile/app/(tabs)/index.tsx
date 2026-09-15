@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import type { Sirket } from '~/api/types';
 import { ApiError } from '~/api/client';
-import { paraBicimle, tema } from '~/ui/tema';
+import { Etiket, Kart, Kasa, Kutu, SeviyeRozeti } from '~/ui/parcalar';
+import { bosluk, kisaPara, paraBicimle, renk, yuvarlak } from '~/ui/tema';
 
 export default function AnaSayfa() {
   const { iste } = useOturum();
+  const kenar = useSafeAreaInsets();
   const [sirket, setSirket] = useState<Sirket | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [yenileniyor, setYenileniyor] = useState(false);
   /*
-   * ★ "Yüklendi" AYRI bir durumdur, "şirket var" değil.
-   * Önce yükleme koşulu `!sirket && !hata` idi ve şirketi olmayan oyuncuda
-   * (404 → sirket null, hata null) spinner sonsuza dek dönüyordu. Simülatörde
-   * ilk gerçek girişte yakalandı: boş durumun kendisi de bir SONUÇTUR.
+   * ★ "Yüklendi" AYRI bir durumdur, "şirket var" değil. Önce yükleme koşulu
+   * `!sirket && !hata` idi ve şirketi olmayan oyuncuda (404 → ikisi de null)
+   * spinner sonsuza dek dönüyordu. Boş durumun kendisi de bir SONUÇTUR.
    */
   const [yuklendi, setYuklendi] = useState(false);
 
@@ -23,7 +28,6 @@ export default function AnaSayfa() {
       setHata(null);
       setSirket(await iste<Sirket>('/company'));
     } catch (e) {
-      // Şirketi olmayan yeni oyuncu: 404 bir hata değil, bir durum.
       if (e instanceof ApiError && e.status === 404) setSirket(null);
       else setHata(e instanceof ApiError ? e.message : 'Sunucuya ulaşılamadı');
     } finally {
@@ -34,62 +38,87 @@ export default function AnaSayfa() {
   useEffect(() => { void yukle(); }, [yukle]);
 
   if (!yuklendi) {
-    return <View style={s.orta}><ActivityIndicator color={tema.renk.vurgu} /></View>;
+    return <View style={s.orta}><ActivityIndicator color={renk.altin} /></View>;
   }
 
   return (
     <ScrollView
-      style={s.zemin}
-      contentContainerStyle={s.icerik}
+      contentContainerStyle={[s.icerik, { paddingTop: kenar.top + 56 }]}
       refreshControl={
         <RefreshControl
-          refreshing={yenileniyor}
-          tintColor={tema.renk.soluk}
+          refreshing={yenileniyor} tintColor={renk.soluk}
           onRefresh={() => { setYenileniyor(true); void yukle().finally(() => setYenileniyor(false)); }}
         />
       }
     >
-      {hata && <View style={[s.kart, s.hataKart]}><Text style={s.hata}>{hata}</Text></View>}
+      {hata && (
+        <Kart style={s.hataKart}>
+          <Etiket ikon="wifi-off" yazi="BAĞLANTI" ton={renk.eksi} />
+          <Text style={s.hata}>{hata}</Text>
+        </Kart>
+      )}
 
       {!sirket && !hata && (
-        <View style={s.kart}>
-          <Text style={s.etiket}>HENÜZ ŞİRKETİN YOK</Text>
-          <Text style={s.buyukDeger}>Kurulum bekliyor</Text>
-          <Text style={s.soluk}>
-            Bir şehir seç ve ilk dükkânını aç. Şirket kurma akışı yakında bu ekrana gelecek.
-          </Text>
-        </View>
+        <>
+          <View style={s.hosgeldin}>
+            <MCI name="storefront-outline" size={44} color={renk.altin} />
+            <Text style={s.hosBaslik}>Şirketini kur</Text>
+            <Text style={s.hosAlt}>
+              Bir şehir seç, ilk dükkânını aç ve piyasaya gir.
+            </Text>
+          </View>
+          <Kart>
+            <Etiket ikon="flag-checkered" yazi="İLK ADIMLAR" />
+            {['Şehrini seç', 'Manavını aç', 'İlk malını al', 'Rafına koy ve sat'].map((m, i) => (
+              <View key={m} style={s.adim}>
+                <View style={s.adimNo}><Text style={s.adimNoYazi}>{i + 1}</Text></View>
+                <Text style={s.adimYazi}>{m}</Text>
+              </View>
+            ))}
+          </Kart>
+        </>
       )}
 
       {sirket && (
         <>
-          <View style={s.kart}>
-            <Text style={s.etiket}>NAKİT</Text>
-            <Text style={s.buyukDeger}>{sirket.cashFormatted}</Text>
-            <Text style={s.soluk}>{sirket.name} · {sirket.city.name}</Text>
-          </View>
+          <Kart style={s.kimlik}>
+            <SeviyeRozeti
+              seviye={sirket.level}
+              unvan={sirket.levelTitle}
+              // Deneyim eşiği API'de yok; halka şimdilik seviye içi kabaca dolar.
+              oran={(Number(sirket.experience) % 1000) / 1000}
+            />
+            <View style={s.kimlikAlt}>
+              <MCI name="office-building" size={14} color={renk.soluk} />
+              <Text style={s.kimlikYazi}>{sirket.name}</Text>
+              <MCI name="map-marker" size={14} color={renk.soluk} />
+              <Text style={s.kimlikYazi}>{sirket.city.name}</Text>
+            </View>
+          </Kart>
+
+          <Kasa tutar={paraBicimle(sirket.cash)} altYazi="kullanılabilir nakit" />
 
           <View style={s.satir}>
-            <View style={[s.kart, s.yarim]}>
-              <Text style={s.etiket}>ŞİRKET DEĞERİ</Text>
-              <Text style={s.deger}>{paraBicimle(sirket.companyValue)}</Text>
-            </View>
-            <View style={[s.kart, s.yarim]}>
-              <Text style={s.etiket}>SEVİYE</Text>
-              <Text style={s.deger}>Lv{sirket.level}</Text>
-              <Text style={s.soluk}>{sirket.levelTitle}</Text>
-            </View>
+            <Kutu
+              ikon="chart-areaspline" etiket="ŞİRKET DEĞERİ"
+              deger={kisaPara(sirket.companyValue)} alt="₺ toplam varlık"
+            />
+            <Kutu
+              ikon="star-four-points" etiket="İTİBAR"
+              deger={Number(sirket.reputation).toFixed(0)} alt="0 – 100"
+              ton={renk.mor}
+            />
           </View>
 
-          {/* Tur geri sayımı, 24s K/Z, kritik stok ve son olaylar için API ucu
-              henüz yok — F9 planının 4. adımı. */}
-          <View style={[s.kart, s.yakinda]}>
-            <Text style={s.etiket}>SIRADAKİ</Text>
-            <Text style={s.soluk}>
-              Tur geri sayımı · 24s K/Z · kritik stok · son olaylar{'\n'}
-              Bu dört alan tek bir özet ucuyla gelecek.
+          {/* Tur geri sayımı · 24s K/Z · kritik stok · son olaylar — tek bir
+              özet ucuyla gelecek (F9 planının 4. adımı). */}
+          <Kart style={s.bekleyen}>
+            <Etiket ikon="timer-sand" yazi="SIRADAKİ TUR" ton={renk.turuncu} />
+            <Text style={s.bekleyenYazi}>
+              Geri sayım, 24 saatlik kâr/zarar, kritik stok uyarıları ve son olaylar
+              buraya gelecek.
             </Text>
-          </View>
+          </Kart>
         </>
       )}
     </ScrollView>
@@ -97,20 +126,30 @@ export default function AnaSayfa() {
 }
 
 const s = StyleSheet.create({
-  zemin: { flex: 1, backgroundColor: tema.renk.zemin },
-  icerik: { padding: tema.bosluk.l, gap: tema.bosluk.m },
-  orta: { flex: 1, backgroundColor: tema.renk.zemin, justifyContent: 'center' },
-  kart: {
-    backgroundColor: tema.renk.kart, borderColor: tema.renk.kartKenar, borderWidth: 1,
-    borderRadius: tema.yuvarlak.l, padding: tema.bosluk.l, gap: tema.bosluk.xs,
+  orta: { flex: 1, justifyContent: 'center' },
+  icerik: { padding: bosluk.l, paddingBottom: 110, gap: bosluk.m },
+
+  hataKart: { borderColor: renk.eksi },
+  hata: { color: renk.eksi, fontSize: 14 },
+
+  hosgeldin: { alignItems: 'center', gap: bosluk.xs, paddingVertical: bosluk.xl },
+  hosBaslik: { color: renk.metin, fontSize: 26, fontWeight: '800' },
+  hosAlt: { color: renk.soluk, fontSize: 14, textAlign: 'center', paddingHorizontal: bosluk.xl },
+
+  adim: { flexDirection: 'row', alignItems: 'center', gap: bosluk.m, paddingVertical: 5 },
+  adimNo: {
+    width: 24, height: 24, borderRadius: yuvarlak.tam, backgroundColor: 'rgba(255,194,75,0.16)',
+    borderWidth: 1, borderColor: 'rgba(255,194,75,0.4)', alignItems: 'center', justifyContent: 'center',
   },
-  hataKart: { borderColor: tema.renk.eksi },
-  hata: { color: tema.renk.eksi, fontSize: 14 },
-  satir: { flexDirection: 'row', gap: tema.bosluk.m },
-  yarim: { flex: 1 },
-  etiket: { color: tema.renk.soluk, fontSize: 11, letterSpacing: 1, fontWeight: '600' },
-  buyukDeger: { color: tema.renk.metin, fontSize: 32, fontWeight: '700' },
-  deger: { color: tema.renk.metin, fontSize: 20, fontWeight: '600' },
-  soluk: { color: tema.renk.soluk, fontSize: 13 },
-  yakinda: { borderStyle: 'dashed' },
+  adimNoYazi: { color: renk.altin, fontSize: 12, fontWeight: '800' },
+  adimYazi: { color: renk.metin, fontSize: 15 },
+
+  kimlik: { gap: bosluk.m },
+  kimlikAlt: { flexDirection: 'row', alignItems: 'center', gap: bosluk.xs, flexWrap: 'wrap' },
+  kimlikYazi: { color: renk.soluk, fontSize: 13, marginRight: bosluk.s },
+
+  satir: { flexDirection: 'row', gap: bosluk.m },
+
+  bekleyen: { borderStyle: 'dashed', borderColor: renk.kenarIsik },
+  bekleyenYazi: { color: renk.soluk, fontSize: 13, lineHeight: 20 },
 });
