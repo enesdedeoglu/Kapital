@@ -7,20 +7,12 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
-import type { Lot, RafTeklifi, Tesis, TesisStok } from '~/api/types';
-import { Etiket, Kart } from '~/ui/parcalar';
+import type { Lot, RafTeklifi, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru } from '~/api/types';
+import { Etiket, Kart, tesisIkonu } from '~/ui/parcalar';
 import { LotPaneli } from '~/ui/LotPaneli';
 import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
-
-/** Tesis türüne göre ikon — kart tek bakışta ne olduğunu söylesin. */
-const tesisIkonu: Record<string, React.ComponentProps<typeof MCI>['name']> = {
-  RETAIL: 'storefront',
-  FARM: 'sprout',
-  MINE: 'pickaxe',
-  FACTORY: 'factory',
-  WAREHOUSE: 'warehouse',
-};
+import { TesisPaneli, type KurmaGirdisi } from '~/ui/TesisPaneli';
 
 export default function Sirketim() {
   const { iste } = useOturum();
@@ -39,6 +31,17 @@ export default function Sirketim() {
   const [rafTesis, setRafTesis] = useState<Tesis | null>(null);
   const [teklifler, setTeklifler] = useState<RafTeklifi[] | null>(null);
   const [bildirim, setBildirim] = useState<string | null>(null);
+
+  /*
+   * Kurma paneli. Tür ve şehir listesi TEMBEL çekilir: sekme her açıldığında
+   * iki istek daha atmak, oyuncuların çoğunun kullanmadığı bir panel için
+   * açılışı geciktirirdi.
+   */
+  const [kurmaAcik, setKurmaAcik] = useState(false);
+  const [turler, setTurler] = useState<TesisTuru[]>([]);
+  const [sehirler, setSehirler] = useState<SehirBilgi[]>([]);
+  const [sirket, setSirket] = useState<Sirket | null>(null);
+  const [kurmaYukleniyor, setKurmaYukleniyor] = useState(false);
 
   const yukle = useCallback(async () => {
     try {
@@ -64,6 +67,41 @@ export default function Sirketim() {
   useEffect(() => { void yukle(); }, [yukle]);
   // Tur düşünce ekran kendini tazeler.
   useTurDegisince(() => { void yukle(); });
+
+  const kurmayiAc = useCallback(async () => {
+    setKurmaAcik(true);
+    setKurmaYukleniyor(true);
+    try {
+      const [t, c, sr] = await Promise.all([
+        iste<TesisTuru[]>('/facility-types'),
+        iste<SehirBilgi[]>('/cities'),
+        iste<Sirket>('/company'),
+      ]);
+      setTurler(t);
+      setSehirler(c);
+      setSirket(sr);
+    } catch (e) {
+      setHata(e instanceof ApiError ? e.message : 'Tesis türleri alınamadı');
+      setKurmaAcik(false);
+    } finally {
+      setKurmaYukleniyor(false);
+    }
+  }, [iste]);
+
+  /*
+   * Kurma isteği. Hata MESAJI döner (null = başarılı) — panel kendi hatasını
+   * kendi gösterir, ekran onun yerine karar vermez (EmirPaneli ile aynı sözleşme).
+   */
+  const kur = useCallback(async (g: KurmaGirdisi): Promise<string | null> => {
+    try {
+      await iste('/facilities', { method: 'POST', body: g });
+      setBildirim('Tesis kuruldu — inşaat başladı.');
+      void yukle();
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Tesis kurulamadı';
+    }
+  }, [iste, yukle]);
 
   const lotlariAc = useCallback(async (tesisId: string, urunId: number, ad: string, birim: string) => {
     setLotBaslik({ ad, birim });
@@ -135,7 +173,7 @@ export default function Sirketim() {
           <View style={s.bosDurum}>
             <MCI name="storefront-outline" size={44} color={renk.altin} />
             <Text style={s.bosBaslik}>Henüz tesisin yok</Text>
-            <Text style={s.bosAlt}>İlk dükkânını açınca burada görünecek.</Text>
+            <Text style={s.bosAlt}>İlk dükkânını aç, mal al, rafa koy ve sat.</Text>
           </View>
         )}
 
@@ -242,7 +280,32 @@ export default function Sirketim() {
             </Kart>
           );
         })}
+      
+        {/*
+          ★ Düğme listenin SONUNDA. Boş durumda da, dolu listede de aynı yerde:
+          "bir tane daha" eylemi listenin akışının devamıdır. Üstte dursaydı
+          asıl içeriği (tesislerin durumu) aşağı iterdi.
+        */}
+        {tesisler !== null && !hata && (
+          <Pressable style={s.kurDugme} onPress={() => void kurmayiAc()}>
+            <MCI name="plus-circle-outline" size={19} color={renk.altin} />
+            <Text style={s.kurYazi}>
+              {tesisler.length === 0 ? 'İlk tesisini kur' : 'Yeni tesis kur'}
+            </Text>
+          </Pressable>
+        )}
       </ScrollView>
+
+      <TesisPaneli
+        acik={kurmaAcik}
+        turler={turler}
+        sehirler={sehirler}
+        nakit={sirket?.cash ?? '0'}
+        seviye={sirket?.level ?? 1}
+        yukleniyor={kurmaYukleniyor}
+        kapat={() => setKurmaAcik(false)}
+        gonder={kur}
+      />
 
       <RafPaneli
         acik={rafTesis !== null}
@@ -299,6 +362,14 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,194,75,0.35)',
   },
   rafDugmeYazi: { color: renk.altin, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
+
+  kurDugme: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 7, paddingVertical: bosluk.m, borderRadius: yuvarlak.m,
+    borderWidth: 1, borderStyle: 'dashed', borderColor: renk.altinKoyu,
+    backgroundColor: 'rgba(255,194,75,0.06)',
+  },
+  kurYazi: { color: renk.altin, fontSize: 15, fontFamily: yaziTipi.baslikOrta },
 
   hataKart: { borderColor: renk.eksi },
   hata: { color: renk.eksi, fontSize: 14, fontFamily: yaziTipi.govde },

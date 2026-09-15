@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Param } from '@nestjs/common';
 import { lastCompletedTickSeq, nextTickAt, type Sql } from '@kapital/db';
-import { formatMoney, asMoney, NotFound, TICK_MINUTES } from '@kapital/shared';
+import { formatMoney, asMoney, mulMoney, NotFound, TICK_MINUTES } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
 import { Public } from '../auth/jwt.guard.js';
 
@@ -114,14 +114,45 @@ export class WorldController {
 
   @Get('facility-types')
   async facilityTypes() {
-    const rows = await this.sql<Record<string, never>[]>`
-      SELECT id, code, name, category, base_cost, base_capacity, maintenance_cost,
-             storage_capacity, construction_ticks, unlock_level, requires_port
-      FROM facility_types WHERE is_active ORDER BY unlock_level, id`;
+    const [rows, sehirler] = await Promise.all([
+      this.sql<Record<string, never>[]>`
+        SELECT id, code, name, category, base_cost, base_capacity, maintenance_cost,
+               storage_capacity, construction_ticks, unlock_level, requires_port
+        FROM facility_types WHERE is_active ORDER BY unlock_level, id`,
+      this.sql<{ code: string; land_cost_index: number; has_port: boolean }[]>`
+        SELECT code, land_cost_index, has_port FROM cities WHERE is_active ORDER BY id`,
+    ]);
+
     return rows.map((r) => {
       const f = r as unknown as Record<string, never>;
       const cost = asMoney(f.base_cost as unknown as bigint);
       const maint = asMoney(f.maintenance_cost as unknown as bigint);
+
+      /*
+       * ★ ŞEHİR BAŞINA GERÇEK MALİYET SUNUCUDA HESAPLANIR.
+       *
+       * Kurulum maliyeti `taban × şehrin arsa endeksi`dir (`facility.service.ts`)
+       * ve şehirden şehre ciddi değişir — Manav Konya'da 2.800 ₺, İstanbul'da
+       * 6.000 ₺. Ekran bunu göstermek zorunda, yoksa oyuncu şehri körlemesine
+       * seçer.
+       *
+       * Çarpımı İSTEMCİ yapamaz: `mulMoney` bigint aritmetiği + bankacı
+       * yuvarlamasıdır (ADR-0001 "sınır kuralı"). İstemcide float ile yeniden
+       * yazmak hem ADR'yi çiğner hem de gösterilen tutarın tahsil edilenden
+       * bir kuruş sapmasına yol açar. Gösterilen ile tahsil edilenin aynı
+       * olduğunun tek garantisi aynı işlevden geçmeleridir.
+       */
+      const cityCosts: Record<string, { cost: string; costFormatted: string; buildable: boolean }> = {};
+      for (const c of sehirler) {
+        const { value } = mulMoney(cost, c.land_cost_index);
+        cityCosts[c.code] = {
+          cost: value.toString(),
+          costFormatted: formatMoney(value),
+          // Liman şartı şehre bağlı: panel kuramayacağı şehri baştan göstersin.
+          buildable: !f.requires_port || c.has_port,
+        };
+      }
+
       return {
         id: f.id, code: f.code, name: f.name, category: f.category,
         baseCost: cost.toString(), baseCostFormatted: formatMoney(cost),
@@ -131,6 +162,7 @@ export class WorldController {
         constructionTicks: f.construction_ticks,
         unlockLevel: f.unlock_level,
         requiresPort: f.requires_port,
+        cityCosts,
       };
     });
   }

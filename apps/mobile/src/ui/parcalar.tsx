@@ -7,6 +7,22 @@ import { bosluk, golge, gradyan, kisaPara, renk, yaziTipi, yuvarlak } from './te
 
 type IkonAdi = ComponentProps<typeof MCI>['name'];
 
+/**
+ * Tesis kategorisine göre ikon.
+ *
+ * ★ Anahtarlar `facility_types.category` ile BİREBİR aynı olmalı. Önce
+ * `FARM`/`MINE`/`FACTORY` yazıyordu; gerçek değerler `AGRICULTURE`/`MINING`/
+ * `INDUSTRY`. Sessizce başarısız oluyordu — eşleşmeyen her kategori genel
+ * `domain` ikonuna düşüyor, yani fırın da madenle aynı görünüyordu.
+ */
+export const tesisIkonu: Record<string, IkonAdi> = {
+  RETAIL: 'storefront',
+  AGRICULTURE: 'sprout',
+  MINING: 'pickaxe',
+  INDUSTRY: 'factory',
+  LOGISTICS: 'ferry',
+};
+
 /** Gradyanlı kart — düz yüzey yerine hafif derinlik. */
 export function Kart({ children, style }: { children: ReactNode; style?: object }) {
   return (

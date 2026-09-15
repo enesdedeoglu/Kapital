@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { Tesis } from '~/api/types';
-import { bosluk, golge, gradyan, renk, yaziTipi, yuvarlak } from './tema';
+import { bosluk, golge, gradyan, paraBicimle, renk, yaziTipi, yuvarlak } from './tema';
 
 export interface EmirGirdisi {
   side: 'BUY' | 'SELL';
@@ -138,8 +138,14 @@ export function EmirPaneli({
                 <Text style={s.toplamEtiket}>
                   {alis ? 'EN FAZLA ÖDERSİN' : 'EN AZ ALIRSIN'}
                 </Text>
+                {/*
+                  ★ `toLocaleString('tr-TR')` DEĞİL: Hermes tam ICU ile gelmez
+                  ve binlik ayırıcıyı yok sayar — "6000" yazardı, "6.000"
+                  değil (aynı hata tema.ts'te de vardı, orada düzeltilmişti;
+                  burası gözden kaçmış). `paraBicimle` kuruş bekler.
+                */}
                 <Text style={s.toplamDeger}>
-                  {toplam.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ₺
+                  {paraBicimle(BigInt(Math.round(toplam * 10_000)), 2)} ₺
                 </Text>
               </View>
             )}

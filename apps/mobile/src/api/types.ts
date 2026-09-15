@@ -237,3 +237,31 @@ export interface Mesafe {
   readonly distanceIndex: number;
   readonly transitTicks: number;
 }
+
+/** Kurulabilir tesis türü — `/facility-types`. */
+export interface TesisTuru {
+  readonly id: number;
+  readonly code: string;
+  readonly name: string;
+  readonly category: string;
+  readonly baseCost: string;
+  readonly baseCostFormatted: string;
+  readonly baseCapacity: number;
+  /** TUR BAŞINA bakım gideri — P5 her turda düşer. */
+  readonly maintenanceCost: string;
+  readonly maintenanceCostFormatted: string;
+  readonly storageCapacity: string;
+  readonly constructionTicks: number;
+  readonly unlockLevel: number;
+  readonly requiresPort: boolean;
+  /**
+   * Şehir koduna göre GERÇEK kurulum maliyeti (taban × arsa endeksi) ve o
+   * şehirde kurulabilir mi (liman şartı). Sunucuda hesaplanır: para çarpımı
+   * `mulMoney` ile yapılır, istemcide tekrarlanmaz (ADR-0001).
+   */
+  readonly cityCosts: Record<string, {
+    readonly cost: string;
+    readonly costFormatted: string;
+    readonly buildable: boolean;
+  }>;
+}
