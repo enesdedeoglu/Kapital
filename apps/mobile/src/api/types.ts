@@ -173,3 +173,21 @@ export interface AcikEmir {
   readonly pricePerUnitFormatted: string;
   readonly expiresAtTick: string | null;
 }
+
+/** Raf teklifi — `GET /retail/:facilityId`, `PUT /retail/:facilityId/prices`. */
+export interface RafTeklifi {
+  readonly productCode: string;
+  readonly productName: string;
+  readonly unit: string;
+  readonly sellingPrice: string;
+  readonly sellingPriceFormatted: string;
+  readonly enabled: boolean;
+  /** Piyasa referans fiyatı — neye göre fiyatladığını görsün. */
+  readonly referencePrice: string;
+  readonly referencePriceFormatted: string;
+  /** Müşterinin ödemeyi kabul ettiği TAVAN; üstünde kimse almaz. */
+  readonly reservationCeiling: string;
+  readonly reservationCeilingFormatted: string;
+  readonly aboveCeiling: boolean;
+  readonly availableStock: string;
+}

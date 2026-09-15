@@ -6,9 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { ApiError } from '~/api/client';
-import type { Lot, Tesis, TesisStok } from '~/api/types';
+import type { Lot, RafTeklifi, Tesis, TesisStok } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
 import { LotPaneli } from '~/ui/LotPaneli';
+import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 /** Tesis türüne göre ikon — kart tek bakışta ne olduğunu söylesin. */
@@ -32,6 +33,11 @@ export default function Sirketim() {
   // Lot paneli
   const [lotBaslik, setLotBaslik] = useState<{ ad: string; birim: string } | null>(null);
   const [lotlar, setLotlar] = useState<Lot[] | null>(null);
+
+  // Raf paneli
+  const [rafTesis, setRafTesis] = useState<Tesis | null>(null);
+  const [teklifler, setTeklifler] = useState<RafTeklifi[] | null>(null);
+  const [bildirim, setBildirim] = useState<string | null>(null);
 
   const yukle = useCallback(async () => {
     try {
@@ -66,6 +72,33 @@ export default function Sirketim() {
     }
   }, [iste]);
 
+  const rafiAc = useCallback(async (t: Tesis) => {
+    setRafTesis(t);
+    setTeklifler(null);
+    try {
+      setTeklifler(await iste<RafTeklifi[]>(`/retail/${t.id}`));
+    } catch {
+      setTeklifler([]);
+    }
+  }, [iste]);
+
+  const rafKaydet = useCallback(async (girdi: RafGirdisi[]): Promise<string | null> => {
+    if (!rafTesis) return 'Tesis seçili değil';
+    try {
+      await iste(`/retail/${rafTesis.id}/prices`, { method: 'PUT', body: { prices: girdi } });
+      setBildirim('Raf fiyatları güncellendi.');
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Fiyatlar kaydedilemedi';
+    }
+  }, [iste, rafTesis]);
+
+  useEffect(() => {
+    if (!bildirim) return;
+    const t = setTimeout(() => setBildirim(null), 3000);
+    return () => clearTimeout(t);
+  }, [bildirim]);
+
   if (tesisler === null && !hata) {
     return <View style={s.orta}><ActivityIndicator color={renk.altin} /></View>;
   }
@@ -81,6 +114,13 @@ export default function Sirketim() {
           />
         }
       >
+        {bildirim && (
+          <View style={s.bildirim}>
+            <MCI name="check-circle-outline" size={16} color={renk.artı} />
+            <Text style={s.bildirimYazi}>{bildirim}</Text>
+          </View>
+        )}
+
         {hata && (
           <Kart style={s.hataKart}>
             <Etiket ikon="wifi-off" yazi="HATA" ton={renk.eksi} />
@@ -147,6 +187,19 @@ export default function Sirketim() {
                 </View>
               </Pressable>
 
+              {/*
+                ★ Raf fiyatı YALNIZ perakende tesisinde anlamlı: fabrikanın
+                rafı yoktur, malını toptan piyasada satar. Düğmeyi her tesise
+                koymak "neden çalışmıyor" sorusunu doğururdu.
+              */}
+              {acikMi && t.type.category === 'RETAIL' && (
+                <Pressable style={s.rafDugme} onPress={() => void rafiAc(t)}>
+                  <MCI name="tag-multiple-outline" size={16} color={renk.altin} />
+                  <Text style={s.rafDugmeYazi}>Raf fiyatları</Text>
+                  <MCI name="chevron-right" size={18} color={renk.altin} />
+                </Pressable>
+              )}
+
               {acikMi && stok && (
                 stok.products.length === 0
                   ? <Text style={s.bosStok}>Depo boş.</Text>
@@ -188,6 +241,14 @@ export default function Sirketim() {
         })}
       </ScrollView>
 
+      <RafPaneli
+        acik={rafTesis !== null}
+        tesisAdi={rafTesis?.name ?? ''}
+        teklifler={teklifler}
+        kapat={() => { setRafTesis(null); setTeklifler(null); }}
+        kaydet={rafKaydet}
+      />
+
       <LotPaneli
         acik={lotBaslik !== null}
         urunAdi={lotBaslik?.ad ?? ''}
@@ -219,6 +280,22 @@ function kaliteRengi(q: number) {
 const s = StyleSheet.create({
   icerik: { padding: bosluk.l, paddingBottom: 110, gap: bosluk.m },
   orta: { flex: 1, justifyContent: 'center' },
+
+  bildirim: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(61,220,151,0.12)', borderWidth: 1,
+    borderColor: 'rgba(61,220,151,0.35)', borderRadius: yuvarlak.m,
+    paddingHorizontal: bosluk.m, paddingVertical: 10,
+  },
+  bildirimYazi: { color: renk.artı, fontSize: 13, fontFamily: yaziTipi.govdeOrta },
+
+  rafDugme: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: bosluk.m,
+    paddingVertical: 10, paddingHorizontal: bosluk.m, borderRadius: yuvarlak.m,
+    backgroundColor: 'rgba(255,194,75,0.10)', borderWidth: 1,
+    borderColor: 'rgba(255,194,75,0.35)',
+  },
+  rafDugmeYazi: { color: renk.altin, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
 
   hataKart: { borderColor: renk.eksi },
   hata: { color: renk.eksi, fontSize: 14, fontFamily: yaziTipi.govde },
