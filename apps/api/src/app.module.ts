@@ -6,6 +6,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtGuard } from './modules/auth/jwt.guard.js';
 import { CompanyModule } from './modules/company/company.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { ReportModule } from './modules/report/report.module.js';
 import { FacilityModule } from './modules/facility/facility.module.js';
 import { ForeignModule } from './modules/foreign/foreign.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -25,7 +26,7 @@ import { WorldModule } from './modules/world/world.module.js';
 @Module({
   imports: [DbModule, AuthModule, WorldModule, CompanyModule, FacilityModule,
            InventoryModule, MarketModule, RetailModule, StandingModule, ForeignModule, LoanModule,
-           AdminModule, HealthModule, DashboardModule],
+           AdminModule, HealthModule, DashboardModule, ReportModule],
   // Varsayılan KAPALI: uçlar açıkça @Public() denmedikçe oturum ister.
   providers: [{ provide: APP_GUARD, useClass: JwtGuard }],
 })

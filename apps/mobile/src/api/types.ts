@@ -282,3 +282,44 @@ export interface TesisTuru {
     readonly buildable: boolean;
   }>;
 }
+
+/** "Sen yokken ne oldu" raporu — `GET /report?sinceTick=N` (madde 45). */
+export interface Rapor {
+  readonly pencere: {
+    readonly baslangicTur: string;
+    readonly bitisTur: string;
+    readonly turSayisi: number;
+    readonly dakika: number;
+    /** Pencere 7 günle sınırlandıysa true — rapor "her şeyi" anlatmıyor demektir. */
+    readonly kirpildi: boolean;
+  };
+  /** false = kaçırılan tur yok; rapor gösterilmez. */
+  readonly yeniMi: boolean;
+  readonly kar: {
+    readonly net: string; readonly netFormatted: string;
+    readonly ciro: string; readonly ciroFormatted: string;
+    readonly gider: string; readonly giderFormatted: string;
+  };
+  readonly satislar: readonly {
+    readonly urunKodu: string; readonly urunAdi: string;
+    readonly adet: string; readonly adetFormatted: string;
+    readonly ciro: string; readonly ciroFormatted: string;
+  }[];
+  readonly uretim: readonly {
+    readonly urunAdi: string;
+    readonly uretilen: string; readonly uretilenFormatted: string;
+  }[];
+  readonly sorunlar: readonly {
+    readonly tesisAdi: string;
+    readonly mesaj: string;
+    /** Süre CÜMLESİ — anlamı sorunun türüne göre değişir, sunucu kurar. */
+    readonly sure: string;
+    readonly turSayisi: number;
+    readonly ilkTur: string; readonly sonTur: string;
+  }[];
+  readonly dunya: readonly {
+    readonly tur: string; readonly kod: string; readonly onem: string;
+    readonly baslik: string; readonly metin: string;
+    readonly urunAdi: string | null; readonly sehirAdi: string | null;
+  }[];
+}
