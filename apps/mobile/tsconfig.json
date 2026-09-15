@@ -1,0 +1,20 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": false,
+    "paths": {
+      "~/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "app/**/*",
+    "src/**/*",
+    "*.ts",
+    "*.tsx"
+  ]
+}
