@@ -115,8 +115,19 @@ export async function collectMetrics(sql: Sql, input: MetricInput): Promise<Metr
   out.push({
     key: 'retail_fulfilment', label: 'Tüketici talebinin karşılanma oranı',
     value: fulfilMedian,
+    /*
+     * ★ KITLIĞA DÜŞEN ÜRÜN ADIYLA YAZILIR (R95).
+     *
+     * Rapor "mal bulunamayan 1/4" diyordu ve HANGİSİ olduğunu söylemiyordu;
+     * kapı bu ölçütten düştüğünde beş tohumun teşhis dosyalarını tek tek
+     * açmak gerekiyordu. Yanındaki bütçe payı da yazılır: ölçütün tamamı
+     * "mal yok"u "pahalı"dan ayırmaktır, o ayrımı taşıyan iki sayı budur.
+     */
     formatted: fulfilMedian === null ? '—'
-      : `${pct(fulfilMedian)} · mal bulunamayan ${starved.length}/${ff.length}`,
+      : `${pct(fulfilMedian)} · mal bulunamayan ${starved.length}/${ff.length}`
+        + (starved.length > 0
+          ? ` (${starved.map((r) => `${r.code} ${pct(r.fulfil)}, bütçe ${pct(r.budget)}`).join('; ')})`
+          : ''),
     target: 'kıtlıktan karşılanamayan ürün yok',
     pass: fulfilMedian === null ? null : starved.length === 0,
   });

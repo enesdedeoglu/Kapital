@@ -87,7 +87,15 @@ if (jsonPath) {
     metrics: report.metrics,
     perSeed: runs.map((r) => ({
       seed: r.seed,
-      metrics: r.metrics.map((m) => ({ key: m.key, value: m.value, pass: m.pass })),
+      /*
+       * ★ `formatted` de saklanır: ham sayı hangi tohumda ne olduğunu
+       * söylemiyor. Kapı düşünce JSON'a bakıp "hangi tohumda hangi ürün"
+       * sorusunu cevaplamak istedim, alan yoktu ve beş iş log'unu tek tek
+       * açmak gerekti. Birleşik rapor yalnız MEDYAN tohumun metnini basar.
+       */
+      metrics: r.metrics.map((m) => ({
+        key: m.key, value: m.value, pass: m.pass, formatted: m.formatted,
+      })),
     })),
   }, null, 2));
   console.log(`\nJSON rapor: ${jsonPath}`);
