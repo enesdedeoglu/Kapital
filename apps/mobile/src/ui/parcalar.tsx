@@ -2,7 +2,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { ComponentProps, ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { bosluk, golge, gradyan, kisaPara, renk, yaziTipi, yuvarlak } from './tema';
 
@@ -198,33 +197,6 @@ function Carpan({ ad, v, tersRenk = false }: { ad: string; v: number; tersRenk?:
 }
 
 /** Yazılmamış sekmeler: boş ekran yerine ne geleceğini gösteren liste. */
-export function Yakinda({ ikon, baslik, maddeler }:
-{ ikon: IkonAdi; baslik: string; maddeler: string[] }) {
-  /*
-   * ★ Başlık ŞEFFAF: `headerTransparent` ile zemin gradyanı üstten kesilmiyor,
-   * ama içerik de başlığın altına kayıyor — ikon dairesi "Şirketim" yazısının
-   * üstüne biniyordu. Güvenli alan + başlık yüksekliği kadar itilir.
-   */
-  const kenar = useSafeAreaInsets();
-  return (
-    <View style={[s.yakindaZemin, { paddingTop: kenar.top + 56 }]}>
-      <View style={s.yakindaIkon}>
-        <MCI name={ikon} size={36} color={renk.mor} />
-      </View>
-      <Text style={s.yakindaBaslik}>{baslik}</Text>
-      <Text style={s.yakindaAlt}>Yapım aşamasında</Text>
-      <Kart style={s.yakindaKart}>
-        {maddeler.map((m) => (
-          <View key={m} style={s.yakindaMadde}>
-            <MCI name="circle-small" size={18} color={renk.mor} />
-            <Text style={s.yakindaMetin}>{m}</Text>
-          </View>
-        ))}
-      </Kart>
-    </View>
-  );
-}
-
 const s = StyleSheet.create({
   kart: {
     borderRadius: yuvarlak.l, borderWidth: 1, borderColor: renk.kenar,
@@ -281,18 +253,4 @@ const s = StyleSheet.create({
   rozetUnvan: { color: renk.metin, fontSize: 17, fontFamily: yaziTipi.baslik },
   rozetAlt: { color: renk.soluk, fontSize: 13, fontFamily: yaziTipi.govde },
 
-  yakindaZemin: {
-    flex: 1, alignItems: 'center', paddingHorizontal: bosluk.xl,
-    paddingBottom: bosluk.xl, gap: bosluk.s,
-  },
-  yakindaIkon: {
-    width: 76, height: 76, borderRadius: yuvarlak.tam, marginTop: bosluk.l,
-    backgroundColor: 'rgba(139,92,246,0.14)', borderWidth: 1, borderColor: 'rgba(139,92,246,0.35)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  yakindaBaslik: { color: renk.metin, fontSize: 22, fontFamily: yaziTipi.baslik, marginTop: bosluk.s },
-  yakindaAlt: { color: renk.soluk, fontSize: 13, fontFamily: yaziTipi.govde, marginBottom: bosluk.m },
-  yakindaKart: { alignSelf: 'stretch', gap: bosluk.xs },
-  yakindaMadde: { flexDirection: 'row', alignItems: 'flex-start', gap: 2 },
-  yakindaMetin: { color: renk.soluk, fontSize: 14, lineHeight: 22, flex: 1, fontFamily: yaziTipi.govde },
 });

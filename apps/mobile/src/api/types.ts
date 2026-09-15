@@ -191,3 +191,38 @@ export interface RafTeklifi {
   readonly aboveCeiling: boolean;
   readonly availableStock: string;
 }
+
+/**
+ * Şehir künyesi — `/cities`.
+ *
+ * Endekslerin her birinin motorda somut bir karşılığı var; ekran ham sayıyı
+ * değil bu karşılığı anlatmalı:
+ *   populationIndex × incomeIndex × consumerDemandIndex → tüketici talebi
+ *     (`economy/formulas/demand.ts`) — mağaza cirosunu bu belirler.
+ *   agricultureBonus / industrialBonus → üretim kapasitesi çarpanı
+ *     (`economy/production/capacity.ts`, tesis kategorisine göre seçilir).
+ *   landCostIndex → tesis kurma maliyeti (`facility.service.ts`).
+ *   logisticsModifier → hedef şehrin nakliye çarpanı (`economy/market/shipping.ts`).
+ *   hasPort → dış ticaret yapılabilir mi.
+ */
+export interface SehirBilgi {
+  readonly id: number;
+  readonly code: string;
+  readonly name: string;
+  readonly populationIndex: number;
+  readonly incomeIndex: number;
+  readonly landCostIndex: number;
+  readonly industrialBonus: number;
+  readonly agricultureBonus: number;
+  readonly consumerDemandIndex: number;
+  readonly logisticsModifier: number;
+  readonly hasPort: boolean;
+}
+
+/** `/cities/:code/distances` — kaynak şehrin kendisi de 0 mesafeyle gelir. */
+export interface Mesafe {
+  readonly cityCode: string;
+  readonly cityName: string;
+  readonly distanceIndex: number;
+  readonly transitTicks: number;
+}
