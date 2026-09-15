@@ -166,4 +166,76 @@ describe('kalıcı emirler — oyuncu yokken şirket çalışsın', () => {
       SELECT last_run_tick FROM standing_orders`;
     expect(rule!.last_run_tick).toBe(tick.seq);
   });
+
+  /*
+   * ★ YOLDAKİ MAL SAYILIR.
+   *
+   * `on_hand` yalnız depodaki partileri sayıyordu. Açık emir koruması emir
+   * DOLUNCA kalkar, mal ise 2-3 tur sonra varır; arada kural "elimde hiç yok"
+   * deyip yeniden sipariş veriyordu. Simülatörde ölçüldü: "200 kg tut" kuralı
+   * 736. turda 200 kg aldı, mal Ankara'dan 739'da varacakken 737'de 200 kg
+   * daha sipariş etti. Uzak şehirden alan oyuncunun kasası böyle boşalır.
+   */
+  it('★ yoldaki mal hedefi karşılıyorsa YENİ emir verilmez', async () => {
+    const { player, facility } = await shopWithRule({
+      kind: 'RESTOCK', productId: TOMATO, target: qty(400),
+    });
+    // Satın alınmış, yola çıkmış ama henüz varmamış mal.
+    const [satici] = await sql<{ id: string }[]>`
+      SELECT id FROM companies WHERE kind = 'NPC' LIMIT 1`;
+    await sql`
+      INSERT INTO shipments (tick_id, trade_tick_id, trade_id, from_company_id, to_company_id,
+                             to_facility_id, product_id, quantity, delivered_quantity,
+                             quality, unit_cost, shipping_cost, dispatched_tick,
+                             arrival_tick, status)
+      VALUES (0, 0, 1, ${satici!.id}::uuid, ${player.id}::uuid, ${facility.id}::uuid,
+              ${TOMATO}, ${qty(400)}, 0, 70, ${money(10)}, 0, 0, 5, 'IN_TRANSIT')`;
+
+    await runTick(sql);
+    expect(await ordersOf(facility.id, 'BUY')).toHaveLength(0);
+  });
+
+  it('yoldaki mal hedefi karşılamıyorsa YALNIZ eksiği sipariş edilir', async () => {
+    const { player, facility } = await shopWithRule({
+      kind: 'RESTOCK', productId: TOMATO, target: qty(400),
+    });
+    const [satici] = await sql<{ id: string }[]>`
+      SELECT id FROM companies WHERE kind = 'NPC' LIMIT 1`;
+    await sql`
+      INSERT INTO shipments (tick_id, trade_tick_id, trade_id, from_company_id, to_company_id,
+                             to_facility_id, product_id, quantity, delivered_quantity,
+                             quality, unit_cost, shipping_cost, dispatched_tick,
+                             arrival_tick, status)
+      VALUES (0, 0, 2, ${satici!.id}::uuid, ${player.id}::uuid, ${facility.id}::uuid,
+              ${TOMATO}, ${qty(150)}, 0, 70, ${money(10)}, 0, 0, 5, 'IN_TRANSIT')`;
+
+    await runTick(sql);
+    const [order] = await ordersOf(facility.id, 'BUY');
+    expect(order).toBeDefined();
+    expect(order!.quantity).toBe(qty(250));
+  });
+
+  /*
+   * ★ SATIŞ tarafında yoldaki mal SAYILMAZ: henüz elinde olmayan malı
+   * satamazsın. İki tarafı aynı sayıyla beslemek, varmamış malı satışa
+   * çıkarırdı.
+   */
+  it('yoldaki mal FAZLA SATIŞ kuralında sayılmaz', async () => {
+    const { player, facility } = await shopWithRule({
+      kind: 'SELL_SURPLUS', productId: TOMATO, target: qty(100), onHand: qty(100),
+    });
+    const [satici] = await sql<{ id: string }[]>`
+      SELECT id FROM companies WHERE kind = 'NPC' LIMIT 1`;
+    await sql`
+      INSERT INTO shipments (tick_id, trade_tick_id, trade_id, from_company_id, to_company_id,
+                             to_facility_id, product_id, quantity, delivered_quantity,
+                             quality, unit_cost, shipping_cost, dispatched_tick,
+                             arrival_tick, status)
+      VALUES (0, 0, 3, ${satici!.id}::uuid, ${player.id}::uuid, ${facility.id}::uuid,
+              ${TOMATO}, ${qty(500)}, 0, 70, ${money(10)}, 0, 0, 5, 'IN_TRANSIT')`;
+
+    await runTick(sql);
+    // Elde tam hedef kadar var, fazlası yok → satış emri çıkmamalı.
+    expect(await ordersOf(facility.id, 'SELL')).toHaveLength(0);
+  });
 });

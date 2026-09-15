@@ -33,6 +33,8 @@ interface RuleRow {
   unit_cost: bigint;
   quality: string;
   free_capacity: bigint;
+  /** Satın alınmış ama HENÜZ VARMAMIŞ mal — yolda. */
+  incoming: bigint;
 }
 
 /**
@@ -68,7 +70,8 @@ export async function runStandingOrders(
            COALESCE(st.available, 0)::bigint AS on_hand,
            COALESCE(st.unit_cost, 0)::bigint AS unit_cost,
            COALESCE(st.quality, '70') AS quality,
-           (i.capacity - i.used_capacity)::bigint AS free_capacity
+           (i.capacity - i.used_capacity)::bigint AS free_capacity,
+           COALESCE(tr.incoming, 0)::bigint AS incoming
       FROM standing_orders so
       JOIN companies c ON c.id = so.company_id AND c.status = 'ACTIVE'
       JOIN facilities f ON f.id = so.facility_id AND f.closed_at IS NULL
@@ -82,6 +85,12 @@ export async function runStandingOrders(
           FROM inventory_batches b
          WHERE b.inventory_id = i.id AND b.product_id = so.product_id
       ) st ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT SUM(sh.quantity - sh.delivered_quantity)::bigint AS incoming
+          FROM shipments sh
+         WHERE sh.to_facility_id = f.id AND sh.product_id = so.product_id
+           AND sh.status IN ('IN_TRANSIT', 'PARTIAL')
+      ) tr ON TRUE
      WHERE so.enabled
      ORDER BY so.company_id, so.id`;
   if (rules.length === 0) return out;
@@ -122,10 +131,27 @@ export async function runStandingOrders(
       }
       const budget = budgets.get(rule.company_id)!;
 
+      /*
+       * ★ YOLDAKİ MAL SAYILIR — yoksa kural aynı malı tekrar tekrar alır.
+       *
+       * `on_hand` yalnız depodaki partileri sayıyordu. Açık emir koruması
+       * (`openOrders`) emir DOLUNCA kalkıyor, mal ise 2-3 tur sonra varıyor.
+       * Arada kural "elimde hiç yok" diyip yeniden sipariş veriyordu.
+       * ÖLÇÜLDÜ: "200 kg tut" kuralı 736. turda 200 kg aldı; mal Ankara'dan
+       * 739'da varacakken 737. turda 200 kg daha sipariş etti. Uzak şehirden
+       * alan bir oyuncunun kasası böyle boşalır.
+       *
+       * Kapasite de aynı sebeple düşülür: yoldaki mal vardığında depoya
+       * girecek. Saymazsak depo taşar ve teslimat STORAGE_FULL ile başarısız
+       * olur — satın alınmış mal kapıda kalır.
+       *
+       * SATIŞ tarafında sayılmaz: yoldaki malı satamazsın, henüz elinde değil.
+       */
+      const bosKapasite = rule.free_capacity - rule.incoming;
       const decision = standingRestock({
-        onHand: asQty(rule.on_hand),
+        onHand: asQty(rule.on_hand + rule.incoming),
         targetQuantity: asQty(rule.target_quantity),
-        freeCapacity: asQty(rule.free_capacity),
+        freeCapacity: asQty(bosKapasite > 0n ? bosKapasite : 0n),
         reference,
         freightAllowance: freight(rule.city_id, rule.product_id),
         maxPrice: rule.max_price === null ? null : asMoney(rule.max_price),
