@@ -318,3 +318,61 @@ describe('★ dış ticaret (docs/12)', () => {
     expect(res.body.message).toMatch(/ithal edilemez/);
   });
 });
+
+/**
+ * ★ Madde 16 — ekran motorla AYNI sırayı göstermeli.
+ *
+ * Emir defteri mal fiyatına göre sıralanıyordu ama alıcının ödediği TOPLAM
+ * maliyettir (mal + nakliye) ve `matching.ts` de toplama göre seçer. Uzak ve
+ * ucuz bir satıcı, yakın ve biraz pahalı olanın üstünde görünüyordu; oyuncu
+ * "en üsttekini aldım" derken en ucuzu almamış oluyordu.
+ */
+describe('★ emir defteri TOPLAM maliyete göre sıralanır (madde 16)', () => {
+  it('uzak ve UCUZ satıcı, yakın ve pahalı satıcının ALTINA düşer', async () => {
+    /*
+     * KON→IST nakliyesi demir için 2,31 ₺ (ağırlık 1 × mesafe 6,6 × 3500).
+     * Ayrışma için MAL FARKI nakliyeden KÜÇÜK olmalı: 1 ₺ < 2,31 ₺.
+     *   yakın: 26,00 + 0,00 = 26,00   ← toplamda ucuz
+     *   uzak : 25,00 + 2,31 = 27,31   ← malda ucuz
+     * Mal fiyatına göre sıralarsak uzak önce gelir; toplama göre yakın.
+     */
+    // Aynı şehirde (nakliye 0) MALDA pahalı satıcı.
+    const yakin = await player({ cityCode: 'IST' });
+    await stockUp(yakin.facilityId, IRON, qty(500));
+    await call('/market/orders', {
+      method: 'POST', token: yakin.token,
+      body: { side: 'SELL', facilityId: yakin.facilityId, productCode: 'IRON',
+              quantity: 500, pricePerUnit: 26 },
+    });
+
+    // Uzak şehirde MALDA ucuz satıcı — ama nakliyeyle toplamı daha yüksek.
+    const uzak = await player({ cityCode: 'KON' });
+    await stockUp(uzak.facilityId, IRON, qty(500));
+    await call('/market/orders', {
+      method: 'POST', token: uzak.token,
+      body: { side: 'SELL', facilityId: uzak.facilityId, productCode: 'IRON',
+              quantity: 500, pricePerUnit: 25 },
+    });
+
+    const alici = await player({ cityCode: 'IST' });
+    const book = await call('/market/book/IRON?city=IST', { token: alici.token });
+    expect(book.status).toBe(200);
+
+    const satirlar = book.body.sell as { goodsPrice: string; totalPerUnit: string }[];
+    expect(satirlar.length).toBeGreaterThanOrEqual(2);
+
+    // Toplamlar ARTAN sırada olmalı.
+    const toplamlar = satirlar.map((r) => BigInt(r.totalPerUnit));
+    for (let i = 1; i < toplamlar.length; i++) {
+      expect(toplamlar[i]! >= toplamlar[i - 1]!).toBe(true);
+    }
+
+    // ★ İlk satırın MAL fiyatı en ucuz OLMAYABİLİR — toplamı en ucuz olmalı.
+    const enUcuzToplam = toplamlar.reduce((a, b) => (b < a ? b : a));
+    expect(BigInt(satirlar[0]!.totalPerUnit)).toBe(enUcuzToplam);
+    // Kurgu gerçekten ayrışıyor mu: mal fiyatı sıralaması TOPLAMDAN farklı.
+    const mallar = satirlar.map((r) => BigInt(r.goodsPrice));
+    const malSirali = [...mallar].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(mallar).not.toEqual(malSirali);
+  });
+});

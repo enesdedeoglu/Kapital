@@ -65,3 +65,44 @@ export interface Ozet {
     readonly maliyet: number;
   }[];
 }
+
+/** Ürün kataloğu — `GET /products`. */
+export interface Urun {
+  readonly id: number;
+  readonly code: string;
+  readonly name: string;
+  readonly unit: string;
+  readonly isRetailProduct?: boolean;
+  readonly unlockLevel?: number;
+}
+
+/** Emir defteri — `GET /market/book/:kod`. Madde 16: üç rakam AYRI. */
+export interface Defter {
+  readonly product: { readonly code: string; readonly name: string; readonly unit: string };
+  readonly deliveryCityId: number;
+  readonly sell: readonly {
+    readonly orderId: string;
+    readonly seller: { readonly name: string; readonly kind: string };
+    readonly city: { readonly code: string; readonly name: string };
+    readonly available: string;
+    readonly availableFormatted: string;
+    readonly quality: number;
+    readonly goodsPrice: string;
+    readonly goodsPriceFormatted: string;
+    readonly shippingPerUnit: string;
+    readonly shippingPerUnitFormatted: string;
+    readonly totalPerUnit: string;
+    readonly totalPerUnitFormatted: string;
+    readonly distanceIndex: number;
+    readonly transitTicks: number;
+  }[];
+  readonly buy: readonly {
+    readonly orderId: string;
+    readonly buyer: string;
+    readonly cityCode: string;
+    readonly wanted: string;
+    readonly maxTotalPerUnit: string;
+    readonly maxTotalPerUnitFormatted: string;
+    readonly minQuality: number;
+  }[];
+}

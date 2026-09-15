@@ -170,6 +170,22 @@ export class OrderService {
     return {
       product: { code: productCode, name: product.name, unit: product.unit },
       deliveryCityId: targetCity.id,
+      /*
+       * ★ SIRALAMA TOPLAM MALİYETE GÖRE, mal fiyatına göre DEĞİL.
+       *
+       * SQL `price_per_unit` ile sıralıyor ama nakliye ondan sonra, teslim
+       * şehrine göre hesaplanıyor. Uzak ve ucuz bir satıcı, yakın ve biraz
+       * pahalı olanın üstünde görünüyordu — oysa alıcının ödediği TOPLAMDIR
+       * ve eşleştirme motoru da toplama göre seçer (`matching.ts`: sıralama
+       * `sell.price + shipping`). Ekran motorla aynı sırayı göstermeli,
+       * yoksa oyuncu "en üsttekini aldım" derken en ucuzu almamış olur.
+       *
+       * ÖLÇÜLDÜ (TOMATO, İstanbul teslim): 4. satır 23,40 ₺ iken 3. satır
+       * 23,42 ₺ idi; 8. satır 24,17 ₺ iken 7. satır 24,87 ₺.
+       *
+       * Not: `LIMIT 100` nakliye bilinmeden uygulanır, yani bu sıralama
+       * getirilen 100 kaydın İÇİNDE doğrudur — madde 16 için yeterli.
+       */
       sell: sells.map((s) => {
         const goods = asMoney(s.price_per_unit);
         const ship = shippingPerUnit({
@@ -193,7 +209,8 @@ export class OrderService {
           distanceIndex: s.distance_index,
           transitTicks: s.transit_ticks,
         };
-      }),
+      }).sort((a, b) => (BigInt(a.totalPerUnit) < BigInt(b.totalPerUnit) ? -1
+        : BigInt(a.totalPerUnit) > BigInt(b.totalPerUnit) ? 1 : 0)),
       buy: buys.map((b) => ({
         orderId: b.id.toString(),
         buyer: b.company_name,
