@@ -10,8 +10,18 @@ export interface ShippingInput {
   readonly baseRate: Money;
   /** `companies.logistics_modifier` — AR-GE ile düşer (F11). */
   readonly logisticsModifier: number;
-  /** Hedef şehrin `logistics_modifier`'ı. */
-  readonly cityModifier?: number;
+  /**
+   * HEDEF (teslim) şehrin `cities.logistics_modifier`'ı — KAYNAK şehrin değil.
+   * Malın vardığı yerin altyapısı maliyeti belirler: Konya'ya taşımak %5
+   * pahalıdır, Konya'dan taşımak değil.
+   *
+   * ★ ZORUNLU, ve bilerek öyle. Önce `?? 1` varsayılanlı isteğe bağlı bir alan
+   * olarak duruyordu ve HİÇBİR ÇAĞIRAN geçmiyordu: sütun seed'de doluydu
+   * (Konya 1,05), doküman onu anlatıyordu, kimse okumuyordu. Sessiz varsayılan
+   * bu ölü veriyi bir tur boyunca değil, aylarca gizledi. Zorunlu alanda
+   * derleyici her yeni çağıranı karar vermeye mecbur eder.
+   */
+  readonly cityModifier: number;
 }
 
 /**
@@ -28,7 +38,7 @@ export function shippingCost(input: ShippingInput): Money {
     input.weightPerUnit *
     input.distanceIndex *
     input.logisticsModifier *
-    (input.cityModifier ?? 1);
+    input.cityModifier;
   // miktar ölçeği (1e3) düşürülür: taban oran birim başınadır
   const perUnitTotal = mulMoney(input.baseRate, factor).value;
   return ((perUnitTotal * (input.quantity as bigint)) / 1000n) as Money;
@@ -41,6 +51,6 @@ export function shippingPerUnit(
   if (input.distanceIndex <= 0) return 0n as Money;
   return mulMoney(
     input.baseRate,
-    input.weightPerUnit * input.distanceIndex * input.logisticsModifier * (input.cityModifier ?? 1),
+    input.weightPerUnit * input.distanceIndex * input.logisticsModifier * input.cityModifier,
   ).value;
 }

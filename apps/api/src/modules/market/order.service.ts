@@ -125,9 +125,16 @@ export class OrderService {
       SELECT id, unit, weight_per_unit, name FROM products WHERE code = ${productCode} AND is_active`;
     if (!product) throw new NotFound('Ürün', productCode);
 
+    // `logistics_modifier` teslim şehrinden okunur: SATIŞ emirlerinde mal bana
+    // gelir, yani hedef BENİM şehrimdir (`shipping.ts` — çarpan hedefindir).
     const targetCity = deliveryCityCode
-      ? (await this.sql<{ id: number }[]>`SELECT id FROM cities WHERE code = ${deliveryCityCode.toUpperCase()}`)[0]
-      : (await this.sql<{ id: number }[]>`SELECT home_city_id AS id FROM companies WHERE id = ${company.id}::uuid`)[0];
+      ? (await this.sql<{ id: number; logistics_modifier: number }[]>`
+          SELECT id, logistics_modifier FROM cities
+           WHERE code = ${deliveryCityCode.toUpperCase()}`)[0]
+      : (await this.sql<{ id: number; logistics_modifier: number }[]>`
+          SELECT c.id, c.logistics_modifier
+            FROM companies co JOIN cities c ON c.id = co.home_city_id
+           WHERE co.id = ${company.id}::uuid`)[0];
     if (!targetCity) throw new NotFound('Şehir', deliveryCityCode ?? '');
 
     const [cfg] = await this.sql<{ value: { baseRatePerKgDistance: string } }[]>`
@@ -160,16 +167,22 @@ export class OrderService {
      * Satışta mal SATICIDAN BANA gelir; burada BENDEN ALICIYA gider. Mesafe
      * tablosu bugün simetrik (ölçüldü: 25 çiftin 0'ı asimetrik) ama sorgu
      * anlamına göre yazılır: simetri bir veri tesadüfüdür, kural değil.
+     *
+     * Şehir lojistik çarpanında ise simetri hiç YOKTUR: çarpan yalnız HEDEF
+     * şehrin. Üstteki listede hedef benim şehrim, burada alıcının şehri —
+     * aynı iki şehir arasında iki yönün ücreti farklı çıkabilir.
      */
     const buys = await this.sql<{
       id: bigint; company_name: string; city_code: string;
       remaining_quantity: bigint; price_per_unit: bigint; min_quality: string;
-      distance_index: number; transit_ticks: number;
+      distance_index: number; transit_ticks: number; city_modifier: number;
     }[]>`
       SELECT o.id, co.name AS company_name, c.code AS city_code,
              o.remaining_quantity, o.price_per_unit, o.min_quality::text,
              COALESCE(d.distance_index, 0) AS distance_index,
-             COALESCE(d.transit_ticks, 0) AS transit_ticks
+             COALESCE(d.transit_ticks, 0) AS transit_ticks,
+             -- Bu yönde hedef ALICININ şehridir; c zaten o şehre bağlı.
+             c.logistics_modifier AS city_modifier
       FROM market_orders o
       JOIN companies co ON co.id = o.company_id
       JOIN cities c ON c.id = o.city_id
@@ -205,6 +218,7 @@ export class OrderService {
           distanceIndex: s.distance_index,
           baseRate,
           logisticsModifier: company.logisticsModifier,
+          cityModifier: targetCity.logistics_modifier,
         });
         const total = asMoney((goods as bigint) + (ship as bigint));
         return {
@@ -251,6 +265,7 @@ export class OrderService {
           distanceIndex: b.distance_index,
           baseRate,
           logisticsModifier: company.logisticsModifier,
+          cityModifier: b.city_modifier,
         });
         const goods = (ceiling as bigint) - (ship as bigint);
         const goodsCeiling = asMoney(goods > 0n ? goods : 0n);
