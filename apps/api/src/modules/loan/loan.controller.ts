@@ -1,9 +1,13 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseInterceptors } from '@nestjs/common';
+import {
+  Body, Controller, Get, Inject, Param, Post, Query, Req, UseInterceptors,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
-import { takeLoanSchema, type TakeLoanDto } from './loan.dto.js';
+import {
+  previewLoanSchema, takeLoanSchema, type PreviewLoanDto, type TakeLoanDto,
+} from './loan.dto.js';
 import { LoanService } from './loan.service.js';
 
 @Controller('loans')
@@ -14,6 +18,15 @@ export class LoanController {
   @Get()
   overview(@Req() req: Request & { user: AuthUser }) {
     return this.loans.overview(req.user.sub);
+  }
+
+  /** "Bu krediyi alırsam ne öderim" — para harcamadan. */
+  @Get('preview')
+  preview(
+    @Req() req: Request & { user: AuthUser },
+    @Query(new ZodPipe(previewLoanSchema)) dto: PreviewLoanDto,
+  ) {
+    return this.loans.preview(req.user.sub, dto);
   }
 
   @Post()

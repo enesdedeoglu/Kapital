@@ -7,7 +7,7 @@ import {
   asMoney, DomainError, formatMoney, InsufficientFunds, money, NotFound,
 } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
-import type { TakeLoanDto } from './loan.dto.js';
+import type { PreviewLoanDto, TakeLoanDto } from './loan.dto.js';
 
 interface Borrower {
   id: string; name: string; level: number; cash: bigint;
@@ -68,6 +68,59 @@ export class LoanService {
           paymentBurden: paymentBurden(payment, asMoney(borrower.revenuePerTick)),
         };
       }),
+    };
+  }
+
+  /**
+   * "Bu krediyi alırsam ne öderim" — TAAHHÜTTEN ÖNCE.
+   *
+   * ★★★★ BU HESAP İSTEMCİDE YAPILAMAZ (ADR-0001). Taksit `annuityPayment`
+   * ile bulunur: float bir çarpan, ardından bigint çarpımı ve bankacı
+   * yuvarlaması. İstemcide float ile yeniden yazmak, GÖSTERİLEN taksitin her
+   * tur TAHSİL EDİLENDEN sapması demekti — 2.688 tur boyunca ödenecek bir
+   * sayıda bu kabul edilemez. Gösterilen ile tahsil edilenin aynı olmasının
+   * tek garantisi, ikisinin aynı işlevden geçmesidir.
+   *
+   * ★ REDDETMEZ, RAPOR EDER: limiti aşan tutar hata değil `exceedsLimit`
+   * olarak döner. Oyuncu rakamı denerken her seferinde hataya çarpmamalı.
+   */
+  async preview(userId: string, dto: PreviewLoanDto) {
+    const borrower = await this.borrower(userId);
+    const terms = await this.terms(borrower.level);
+    const rate = await this.currentRate(terms.interest_rate);
+
+    const amount = money(dto.amount);
+    const available = maxLoanAmount(
+      asMoney(borrower.companyValue), asMoney(borrower.debt), terms.leverage_ratio,
+    );
+    const term = Math.min(dto.termTicks ?? terms.max_term_ticks, terms.max_term_ticks);
+    const payment = annuityPayment(amount, rate, term);
+
+    /*
+     * ★ TOPLAM "vade sonuna kadar ödenirse"dir, tahmin değil: sözleşmenin
+     * yüzü budur. Erken kapatan daha az öder (`repay`), o yüzden gerçek toplam
+     * bundan yüksek olamaz.
+     */
+    const totalPayment = asMoney((payment as bigint) * BigInt(term));
+    const totalInterest = asMoney((totalPayment as bigint) - (amount as bigint));
+
+    return {
+      amount: amount.toString(),
+      amountFormatted: formatMoney(amount),
+      termTicks: term,
+      interestRatePerTick: rate,
+      interestRateAnnualPct: Number(((Math.pow(1 + rate, 2688) - 1) * 100).toFixed(2)),
+      paymentPerTick: payment.toString(),
+      paymentPerTickFormatted: formatMoney(payment),
+      totalPayment: totalPayment.toString(),
+      totalPaymentFormatted: formatMoney(totalPayment),
+      totalInterest: totalInterest.toString(),
+      totalInterestFormatted: formatMoney(totalInterest),
+      availableCredit: available.toString(),
+      availableCreditFormatted: formatMoney(available),
+      exceedsLimit: amount > available,
+      /** ★ R16: taksidin gelire oranı — batmadan ÖNCE görünsün. */
+      paymentBurden: paymentBurden(payment, asMoney(borrower.revenuePerTick)),
     };
   }
 

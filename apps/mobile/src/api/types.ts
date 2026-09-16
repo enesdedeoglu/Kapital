@@ -473,3 +473,62 @@ export interface Sevkiyat {
   readonly arrivesAt: string | null;
   readonly status: string;
 }
+
+/** Açık ya da kapanmış bir kredi — `GET /loans` içindeki satır. */
+export interface Kredi {
+  readonly id: string;
+  readonly status: string;
+  readonly principal: string;
+  readonly remainingBalance: string;
+  readonly remainingBalanceFormatted: string;
+  readonly paymentPerTick: string;
+  readonly paymentPerTickFormatted: string;
+  readonly totalPaid: string;
+  readonly interestPaid: string;
+  readonly missedPayments: number;
+  readonly ticksRemaining: number;
+  /** Taksidin tur gelirine oranı; gelir yoksa null (R16). */
+  readonly paymentBurden: number | null;
+}
+
+/** `GET /loans` — limit, faiz ve açık krediler. */
+export interface KrediDurumu {
+  readonly companyValue: string;
+  readonly companyValueFormatted: string;
+  readonly totalDebt: string;
+  readonly totalDebtFormatted: string;
+  readonly leverageRatio: number;
+  readonly interestRatePerTick: number;
+  readonly interestRateAnnualPct: number;
+  readonly maxTermTicks: number;
+  readonly availableCredit: string;
+  readonly availableCreditFormatted: string;
+  readonly loans: readonly Kredi[];
+}
+
+/**
+ * `GET /loans/preview` — taahhütten önce taksit.
+ *
+ * ★ Taksit SUNUCUDA hesaplanır: `annuityPayment` float bir çarpanın ardından
+ * bigint çarpımı ve bankacı yuvarlaması yapar (ADR-0001). İstemcide yeniden
+ * yazmak, gösterilen taksidin 2.688 tur boyunca tahsil edilenden sapması
+ * demekti.
+ */
+export interface KrediOnizleme {
+  readonly amount: string;
+  readonly amountFormatted: string;
+  readonly termTicks: number;
+  readonly interestRatePerTick: number;
+  readonly interestRateAnnualPct: number;
+  readonly paymentPerTick: string;
+  readonly paymentPerTickFormatted: string;
+  readonly totalPayment: string;
+  readonly totalPaymentFormatted: string;
+  readonly totalInterest: string;
+  readonly totalInterestFormatted: string;
+  readonly availableCredit: string;
+  readonly availableCreditFormatted: string;
+  readonly exceedsLimit: boolean;
+  readonly paymentBurden: number | null;
+}
+

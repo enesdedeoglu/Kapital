@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTur, useTurDegisince } from '~/tur';
-import type { Ozet, Sirket } from '~/api/types';
+import type { KrediDurumu, KrediOnizleme, Ozet, Sirket } from '~/api/types';
 import { ApiError } from '~/api/client';
 import { GeriSayim } from '~/ui/GeriSayim';
+import { KrediPaneli } from '~/ui/KrediPaneli';
 import {
   Etiket, KarRozeti, Kart, Kasa, KritikStok, Kutu, Olaylar, SeviyeRozeti,
 } from '~/ui/parcalar';
@@ -28,6 +29,13 @@ export default function AnaSayfa() {
    * spinner sonsuza dek dönüyordu. Boş durumun kendisi de bir SONUÇTUR.
    */
   const [yuklendi, setYuklendi] = useState(false);
+
+  /*
+   * Kredi paneli. Durum TEMBEL çekilir: oyuncuların çoğu her açılışta kredi
+   * bakmaz, ana sayfayı iki istekle açık tutmak daha önemli.
+   */
+  const [krediAcik, setKrediAcik] = useState(false);
+  const [kredi, setKredi] = useState<KrediDurumu | null>(null);
 
   const yukle = useCallback(async () => {
     try {
@@ -53,13 +61,70 @@ export default function AnaSayfa() {
 
   useEffect(() => { void yukle(); }, [yukle]);
   // Tur düşünce ekran kendini tazeler — oyuncunun aşağı çekmesi gerekmez.
-  useTurDegisince(() => { void yukle(); });
+  useTurDegisince(() => {
+    void yukle();
+    // Taksit her turda kasadan düşer; panel açıksa bakiye eskimesin.
+    if (krediAcik) void krediyiYukle();
+  });
+
+  const krediyiYukle = useCallback(async () => {
+    try {
+      setKredi(await iste<KrediDurumu>('/loans'));
+    } catch (e) {
+      setKredi(null);
+      setHata(e instanceof ApiError ? e.message : 'Kredi bilgisi alınamadı');
+    }
+  }, [iste]);
+
+  const krediyiAc = useCallback(() => {
+    setKrediAcik(true);
+    setKredi(null);
+    void krediyiYukle();
+  }, [krediyiYukle]);
+
+  /*
+   * ★ TAKSİT SUNUCUDAN SORULUR, İSTEMCİDE HESAPLANMAZ (ADR-0001):
+   * `annuityPayment` float bir çarpanın ardından bigint çarpımı ve bankacı
+   * yuvarlaması yapar. Burada yeniden yazmak, gösterilen taksidin her tur
+   * tahsil edilenden sapması demekti.
+   */
+  const krediOnizle = useCallback(
+    async (tutar: number, vade: number): Promise<KrediOnizleme | null> => {
+      try {
+        return await iste<KrediOnizleme>(
+          `/loans/preview?amount=${tutar}&termTicks=${vade}`);
+      } catch {
+        return null;
+      }
+    }, [iste]);
+
+  const krediCek = useCallback(
+    async (tutar: number, vade: number): Promise<string | null> => {
+      try {
+        await iste('/loans', { method: 'POST', body: { amount: tutar, termTicks: vade } });
+        await Promise.all([krediyiYukle(), yukle()]);
+        return null;
+      } catch (e) {
+        return e instanceof ApiError ? e.message : 'Kredi alınamadı';
+      }
+    }, [iste, krediyiYukle, yukle]);
+
+  const krediKapat = useCallback(async (id: string): Promise<string | null> => {
+    try {
+      await iste(`/loans/${id}/repay`, { method: 'POST' });
+      await Promise.all([krediyiYukle(), yukle()]);
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Kredi kapatılamadı';
+    }
+  }, [iste, krediyiYukle, yukle]);
 
   if (!yuklendi) {
     return <View style={s.orta}><ActivityIndicator color={renk.altin} /></View>;
   }
 
   return (
+    <>
     <ScrollView
       contentContainerStyle={[s.icerik, { paddingTop: kenar.top + 56 }]}
       refreshControl={
@@ -133,6 +198,19 @@ export default function AnaSayfa() {
 
           <Kasa tutar={paraBicimle(sirket.cash)} altYazi="kullanılabilir nakit" />
 
+          {/*
+            ★ KREDİ KASANIN HEMEN ALTINDA. Kredi sistemi kuruluydu ama mobilde
+            hiçbir ekran `/loans`u çağırmıyordu: nakdi biten oyuncunun elinde
+            tesis satmaktan başka yol yoktu. Soru kasaya bakarken sorulur, o
+            yüzden cevabı da orada duruyor — profile saklamak, ihtiyaç anında
+            bulunmamak demekti.
+          */}
+          <Pressable style={s.krediDugme} onPress={krediyiAc}>
+            <MCI name="bank-outline" size={17} color={renk.mavi} />
+            <Text style={s.krediYazi}>Kredi</Text>
+            <MCI name="chevron-right" size={18} color={renk.mavi} />
+          </Pressable>
+
           <View style={s.satir}>
             {ozet
               ? <KarRozeti net={ozet.kar.net} oran={ozet.kar.oran} />
@@ -168,11 +246,28 @@ export default function AnaSayfa() {
         </>
       )}
     </ScrollView>
+
+    <KrediPaneli
+      acik={krediAcik}
+      durum={kredi}
+      onizle={krediOnizle}
+      kapat={() => setKrediAcik(false)}
+      cek={krediCek}
+      kapatKredi={krediKapat}
+    />
+    </>
   );
 }
 
 const s = StyleSheet.create({
   orta: { flex: 1, justifyContent: 'center' },
+  krediDugme: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 12, paddingHorizontal: bosluk.l, borderRadius: yuvarlak.m,
+    backgroundColor: 'rgba(90,160,255,0.10)', borderWidth: 1,
+    borderColor: 'rgba(90,160,255,0.35)',
+  },
+  krediYazi: { color: renk.mavi, fontSize: 15, fontFamily: yaziTipi.baslikOrta, flex: 1 },
   icerik: { padding: bosluk.l, paddingBottom: 110, gap: bosluk.m },
 
   hataKart: { borderColor: renk.eksi },

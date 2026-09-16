@@ -210,3 +210,75 @@ describe('kredi kullanımı', () => {
     expect(res.status).toBe(404);
   });
 });
+
+/*
+ * ★★★★ ÖNİZLEME: TAAHHÜTTEN ÖNCE TAKSİT (R100).
+ *
+ * Kredi API'si tamdı ama oyuncu 2.688 tur boyunca ödeyeceği taksidi ancak
+ * krediyi ÇEKTİKTEN sonra görebiliyordu. Taksit `annuityPayment` ile bulunur —
+ * float bir çarpan, ardından bigint çarpımı ve bankacı yuvarlaması — yani
+ * istemcide yeniden yazılamaz (ADR-0001). Gösterilen ile tahsil edilenin aynı
+ * olmasının tek garantisi ikisinin AYNI işlevden geçmesi.
+ */
+describe('★ kredi önizlemesi', () => {
+  it('★ önizlemedeki taksit, ÇEKİLEN kredininkiyle BİREBİR aynı', async () => {
+    const p = await player();
+    await sql`UPDATE companies SET company_value = ${money(200_000)} WHERE id = ${p.companyId}::uuid`;
+
+    const on = await call('/loans/preview?amount=50000&termTicks=1000', { token: p.token });
+    expect(on.status).toBe(200);
+    expect(on.body.exceedsLimit).toBe(false);
+
+    const cekildi = await call('/loans', {
+      method: 'POST', token: p.token, body: { amount: 50_000, termTicks: 1000 },
+    });
+    expect(cekildi.status).toBe(201);
+
+    const liste = await call('/loans', { token: p.token });
+    const kredi = liste.body.loans[0];
+    // Kuruşu kuruşuna aynı: önizleme bir tahmin değil, aynı hesabın kendisi.
+    expect(kredi.paymentPerTick).toBe(on.body.paymentPerTick);
+    expect(kredi.paymentPerTickFormatted).toBe(on.body.paymentPerTickFormatted);
+  });
+
+  it('toplam geri ödeme = taksit × vade, faiz de aradaki fark', async () => {
+    const p = await player();
+    await sql`UPDATE companies SET company_value = ${money(200_000)} WHERE id = ${p.companyId}::uuid`;
+    const r = await call('/loans/preview?amount=50000&termTicks=1000', { token: p.token });
+
+    expect(BigInt(r.body.totalPayment)).toBe(BigInt(r.body.paymentPerTick) * 1000n);
+    expect(BigInt(r.body.totalInterest))
+      .toBe(BigInt(r.body.totalPayment) - BigInt(r.body.amount));
+    expect(BigInt(r.body.totalInterest)).toBeGreaterThan(0n);
+  });
+
+  it('★ limiti aşan tutar REDDEDİLMEZ, işaretlenir', async () => {
+    const p = await player();
+    await sql`UPDATE companies SET company_value = ${money(100_000)} WHERE id = ${p.companyId}::uuid`;
+
+    const r = await call('/loans/preview?amount=900000', { token: p.token });
+    expect(r.status).toBe(200);
+    expect(r.body.exceedsLimit).toBe(true);
+    expect(BigInt(r.body.availableCredit)).toBeLessThan(BigInt(r.body.amount));
+
+    // Aynı tutar ÇEKİLMEK istenirse reddedilir — önizleme gevşek, işlem sıkı.
+    const cek = await call('/loans', {
+      method: 'POST', token: p.token, body: { amount: 900_000 },
+    });
+    expect(cek.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('vade verilmezse kademenin azami vadesi kullanılır', async () => {
+    const p = await player();
+    await sql`UPDATE companies SET company_value = ${money(200_000)} WHERE id = ${p.companyId}::uuid`;
+
+    const genel = await call('/loans', { token: p.token });
+    const r = await call('/loans/preview?amount=10000', { token: p.token });
+    expect(r.body.termTicks).toBe(genel.body.maxTermTicks);
+  });
+
+  it('kimliksiz istek reddedilir', async () => {
+    expect((await call('/loans/preview?amount=1000')).status).toBeGreaterThanOrEqual(400);
+  });
+});
+
