@@ -9,6 +9,7 @@ import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
 import type { Lot, Raf, Sevkiyat, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Uretim, Urun } from '~/api/types';
 import { Etiket, Kart, tesisIkonu } from '~/ui/parcalar';
+import { tesisEtiketi } from '~/ui/tesisEtiketi';
 import { LotPaneli } from '~/ui/LotPaneli';
 import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
@@ -513,7 +514,7 @@ export default function Sirketim() {
 
       <RafPaneli
         acik={rafTesis !== null}
-        tesisAdi={rafTesis?.name ?? ''}
+        tesisAdi={rafTesis ? tesisEtiketi(rafTesis) : ''}
         raf={raf}
         kapat={() => { setRafTesis(null); setRaf(null); }}
         kaydet={rafKaydet}

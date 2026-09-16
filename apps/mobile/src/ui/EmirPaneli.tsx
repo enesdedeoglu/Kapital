@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { Tesis } from '~/api/types';
+import { tesisEtiketi } from './tesisEtiketi';
 import { bosluk, golge, gradyan, paraBicimle, renk, yaziTipi, yuvarlak } from './tema';
 
 export interface EmirGirdisi {
@@ -56,6 +57,7 @@ export function EmirPaneli({
     setFiyat((f) => (f === '' && ipucuFiyat ? ipucuFiyat : f));
   }, [acik, tesisler, ipucuFiyat]);
 
+  const [tekTesis] = tesisler;
   const adetSayi = Number(adet.replace(',', '.'));
   const fiyatSayi = Number(fiyat.replace(',', '.'));
   const gecerli = tesisId !== null
@@ -96,21 +98,43 @@ export function EmirPaneli({
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled">
-            {tesisler.length > 1 && (
-              <>
-                <Text style={s.etiket}>{alis ? 'TESLİM TESİSİ' : 'ÇIKIŞ TESİSİ'}</Text>
-                <View style={s.tesisSerit}>
-                  {tesisler.map((t) => (
-                    <Pressable key={t.id} onPress={() => setTesisId(t.id)}
-                      style={[s.tesisPul, tesisId === t.id && s.tesisPulAktif]}>
-                      <Text style={[s.tesisYazi, tesisId === t.id && s.tesisYaziAktif]}>
-                        {t.name}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
+            {/*
+              ★ ŞEHİR YAZILIR — pul üstünde yalnız ad vardı ve tesise isim
+              verilemediği için iki manavı olan oyuncu iki özdeş "Manav" pulu
+              görüyordu. Hangisini seçtiğini bilmeden ALIŞTA malı yanlış şehre
+              getirtir (nakliye ve transit süresi teslim şehrine bağlıdır),
+              SATIŞTA da stoğu olmayan dükkândan satmaya çalışır.
+            */}
+            {tesisler.length > 0 && (
+              <Text style={s.etiket}>{alis ? 'TESLİM TESİSİ' : 'ÇIKIŞ TESİSİ'}</Text>
             )}
+            {tesisler.length === 1 && tekTesis !== undefined
+              ? (
+                /*
+                  ★ TEK TESİSTE DE YAZILIR. Eskiden seçici `length > 1` şartına
+                  bağlıydı; tek tesisi olan oyuncu malın nereye geldiğini hiçbir
+                  yerde göremiyordu. Seçecek bir şey yok ama BİLİNECEK bir şey var.
+                */
+                <Text style={s.tekTesis}>{tesisEtiketi(tekTesis)}</Text>
+              )
+              : (
+                <View style={s.tesisSerit}>
+                  {tesisler.map((t) => {
+                    const secili = tesisId === t.id;
+                    return (
+                      <Pressable key={t.id} onPress={() => setTesisId(t.id)}
+                        style={[s.tesisPul, secili && s.tesisPulAktif]}>
+                        <Text style={[s.tesisYazi, secili && s.tesisYaziAktif]}>
+                          {t.name}
+                        </Text>
+                        <Text style={[s.tesisSehir, secili && s.tesisSehirAktif]}>
+                          {t.city.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
 
             <Text style={s.etiket}>MİKTAR ({birim})</Text>
             <TextInput
@@ -218,6 +242,9 @@ const s = StyleSheet.create({
   tesisPulAktif: { backgroundColor: 'rgba(255,194,75,0.16)', borderColor: renk.altin },
   tesisYazi: { color: renk.soluk, fontSize: 13, fontFamily: yaziTipi.govdeOrta },
   tesisYaziAktif: { color: renk.altin },
+  tesisSehir: { color: renk.cokSoluk, fontSize: 11, fontFamily: yaziTipi.govde, marginTop: 1 },
+  tesisSehirAktif: { color: 'rgba(255,194,75,0.75)' },
+  tekTesis: { color: renk.metin, fontSize: 15, fontFamily: yaziTipi.govdeOrta },
 
   toplamKart: {
     marginTop: bosluk.l, padding: bosluk.m, borderRadius: yuvarlak.m,

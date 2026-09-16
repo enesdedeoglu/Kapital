@@ -5,6 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { Tesis } from '~/api/types';
+import { tesisEtiketi } from './tesisEtiketi';
 import { bosluk, paraBicimle, renk, yaziTipi, yuvarlak } from './tema';
 
 /**
@@ -54,7 +55,7 @@ export function YukseltmePaneli({ tesis, nakit, kapat, gonder }: {
           <>
             <View style={s.baslikSatir}>
               <MCI name="arrow-up-bold-hexagon-outline" size={19} color={renk.mor} />
-              <Text style={s.baslik}>{tesis.name} · seviye atlat</Text>
+              <Text style={s.baslik}>{tesisEtiketi(tesis)} · seviye atlat</Text>
               <View style={s.bosluk} />
               <Pressable onPress={kapat} hitSlop={12}>
                 <MCI name="close" size={22} color={renk.soluk} />

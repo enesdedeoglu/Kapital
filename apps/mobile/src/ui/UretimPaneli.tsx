@@ -5,6 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { Tesis, Uretim } from '~/api/types';
+import { tesisEtiketi } from './tesisEtiketi';
 import { bosluk, renk, yaziTipi, yuvarlak } from './tema';
 
 /**
@@ -54,7 +55,7 @@ export function UretimPaneli({ tesis, uretim, kapat, degistir }: {
         <View style={s.tutamak} />
         <View style={s.baslikSatir}>
           <MCI name="factory" size={19} color={renk.mavi} />
-          <Text style={s.baslik}>Üretim · {tesis?.name ?? ''}</Text>
+          <Text style={s.baslik}>Üretim · {tesis ? tesisEtiketi(tesis) : ''}</Text>
           <View style={s.bosluk} />
           <Pressable onPress={kapat} hitSlop={12}>
             <MCI name="close" size={22} color={renk.soluk} />

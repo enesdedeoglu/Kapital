@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { OtomatikKural, Tesis, Urun } from '~/api/types';
+import { tesisEtiketi } from './tesisEtiketi';
 import { bosluk, renk, yaziTipi, yuvarlak } from './tema';
 
 export interface KuralGirdisi {
@@ -100,7 +101,9 @@ export function OtomatikPaneli({
           <View style={s.tutamak} />
           <View style={s.baslikSatir}>
             <MCI name="autorenew" size={19} color={renk.artı} />
-            <Text style={s.baslik}>Otomatik sipariş · {tesis?.name}</Text>
+            <Text style={s.baslik}>
+              Otomatik sipariş · {tesis ? tesisEtiketi(tesis) : ''}
+            </Text>
             <View style={s.bosluk} />
             <Pressable onPress={kapat} hitSlop={12}>
               <MCI name="close" size={22} color={renk.soluk} />
