@@ -1,9 +1,12 @@
-import { CanActivate, Controller, ExecutionContext, Get, Inject, Injectable, Post, UseGuards } from '@nestjs/common';
+import {
+  CanActivate, Controller, ExecutionContext, Get, HttpCode, Inject, Injectable, Post, UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { checkInvariants, type Sql } from '@kapital/db';
 import { runTick, type TickResult } from '@kapital/engine';
 import { DomainError } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
+import { jsonGuvenli } from '../../common/json-guvenli.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
 
 @Injectable()
@@ -29,10 +32,19 @@ export class AdminController {
    *
    * Üretimde turlar `apps/worker` tarafından 15 dakikada bir koşar; bu uç
    * geliştirme, test ve olağandışı durumlarda operatör müdahalesi içindir.
+   *
+   * ★★★★ YANIT `jsonGuvenli`DEN GEÇER — VE BU BİR DÜZELTMEDİR (R99).
+   * `TickResult` bigint taşıyor (`tickId`, `seq` ve faz sonuçlarındaki tutarlar).
+   * Doğrudan döndürülünce Nest yanıtı yazarken patlıyordu:
+   * "Do not know how to serialize a BigInt". Tur KOŞMUŞ oluyor, operatör 500
+   * görüyordu — ve tekrar denemek düzeltmiyor, BİR TUR DAHA koşturuyordu.
    */
+  // 200, 201 değil: tur ÇALIŞTIRILIR, adreslenebilir bir kaynak yaratılmaz.
+  @HttpCode(200)
   @Post('tick')
-  async tick(): Promise<TickResult> {
-    return runTick(this.sql);
+  async tick(): Promise<unknown> {
+    const sonuc: TickResult = await runTick(this.sql);
+    return jsonGuvenli(sonuc);
   }
 
   @Get('invariants')

@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { Tesis } from '~/api/types';
 import { tesisEtiketi } from './tesisEtiketi';
+import { sayiOku } from './sayiOku';
 import { bosluk, golge, gradyan, paraBicimle, renk, yaziTipi, yuvarlak } from './tema';
 
 export interface EmirGirdisi {
@@ -58,8 +59,8 @@ export function EmirPaneli({
   }, [acik, tesisler, ipucuFiyat]);
 
   const [tekTesis] = tesisler;
-  const adetSayi = Number(adet.replace(',', '.'));
-  const fiyatSayi = Number(fiyat.replace(',', '.'));
+  const adetSayi = sayiOku(adet);
+  const fiyatSayi = sayiOku(fiyat);
   const gecerli = tesisId !== null
     && Number.isFinite(adetSayi) && adetSayi > 0
     && Number.isFinite(fiyatSayi) && fiyatSayi > 0;

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { Raf } from '~/api/types';
+import { sayiOku } from './sayiOku';
 import { bosluk, golge, gradyan, renk, yaziTipi, yuvarlak } from './tema';
 
 export interface RafGirdisi {
@@ -28,7 +29,7 @@ interface Satir {
   yeni: boolean;
 }
 
-const kurusa = (metin: string) => Number(metin.replace(',', '.'));
+
 const gosterim = (kurus: string) => (Number(kurus) / 10_000).toFixed(2).replace('.', ',');
 
 /**
@@ -103,7 +104,7 @@ export function RafPaneli({ acik, tesisAdi, raf, kapat, kaydet }: {
     for (const satir of satirlar) {
       const d = taslak[satir.kod];
       if (!d) continue;
-      const f = kurusa(d.fiyat);
+      const f = sayiOku(d.fiyat);
       if (!Number.isFinite(f) || f <= 0) {
         setHata(`${satir.ad} için geçerli bir fiyat gir.`);
         return;
@@ -145,7 +146,7 @@ export function RafPaneli({ acik, tesisAdi, raf, kapat, kaydet }: {
 
                   {satirlar.map((t) => {
                     const d = taslak[t.kod] ?? { fiyat: '', acik: true };
-                    const f = kurusa(d.fiyat);
+                    const f = sayiOku(d.fiyat);
                     const tavanUstu = Number.isFinite(f) && f > t.tavan;
                     return (
                       <View key={t.kod} style={s.urun}>

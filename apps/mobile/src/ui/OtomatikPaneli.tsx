@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import type { OtomatikKural, Tesis, Urun } from '~/api/types';
 import { tesisEtiketi } from './tesisEtiketi';
+import { sayiOku } from './sayiOku';
 import { bosluk, renk, yaziTipi, yuvarlak } from './tema';
 
 export interface KuralGirdisi {
@@ -65,8 +66,8 @@ export function OtomatikPaneli({
 
   const urun = urunler.find((u) => u.code === urunKodu) ?? null;
   const kilitli = urun !== null && (urun.unlockLevel ?? 1) > seviye;
-  const hedefSayi = Number(hedef.replace(',', '.'));
-  const fiyatSayi = fiyat.trim() === '' ? undefined : Number(fiyat.replace(',', '.'));
+  const hedefSayi = sayiOku(hedef);
+  const fiyatSayi = fiyat.trim() === '' ? undefined : sayiOku(fiyat);
   const fiyatGecerli = fiyatSayi === undefined || (Number.isFinite(fiyatSayi) && fiyatSayi > 0);
   const gecerli = tesis !== null && urun !== null && !kilitli
     && Number.isFinite(hedefSayi) && hedefSayi > 0 && fiyatGecerli;

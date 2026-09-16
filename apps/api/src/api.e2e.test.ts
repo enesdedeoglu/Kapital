@@ -329,3 +329,63 @@ describe('★ hesap künyesi', () => {
     expect((await call('/auth/me')).status).toBeGreaterThanOrEqual(400);
   });
 });
+
+/*
+ * ★★★★ TUR UCU: ÇALIŞTIRIP 500 DÖNÜYORDU (R99).
+ *
+ * `TickResult` bigint taşır (`tickId`, `seq`, faz sonuçlarındaki tutarlar) ve
+ * doğrudan döndürülünce Nest yanıtı yazarken patlıyordu. Operatörün gördüğü
+ * 500'dü; oysa tur koşmuştu. Tekrar denemek DÜZELTMİYOR, bir tur daha
+ * koşturuyordu — dünyayı istemeden ileri sarmak.
+ */
+describe('★ yönetici: tur ucu', () => {
+  async function yonetici() {
+    const eposta = `adm-${randomUUID()}@kapital.test`;
+    const reg = await call('/auth/register', {
+      method: 'POST',
+      body: { email: eposta, password: 'parola12345', displayName: 'Operatör' },
+    });
+    await sql`UPDATE users SET is_admin = true WHERE email = ${eposta}`;
+    return reg.body.accessToken as string;
+  }
+
+  const suAnkiTur = async () => {
+    const [row] = await sql<{ seq: bigint | null }[]>`SELECT MAX(seq) AS seq FROM economic_ticks`;
+    return row?.seq ?? 0n;
+  };
+
+  it('★ 200 döner ve turu BİR kez ilerletir', async () => {
+    const token = await yonetici();
+    const once = await suAnkiTur();
+
+    const res = await call('/admin/tick', { method: 'POST', token, idem: randomUUID() });
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(await suAnkiTur()).toBe(once + 1n);
+  });
+
+  it('★ bigint alanlar METİN olarak gelir — sessizce yuvarlanmaz', async () => {
+    const token = await yonetici();
+    const res = await call('/admin/tick', { method: 'POST', token, idem: randomUUID() });
+
+    // `seq` ve `tickId` bigint'ti; 2^53'ü aşabildikleri için Number'a değil
+    // metne çevriliyorlar.
+    expect(typeof res.body.seq).toBe('string');
+    expect(typeof res.body.tickId).toBe('string');
+    expect(typeof res.body.durationMs).toBe('number');
+    expect(Object.keys(res.body.phases).length).toBeGreaterThan(0);
+  });
+
+  it('yönetici olmayan reddedilir ve tur İLERLEMEZ', async () => {
+    const reg = await call('/auth/register', {
+      method: 'POST',
+      body: { email: `duz-${randomUUID()}@kapital.test`, password: 'parola12345', displayName: 'Düz Oyuncu' },
+    });
+    const once = await suAnkiTur();
+    const res = await call('/admin/tick', {
+      method: 'POST', token: reg.body.accessToken as string, idem: randomUUID(),
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await suAnkiTur()).toBe(once);
+  });
+});
