@@ -6,6 +6,44 @@ export interface Sehir {
   readonly name: string;
 }
 
+/**
+ * Seviye şartı — `company_levels` satırının oyuncuya gösterilen hâli.
+ *
+ * Seviye atlamak yalnız XP'ye bakmıyor; şirket değeri, ticaret hacmi,
+ * üretilen miktar ve farklı ürün sayısı da şart. Biçimli metinler SUNUCUDAN
+ * gelir: para bigint aritmetiğiyle (ADR-0001), sayılar da binlik ayıraçla —
+ * Hermes'te tam ICU yok, istemci ayıramıyor.
+ */
+export interface SeviyeSarti {
+  readonly key: 'experience' | 'companyValue' | 'tradeVolume' | 'unitsProduced' | 'distinctProducts';
+  readonly label: string;
+  readonly current: string;
+  readonly required: string;
+  readonly currentFormatted: string;
+  readonly requiredFormatted: string;
+  readonly met: boolean;
+  /** 0–1 çubuk oranı. */
+  readonly ratio: number;
+}
+
+export interface Ilerleme {
+  readonly atMaxLevel: boolean;
+  readonly nextLevel: number | null;
+  readonly nextTitle: string | null;
+  /** EN YAVAŞ şartın oranı; ortalama değil — bağlayan şart neyse o. */
+  readonly ratio: number;
+  readonly requirements: readonly SeviyeSarti[];
+}
+
+/** `GET /auth/me` — oturumdaki hesabın künyesi. */
+export interface Hesap {
+  readonly userId: string;
+  readonly email: string;
+  readonly displayName: string;
+  readonly createdAt: string;
+  readonly lastLoginAt: string | null;
+}
+
 export interface Sirket {
   readonly id: string;
   readonly name: string;
@@ -21,6 +59,7 @@ export interface Sirket {
   readonly city: Sehir;
   readonly status: string;
   readonly createdAt: string;
+  readonly progress: Ilerleme;
 }
 
 export interface OturumYaniti {

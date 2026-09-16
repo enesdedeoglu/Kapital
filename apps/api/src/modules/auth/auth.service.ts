@@ -28,6 +28,31 @@ export class AuthService {
     @Inject(JwtService) private readonly jwt: JwtService,
   ) {}
 
+  /**
+   * Oturumdaki hesabın künyesi.
+   *
+   * ★ ESKİDEN YALNIZ `{ userId }` DÖNÜYORDU, yani uç vardı ama işe yaramıyordu
+   * ve mobil uygulama onu hiç çağırmıyordu. Profil ekranı oyuncunun kim
+   * olduğunu gösterebilmek için adı ve e-postayı ister (R98).
+   *
+   * ★ Parola özeti ve yönetici bayrağı DÖNMEZ: ekranın işi değil.
+   */
+  async me(userId: string) {
+    const [row] = await this.sql<{
+      email: string; display_name: string; created_at: Date; last_login_at: Date | null;
+    }[]>`
+      SELECT email, display_name, created_at, last_login_at
+        FROM users WHERE id = ${userId}::uuid`;
+    if (!row) throw new NotFound('Kullanıcı', userId);
+    return {
+      userId,
+      email: row.email,
+      displayName: row.display_name,
+      createdAt: new Date(row.created_at).toISOString(),
+      lastLoginAt: row.last_login_at === null ? null : new Date(row.last_login_at).toISOString(),
+    };
+  }
+
   async register(dto: RegisterDto): Promise<AuthResult> {
     const [existing] = await this.sql`SELECT 1 FROM users WHERE email = ${dto.email}`;
     if (existing) throw new Conflict('Bu e-posta zaten kayıtlı', { email: dto.email });

@@ -114,7 +114,13 @@ export default function SekmeDuzeni() {
       <Tabs.Screen name="sirket"   options={{ title: 'Şirketim',  tabBarIcon: ikon('factory') }} />
       <Tabs.Screen name="piyasa"   options={{ title: 'Piyasa',    tabBarIcon: ikon('chart-line-variant') }} />
       <Tabs.Screen name="sehirler" options={{ title: 'Şehirler',  tabBarIcon: ikon('map-marker-radius') }} />
-      <Tabs.Screen name="menu"     options={{ title: 'Menü',      tabBarIcon: ikon('menu') }} />
+      {/*
+        ★ "Menü" değil PROFİL: sekme üç satırlık bir ayar listesiydi (sunucu,
+        sürüm, çıkış) ve adı da onu anlatıyordu. Artık oyuncunun künyesini,
+        şirketini ve seviye merdivenini taşıyor; "menü" diye adlandırılan bir
+        sekmede kimse seviye şartlarını aramaz.
+      */}
+      <Tabs.Screen name="menu"     options={{ title: 'Profil',    tabBarIcon: ikon('account-circle-outline') }} />
     </Tabs>
     </>
   );

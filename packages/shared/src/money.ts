@@ -189,6 +189,20 @@ export function formatMoney(amount: Money, opts: { symbol?: boolean } = {}): str
   return `${negative ? '-' : ''}${grouped},${kurus}${symbol}`;
 }
 
+/**
+ * Ölçeksiz tam sayı — binlik ayıraçlı. Deneyim puanı, adet, ürün çeşidi gibi
+ * ne para ne miktar ölçeğinde olan sayılar için.
+ *
+ * ★ İSTEMCİDE YAZILAMAZ: Hermes'te tam ICU yok, `toLocaleString('tr-TR')`
+ * binlikleri ayırmıyor (F9'da ölçüldü). Biçim sunucuda kurulur.
+ */
+export function formatInteger(value: bigint | number): string {
+  const n = typeof value === 'bigint' ? value : BigInt(Math.trunc(value));
+  const negative = n < 0n;
+  const abs = negative ? -n : n;
+  return (negative ? '-' : '') + abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 export function formatQty(amount: Qty, unit = ''): string {
   const negative = amount < 0n;
   const abs = negative ? -amount : amount;

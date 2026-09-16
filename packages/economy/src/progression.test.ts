@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { money, qty } from '@kapital/shared';
 import {
-  experienceGain, nextLevel, DEFAULT_EXPERIENCE_RATES,
+  experienceGain, levelChecks, meetsLevel, nextLevel, DEFAULT_EXPERIENCE_RATES,
   type CompanyProgress, type LevelRequirement,
 } from './progression.js';
 
@@ -106,5 +106,67 @@ describe('seviye atlama', () => {
       tradeVolume: money(10_000), unitsProduced: 0n, distinctProducts: 1,
     };
     expect(nextLevel(carpik, requirements)).toBe(1);
+  });
+});
+
+/*
+ * ★ ŞARTLARI TEK TEK GÖSTERMEK, KURALI BÖLMEK DEĞİL.
+ *
+ * `levelChecks` ekran için var: oyuncu 9.000 XP'ye ulaşıp neden seviye
+ * atlayamadığını göremiyordu. Ama karşılaştırma ikinci bir yere yazılsaydı
+ * ekranın "tuttu" dediği şart ile motorun uyguladığı şart ayrı ayrı kayabilirdi.
+ * Bu testler ikisinin AYNI kaynaktan okuduğunu sabitliyor.
+ */
+describe('seviye şartlarının dökümü', () => {
+  const requirements: LevelRequirement[] = [
+    { level: 1, requiredXp: 0n, requiredCompanyValue: 0n, requiredTradeVolume: 0n,
+      requiredUnitsProduced: 0n, requiredDistinctProducts: 0 },
+    { level: 2, requiredXp: 700n, requiredCompanyValue: money(45_000),
+      requiredTradeVolume: money(15_000), requiredUnitsProduced: 0n, requiredDistinctProducts: 1 },
+  ];
+  const lv2 = requirements[1]!;
+
+  const hazir: CompanyProgress = {
+    level: 1, experience: 700n, companyValue: money(45_000),
+    tradeVolume: money(15_000), unitsProduced: 0n, distinctProducts: 1,
+  };
+
+  it('beş şartın hepsi tek tek raporlanır', () => {
+    const c = levelChecks(hazir, lv2);
+    expect(c.map((x) => x.key)).toEqual([
+      'experience', 'companyValue', 'tradeVolume', 'unitsProduced', 'distinctProducts',
+    ]);
+    expect(c.every((x) => x.met)).toBe(true);
+  });
+
+  it('★ BAĞLAYAN şart adıyla görünür — "neden atlayamıyorum"un cevabı', () => {
+    const c = levelChecks({ ...hazir, companyValue: money(44_999) }, lv2);
+    const kalan = c.filter((x) => !x.met);
+    expect(kalan).toHaveLength(1);
+    expect(kalan[0]!.key).toBe('companyValue');
+    expect(kalan[0]!.current).toBe(money(44_999));
+    expect(kalan[0]!.required).toBe(money(45_000));
+  });
+
+  it('★ dökümle motorun kararı AYNI — kural tek yerde', () => {
+    const durumlar: CompanyProgress[] = [
+      hazir,
+      { ...hazir, experience: 699n },
+      { ...hazir, companyValue: money(44_999) },
+      { ...hazir, tradeVolume: money(14_999) },
+      { ...hazir, distinctProducts: 0 },
+      { ...hazir, unitsProduced: 0n },
+    ];
+    for (const d of durumlar) {
+      const hepsiTuttu = levelChecks(d, lv2).every((x) => x.met);
+      expect(meetsLevel(d, lv2)).toBe(hepsiTuttu);
+      // Motorun verdiği karar da aynı olmalı: tutuyorsa Lv2, tutmuyorsa Lv1.
+      expect(nextLevel(d, requirements)).toBe(hepsiTuttu ? 2 : 1);
+    }
+  });
+
+  it('şartı sıfır olan alan her zaman tutar — eksik sayılmaz', () => {
+    const c = levelChecks({ ...hazir, unitsProduced: 0n }, lv2);
+    expect(c.find((x) => x.key === 'unitsProduced')!.met).toBe(true);
   });
 });

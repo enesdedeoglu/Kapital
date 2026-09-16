@@ -100,11 +100,20 @@ export default function AnaSayfa() {
       {sirket && (
         <>
           <Kart style={s.kimlik}>
+            {/*
+              ★ HALKA ARTIK GERÇEK ORANI GÖSTERİYOR. Eskiden
+              `(experience % 1000) / 1000` idi, yani her seviyeyi 1.000 XP
+              sanıyordu; gerçek eşikler 200 · 1.000 · 2.500 · 9.000 · 17.000 …
+              diye gidiyor ve tam 9.000 XP'deki oyuncu halkayı BOŞ görüyordu.
+
+              `progress.ratio` en yavaş şartın oranı: seviye atlamak yalnız XP
+              değil, şirket değeri/hacim/üretim/ürün çeşidi de istiyor. Dört
+              şart dolup biri %10'daysa halkanın dolu görünmesi yalan olurdu.
+            */}
             <SeviyeRozeti
               seviye={sirket.level}
               unvan={sirket.levelTitle}
-              // Deneyim eşiği API'de yok; halka şimdilik seviye içi kabaca dolar.
-              oran={(Number(sirket.experience) % 1000) / 1000}
+              oran={sirket.progress.ratio}
             />
             <View style={s.kimlikAlt}>
               <MCI name="office-building" size={14} color={renk.soluk} />

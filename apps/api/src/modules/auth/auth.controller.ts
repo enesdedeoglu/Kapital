@@ -40,6 +40,6 @@ export class AuthController {
 
   @Get('me')
   me(@Req() req: Request & { user: AuthUser }) {
-    return { userId: req.user.sub };
+    return this.auth.me(req.user.sub);
   }
 }

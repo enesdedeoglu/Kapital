@@ -72,6 +72,49 @@ export interface CompanyProgress {
   readonly distinctProducts: number;
 }
 
+export type RequirementKey =
+  | 'experience' | 'companyValue' | 'tradeVolume' | 'unitsProduced' | 'distinctProducts';
+
+export interface RequirementCheck {
+  readonly key: RequirementKey;
+  readonly current: bigint;
+  readonly required: bigint;
+  readonly met: boolean;
+}
+
+/**
+ * Bir seviyenin ŞARTLARI tek tek — hangisi tuttu, hangisi bağlıyor.
+ *
+ * ★★★★ BU AYRIŞTIRMA EKRAN İÇİN YAPILDI, AMA KURAL BÖLÜNMEDİ (R98).
+ * Seviye atlamak yalnız XP'ye bakmıyor: şirket değeri, ticaret hacmi, üretilen
+ * miktar ve ürün çeşidi de şart. Oyuncu bunların hiçbirini göremiyordu; 9.000
+ * XP'ye ulaşıp seviye atlayamayan biri NEDEN atlayamadığını bilmiyordu.
+ *
+ * Şartları göstermek için karşılaştırmayı ikinci bir yere yazmak, ekranın
+ * "tuttu" dediği şartla motorun uyguladığı şartın ayrı ayrı kaymasına açık
+ * kapı bırakırdı. O yüzden `nextLevel` de ARTIK BURADAN okuyor: karşılaştırma
+ * tek yerde.
+ */
+export function levelChecks(
+  progress: CompanyProgress, req: LevelRequirement,
+): readonly RequirementCheck[] {
+  const satir = (key: RequirementKey, current: bigint, required: bigint): RequirementCheck =>
+    ({ key, current, required, met: current >= required });
+  return [
+    satir('experience', progress.experience, req.requiredXp),
+    satir('companyValue', progress.companyValue, req.requiredCompanyValue),
+    satir('tradeVolume', progress.tradeVolume, req.requiredTradeVolume),
+    satir('unitsProduced', progress.unitsProduced, req.requiredUnitsProduced),
+    satir('distinctProducts',
+      BigInt(progress.distinctProducts), BigInt(req.requiredDistinctProducts)),
+  ];
+}
+
+/** Seviyenin şartlarının TAMAMI sağlandı mı. */
+export function meetsLevel(progress: CompanyProgress, req: LevelRequirement): boolean {
+  return levelChecks(progress, req).every((c) => c.met);
+}
+
 /**
  * Şirketin ulaşabileceği en yüksek seviye.
  *
@@ -87,13 +130,7 @@ export function nextLevel(
   for (const req of ordered) {
     if (req.level <= reached) continue;
     if (req.level > reached + 1) break; // sıra atlanmaz
-    const ok =
-      progress.experience >= req.requiredXp &&
-      progress.companyValue >= req.requiredCompanyValue &&
-      progress.tradeVolume >= req.requiredTradeVolume &&
-      progress.unitsProduced >= req.requiredUnitsProduced &&
-      progress.distinctProducts >= req.requiredDistinctProducts;
-    if (!ok) break;
+    if (!meetsLevel(progress, req)) break;
     reached = req.level;
   }
   return reached;
