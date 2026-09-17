@@ -7,7 +7,7 @@ import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTurDegisince } from '~/tur';
 import { ApiError } from '~/api/client';
-import type { Lot, Raf, Sevkiyat, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Uretim, Urun } from '~/api/types';
+import type { DisTicaret, DovizOnizleme, Lot, Raf, Sevkiyat, Tesis, TesisStok, SehirBilgi, Sirket, TesisTuru, OtomatikKural, Uretim, Urun } from '~/api/types';
 import { Etiket, Kart, tesisIkonu } from '~/ui/parcalar';
 import { tesisEtiketi } from '~/ui/tesisEtiketi';
 import { LotPaneli } from '~/ui/LotPaneli';
@@ -16,6 +16,7 @@ import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 import { TesisPaneli, type KurmaGirdisi } from '~/ui/TesisPaneli';
 import { YukseltmePaneli } from '~/ui/YukseltmePaneli';
 import { OtomatikPaneli, type KuralGirdisi } from '~/ui/OtomatikPaneli';
+import { DisTicaretPaneli, type DisTicaretGirdisi } from '~/ui/DisTicaretPaneli';
 import { UretimPaneli } from '~/ui/UretimPaneli';
 import { YoldaOzet } from '~/ui/YoldakiMal';
 
@@ -45,6 +46,14 @@ export default function Sirketim() {
    */
   const [uretimTesis, setUretimTesis] = useState<Tesis | null>(null);
   const [uretim, setUretim] = useState<Uretim | null>(null);
+
+  /*
+   * Dış ticaret paneli — LİMANDAN açılır. Altyapı vardı ama kapısı yoktu:
+   * oyuncu 200.000 ₺ ve 20 tur harcayıp liman kuruyor, karşılığında hiçbir
+   * ekran görmüyordu (R101).
+   */
+  const [disTesis, setDisTesis] = useState<Tesis | null>(null);
+  const [disDurum, setDisDurum] = useState<DisTicaret | null>(null);
 
   /*
    * Kurma paneli. Tür ve şehir listesi TEMBEL çekilir: sekme her açıldığında
@@ -215,6 +224,62 @@ export default function Sirketim() {
     }
   }, [iste]);
 
+  const disTicaretiAc = useCallback(async (t: Tesis) => {
+    setDisTesis(t);
+    setDisDurum(null);
+    try {
+      setDisDurum(await iste<DisTicaret>('/foreign'));
+    } catch (e) {
+      setDisTesis(null);
+      setHata(e instanceof ApiError ? e.message : 'Dış ticaret bilgisi alınamadı');
+    }
+  }, [iste]);
+
+  const disTazele = useCallback(async () => {
+    try { setDisDurum(await iste<DisTicaret>('/foreign')); } catch { /* panel açık kalsın */ }
+  }, [iste]);
+
+  /*
+   * ★ Kur hesabı SUNUCUDAN sorulur (ADR-0001): spread `fxConversion` ile
+   * bulunur ve istemcide float ile yeniden yazmak, gösterilen tutarın
+   * tahsil edilenden sapması demekti.
+   */
+  const dovizOnizle = useCallback(
+    async (yon: 'BUY_USD' | 'SELL_USD', usd: number): Promise<DovizOnizleme | null> => {
+      try {
+        return await iste<DovizOnizleme>(`/foreign/fx/preview?side=${yon}&usdAmount=${usd}`);
+      } catch {
+        return null;
+      }
+    }, [iste]);
+
+  const dovizBozdur = useCallback(
+    async (yon: 'BUY_USD' | 'SELL_USD', usd: number): Promise<string | null> => {
+      try {
+        await iste('/foreign/fx/convert', { method: 'POST', body: { side: yon, usdAmount: usd } });
+        setBildirim(yon === 'BUY_USD' ? 'Döviz alındı.' : 'Döviz bozduruldu.');
+        await disTazele();
+        return null;
+      } catch (e) {
+        return e instanceof ApiError ? e.message : 'Döviz işlemi yapılamadı';
+      }
+    }, [iste, disTazele]);
+
+  const disTicaretYap = useCallback(
+    async (g: DisTicaretGirdisi): Promise<string | null> => {
+      try {
+        await iste(g.yon === 'IMPORT' ? '/foreign/import' : '/foreign/export', {
+          method: 'POST',
+          body: { facilityId: g.facilityId, productCode: g.productCode, quantity: g.quantity },
+        });
+        setBildirim(g.yon === 'IMPORT' ? 'İthalat yapıldı.' : 'İhracat yapıldı.');
+        await Promise.all([disTazele(), yukle()]);
+        return null;
+      } catch (e) {
+        return e instanceof ApiError ? e.message : 'İşlem yapılamadı';
+      }
+    }, [iste, disTazele, yukle]);
+
   const uretimiAc = useCallback(async (t: Tesis) => {
     setUretimTesis(t);
     setUretim(null);
@@ -383,6 +448,19 @@ export default function Sirketim() {
               )}
 
               {/*
+                ★ Dış ticaret düğmesi YALNIZ limanda: kapı orası (docs/12 §3.5).
+                `supportsForeignTrade` SUNUCUDAN gelir — `type.code === 'PORT'`
+                diye eşlemek, bu depoda bir kez ısırmış bir kalıptı.
+              */}
+              {acikMi && t.supportsForeignTrade && !t.isUnderConstruction && (
+                <Pressable style={s.disDugme} onPress={() => void disTicaretiAc(t)}>
+                  <MCI name="ferry" size={16} color={renk.mavi} />
+                  <Text style={s.disYazi}>Dış ticaret</Text>
+                  <MCI name="chevron-right" size={18} color={renk.mavi} />
+                </Pressable>
+              )}
+
+              {/*
                 ★ Raf fiyatı YALNIZ perakende tesisinde anlamlı: fabrikanın
                 rafı yoktur, malını toptan piyasada satar. Düğmeyi her tesise
                 koymak "neden çalışmıyor" sorusunu doğururdu.
@@ -520,6 +598,16 @@ export default function Sirketim() {
         kaydet={rafKaydet}
       />
 
+      <DisTicaretPaneli
+        acik={disTesis !== null}
+        durum={disDurum}
+        tesisId={disTesis?.id ?? null}
+        onizleDoviz={dovizOnizle}
+        kapat={() => { setDisTesis(null); setDisDurum(null); }}
+        bozdur={dovizBozdur}
+        ticaret={disTicaretYap}
+      />
+
       <UretimPaneli
         tesis={uretimTesis}
         uretim={uretim}
@@ -581,6 +669,13 @@ const s = StyleSheet.create({
     borderColor: 'rgba(90,160,255,0.35)',
   },
   uretimYazi: { color: renk.mavi, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
+  disDugme: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: bosluk.m,
+    paddingVertical: 10, paddingHorizontal: bosluk.m, borderRadius: yuvarlak.m,
+    backgroundColor: 'rgba(90,160,255,0.10)', borderWidth: 1,
+    borderColor: 'rgba(90,160,255,0.35)',
+  },
+  disYazi: { color: renk.mavi, fontSize: 14, fontFamily: yaziTipi.baslikOrta, flex: 1 },
 
   otomatikDugme: {
     flexDirection: 'row', alignItems: 'center', gap: 7,

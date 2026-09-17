@@ -222,3 +222,125 @@ describe('dış ticaret — liman uçları (R44)', () => {
     expect(await usdOf(companyId)).toBeGreaterThan(before);
   });
 });
+
+/*
+ * ★★★★ EKRANIN İHTİYACI: BAĞLAM (R101).
+ *
+ * `/foreign/capacity` dünyayı anlatıyor ama kim olduğunu bilmiyor. "Ticaret
+ * yapabilir miyim" sorusunun cevabı üç şeye bağlı ve üçü de oyuncuya ait:
+ * seviye kilidi, HAZIR bir liman, ve $ bakiyesi. Bunlar olmadan panel ya boş
+ * açılır ya da oyuncuyu "Dış ticaret yalnız Liman üzerinden yapılır"
+ * hatasına çarptırır — uç zaten vardı, eksik olan kimin sorduğuydu.
+ */
+describe('★ dış ticaret özeti', () => {
+  async function limansiz(level = 7) {
+    const reg = await call('/auth/register', {
+      method: 'POST',
+      body: { email: `o-${randomUUID()}@kapital.test`, password: 'parola12345', displayName: 'Limansız' },
+    });
+    const token = reg.body.accessToken as string;
+    const co = await call('/company', {
+      method: 'POST', token,
+      body: { name: 'Limansız A.Ş.', cityCode: 'IST', facilityTypeCode: 'GREENGROCER' },
+    });
+    await sql`UPDATE companies SET level = ${level} WHERE id = ${co.body.id}::uuid`;
+    return { token, companyId: co.body.id as string };
+  }
+
+  it('limanı olmayan oyuncuda canTrade FALSE — hata değil, DURUM', async () => {
+    const p = await limansiz();
+    // Kapasite satırları `foreign-capacity` fazında, yani TUR BAŞINDA oluşur.
+    // Canlı dünyada hep vardır; testte bir tur koşturmak gerçeği taklit eder.
+    await runTick(sql);
+    const res = await call('/foreign', { token: p.token });
+
+    expect(res.status).toBe(200);
+    expect(res.body.canTrade).toBe(false);
+    expect(res.body.ports).toEqual([]);
+    expect(res.body.levelLocked).toBe(false);
+    // Dünya verisi yine gelir: oyuncu neyi kaçırdığını görebilmeli.
+    expect(res.body.products.length).toBeGreaterThan(0);
+  });
+
+  it('★ seviye kilidi AYRI raporlanır — liman eksikliğiyle karışmasın', async () => {
+    const p = await limansiz(3);
+    const res = await call('/foreign', { token: p.token });
+    expect(res.body.levelLocked).toBe(true);
+    expect(res.body.canTrade).toBe(false);
+    expect(res.body.unlockLevel).toBeGreaterThan(3);
+  });
+
+  it('★ limanı olan oyuncuda canTrade TRUE ve liman listelenir', async () => {
+    const p = await trader();
+    const res = await call('/foreign', { token: p.token });
+
+    expect(res.body.canTrade).toBe(true);
+    expect(res.body.ports).toHaveLength(1);
+    expect(res.body.ports[0].id).toBe(p.portId);
+    expect(res.body.ports[0].ready).toBe(true);
+    expect(res.body.ports[0].city.length).toBeGreaterThan(0);
+  });
+
+  it('fiyatlar hem $ hem ₺ karşılığıyla gelir', async () => {
+    const p = await trader();
+    await runTick(sql); // kapasite satırları bu turda oluşur
+    const res = await call('/foreign', { token: p.token });
+    const u = res.body.products[0];
+
+    expect(u.importPriceUsdFormatted.length).toBeGreaterThan(0);
+    expect(u.importPriceTryFormatted).toContain('₺');
+    expect(u.exportPriceTryFormatted).toContain('₺');
+    expect(u.importRemainingFormatted.length).toBeGreaterThan(0);
+  });
+});
+
+/*
+ * ★ Döviz önizlemesi: spread HER İKİ YÖNDE de maliyettir; oyuncu ödemeden
+ * önce görmeli. Hesap `convert`in kullandığı işlevin AYNISI.
+ */
+describe('★ döviz önizlemesi', () => {
+  const cashOf = async (id: string) => {
+    const [row] = await sql<{ cash: bigint }[]>`SELECT cash FROM companies WHERE id = ${id}::uuid`;
+    return row!.cash;
+  };
+
+  it('★ önizlemedeki ₺ tutarı, GERÇEK dönüşümde düşen tutarla birebir aynı', async () => {
+    const p = await trader();
+
+    const on = await call('/foreign/fx/preview?side=BUY_USD&usdAmount=100', { token: p.token });
+    expect(on.status).toBe(200);
+    expect(on.body.affordable).toBe(true);
+
+    const once = await cashOf(p.companyId);
+    const sonuc = await call('/foreign/fx/convert', {
+      method: 'POST', token: p.token, body: { side: 'BUY_USD', usdAmount: 100 },
+    });
+    expect(sonuc.status).toBe(201);
+
+    expect(once - (await cashOf(p.companyId))).toBe(BigInt(on.body.tryAmount));
+  });
+
+  it('★ spread İKİ YÖNDE DE aleyhte: gidip gelmek bedava değil', async () => {
+    const p = await trader();
+    const al = await call('/foreign/fx/preview?side=BUY_USD&usdAmount=100', { token: p.token });
+    const sat = await call('/foreign/fx/preview?side=SELL_USD&usdAmount=100', { token: p.token });
+
+    expect(BigInt(al.body.tryAmount)).toBeGreaterThan(BigInt(sat.body.tryAmount));
+    expect(BigInt(al.body.spread)).toBeGreaterThan(0n);
+    // Aradaki fark tam olarak iki spread kadar.
+    expect(BigInt(al.body.tryAmount) - BigInt(sat.body.tryAmount))
+      .toBe(BigInt(al.body.spread) + BigInt(sat.body.spread));
+  });
+
+  it('★ dövizi yoksa affordable FALSE — önizleme gevşek, işlem sıkı', async () => {
+    const p = await trader();
+    const on = await call('/foreign/fx/preview?side=SELL_USD&usdAmount=1000', { token: p.token });
+    expect(on.body.affordable).toBe(false);
+
+    const sonuc = await call('/foreign/fx/convert', {
+      method: 'POST', token: p.token, body: { side: 'SELL_USD', usdAmount: 1000 },
+    });
+    expect(sonuc.status).toBeGreaterThanOrEqual(400);
+  });
+});
+

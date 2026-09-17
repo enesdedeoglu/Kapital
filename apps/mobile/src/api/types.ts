@@ -180,6 +180,8 @@ export interface Tesis {
   readonly producedProduct:
     | { readonly code: string; readonly name: string; readonly unit: string }
     | null;
+  /** Liman mı — dış ticaretin tek kapısı. Sunucu söyler, kod eşlenmez. */
+  readonly supportsForeignTrade: boolean;
   readonly isUnderConstruction: boolean;
   readonly ticksRemaining: number;
   /**
@@ -530,5 +532,71 @@ export interface KrediOnizleme {
   readonly availableCreditFormatted: string;
   readonly exceedsLimit: boolean;
   readonly paymentBurden: number | null;
+}
+
+/** Dünya pazarında bir ürün — `GET /foreign` içindeki satır. */
+export interface DisUrun {
+  readonly code: string;
+  readonly name: string;
+  readonly unit: string;
+  readonly importable: boolean;
+  readonly exportable: boolean;
+  readonly importPriceUsd: string;
+  readonly exportPriceUsd: string;
+  readonly importPriceUsdFormatted: string;
+  readonly exportPriceUsdFormatted: string;
+  /** ₺ karşılığı — oyuncu kasasını ₺ tutuyor, kıyası orada yapıyor. */
+  readonly importPriceTryFormatted: string;
+  readonly exportPriceTryFormatted: string;
+  readonly importRemaining: string;
+  readonly exportRemaining: string;
+  readonly importRemainingFormatted: string;
+  readonly exportRemainingFormatted: string;
+}
+
+export interface Liman {
+  readonly id: string;
+  readonly name: string;
+  readonly city: string;
+  readonly ready: boolean;
+  readonly freeCapacity: string;
+  readonly freeCapacityFormatted: string;
+}
+
+/**
+ * `GET /foreign` — ekranın tek çağrısı.
+ *
+ * "Ticaret yapabilir miyim" üç şarta bağlı: seviye kilidi, HAZIR liman ve
+ * (ithalatta) döviz. Üçü de burada ayrı ayrı raporlanır; biri eksikken
+ * oyuncuyu hataya çarptırmak yerine sebebi söylenir.
+ */
+export interface DisTicaret {
+  readonly unlockLevel: number;
+  readonly level: number;
+  readonly levelLocked: boolean;
+  readonly canTrade: boolean;
+  readonly usdBalance: string;
+  readonly usdBalanceFormatted: string;
+  readonly cash: string;
+  readonly cashFormatted: string;
+  readonly fxRate: string;
+  readonly fxRateFormatted: string;
+  readonly fxSpreadPct: number;
+  readonly ports: readonly Liman[];
+  readonly products: readonly DisUrun[];
+}
+
+/** `GET /foreign/fx/preview` — bozdurmadan önce ne alırım/veririm. */
+export interface DovizOnizleme {
+  readonly side: 'BUY_USD' | 'SELL_USD';
+  readonly usdAmount: string;
+  readonly usdAmountFormatted: string;
+  readonly tryAmount: string;
+  readonly tryAmountFormatted: string;
+  readonly spread: string;
+  readonly spreadFormatted: string;
+  readonly rate: string;
+  readonly rateFormatted: string;
+  readonly affordable: boolean;
 }
 

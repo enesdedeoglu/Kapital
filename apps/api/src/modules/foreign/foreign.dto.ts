@@ -13,3 +13,11 @@ export const fxConvertSchema = z.object({
   usdAmount: z.number().positive().max(100_000_000),
 });
 export type FxConvertDto = z.infer<typeof fxConvertSchema>;
+
+/** Döviz önizlemesi — `convert` ile aynı alanlar, sorgu dizesinden gelir. */
+export const fxPreviewSchema = z.object({
+  side: z.enum(['BUY_USD', 'SELL_USD']),
+  usdAmount: z.coerce.number().positive().max(100_000_000),
+});
+export type FxPreviewDto = z.infer<typeof fxPreviewSchema>;
+

@@ -47,6 +47,16 @@ export interface FacilityView {
    * görünüyordu (R96).
    */
   productionState: 'NONE' | 'NO_RECIPE' | 'PAUSED' | 'RUNNING';
+  /**
+   * Dış ticaret bu tesisten yapılabilir mi (`facility_types.requires_port`).
+   *
+   * ★ SUNUCU SÖYLER, istemci kod eşlemez. Arayüz `type.code === 'PORT'` diye
+   * bakabilirdi ama bu tür bir eşleme bu depoda bir kez ısırdı: ikon haritası
+   * `FARM`/`FACTORY` bekleyip gerçek kodlar `AGRICULTURE`/`INDUSTRY` olunca
+   * her şey sessizce varsayılana düşmüştü. Şart veritabanında; cevabı da
+   * oradan gelmeli.
+   */
+  supportsForeignTrade: boolean;
   /** Tarif atanmışsa ürettiği ürün; yoksa null. */
   producedProduct: { code: string; name: string; unit: string } | null;
   isUnderConstruction: boolean;
@@ -529,6 +539,7 @@ export class FacilityService {
              COALESCE(i.used_capacity, 0) AS used_capacity,
              COALESCE(cur.capacity_multiplier, 1) AS level_multiplier,
              nxt.capacity_multiplier AS next_multiplier,
+             ft.requires_port,
              rp.code AS output_code, rp.name AS output_name, rp.unit AS output_unit,
              -- Tesis TÜRÜ üretebiliyor mu: 'üretmez' ile 'tarifi yok'u ayırır.
              EXISTS (SELECT 1 FROM production_recipes pr
@@ -589,6 +600,7 @@ export class FacilityService {
       productionEnabled: f.production_enabled as unknown as boolean,
       productionState: uretim.durum,
       producedProduct: uretim.urun,
+      supportsForeignTrade: f.requires_port as unknown as boolean,
       isUnderConstruction: remaining > 0,
       readyAtTick: readyAt.toString(),
       ticksRemaining: remaining,

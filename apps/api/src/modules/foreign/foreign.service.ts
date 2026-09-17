@@ -20,6 +20,125 @@ export class ForeignService {
   constructor(@Inject(SQL) private readonly sql: Sql) {}
 
   /** Bu turda kalan ithalat/ihracat derinliği ve dünya fiyatları. */
+  /**
+   * Dış ticaret ekranının tek çağrısı: oyuncunun BAĞLAMI + dünya verisi.
+   *
+   * ★★★★ `capacity()` yalnız dünyayı anlatıyor — kim olduğunu bilmiyor. Ekran
+   * için yetmiyordu (R101): "ticaret yapabilir miyim" sorusunun cevabı üç
+   * şeye bağlı ve üçü de oyuncuya ait — seviye kilidi, LİMANIN olup olmadığı
+   * ve $ bakiyesi. Bunlar olmadan panel ya boş açılıyor ya da oyuncuyu
+   * "Dış ticaret yalnız Liman üzerinden yapılır" hatasına çarptırıyordu.
+   *
+   * ★ ₺ KARŞILIKLARI SUNUCUDA: fiyatlar dolar, oyuncunun kasası ₺. Çarpımı
+   * istemcide float ile yapmak para matematiğini ikinci bir yere kopyalamak
+   * olurdu (ADR-0001).
+   */
+  async overview(userId: string) {
+    const [company] = await this.sql<{
+      id: string; level: number; cash: bigint; usd_balance: bigint;
+    }[]>`SELECT id, level, cash, usd_balance FROM companies WHERE user_id = ${userId}::uuid`;
+    if (!company) throw new NotFound('Şirket');
+
+    const fx = await this.fxConfig();
+    const dunya = await this.capacity();
+    const rate = asMoney(BigInt(dunya.fxRate));
+
+    // Liman tesisleri: dış ticaretin tek kapısı (docs/12 §3.5).
+    const limanlar = await this.sql<{
+      id: string; name: string; city_name: string; ready: boolean; free: bigint;
+    }[]>`
+      SELECT f.id, COALESCE(f.name, ft.name) AS name, c.name AS city_name,
+             (f.construction_complete_at_tick <= COALESCE(
+               (SELECT MAX(seq) FROM economic_ticks), 0)) AS ready,
+             (i.capacity - i.used_capacity)::bigint AS free
+        FROM facilities f
+        JOIN facility_types ft ON ft.id = f.facility_type_id
+        JOIN cities c ON c.id = f.city_id
+        JOIN inventories i ON i.facility_id = f.id
+       WHERE f.company_id = ${company.id}::uuid AND ft.requires_port AND f.closed_at IS NULL
+       ORDER BY f.created_at`;
+
+    const usd = asMoney(company.usd_balance);
+    const hazirLiman = limanlar.filter((l) => l.ready);
+
+    return {
+      unlockLevel: fx.unlockLevel,
+      level: company.level,
+      levelLocked: company.level < fx.unlockLevel,
+      /** Üç şart birden: seviye, HAZIR liman, ve tur verisi. */
+      canTrade: company.level >= fx.unlockLevel && hazirLiman.length > 0,
+      usdBalance: usd.toString(),
+      usdBalanceFormatted: formatMoney(usd, { symbol: false }),
+      cash: company.cash.toString(),
+      cashFormatted: formatMoney(asMoney(company.cash)),
+      fxRate: dunya.fxRate,
+      fxRateFormatted: dunya.fxRateFormatted,
+      fxSpreadPct: fx.spreadPct,
+      ports: limanlar.map((l) => ({
+        id: l.id, name: l.name, city: l.city_name, ready: l.ready,
+        freeCapacity: l.free.toString(),
+        freeCapacityFormatted: formatQty(asQty(l.free)),
+      })),
+      products: dunya.products.map((u) => {
+        const ithal = asMoney(BigInt(u.importPriceUsd));
+        const ihrac = asMoney(BigInt(u.exportPriceUsd));
+        return {
+          ...u,
+          importPriceUsdFormatted: formatMoney(ithal, { symbol: false }),
+          exportPriceUsdFormatted: formatMoney(ihrac, { symbol: false }),
+          // ★ ₺ karşılığı: oyuncu kasasını ₺ tutuyor, kıyası orada yapıyor.
+          importPriceTryFormatted: formatMoney(this.tryOf(ithal, rate)),
+          exportPriceTryFormatted: formatMoney(this.tryOf(ihrac, rate)),
+          importRemainingFormatted: formatQty(asQty(BigInt(u.importRemaining)), u.unit),
+          exportRemainingFormatted: formatQty(asQty(BigInt(u.exportRemaining)), u.unit),
+        };
+      }),
+    };
+  }
+
+  /**
+   * "Bu dövizi bozdurursam ne alırım/veririm" — işlemden ÖNCE.
+   *
+   * ★ SPREAD HER İKİ YÖNDE DE MALİYETTİR (`fxConversion`): alırken eklenir,
+   * satarken düşülür. Gidip gelmek bedava değil ve oyuncu bunu ödemeden önce
+   * görmeli. Hesap `convert`in kullandığı işlevin AYNISI — gösterilen ile
+   * tahsil edilen aynı sayı.
+   */
+  async fxPreview(userId: string, side: 'BUY_USD' | 'SELL_USD', usdAmount: number) {
+    const [company] = await this.sql<{ level: number; cash: bigint; usd_balance: bigint }[]>`
+      SELECT level, cash, usd_balance FROM companies WHERE user_id = ${userId}::uuid`;
+    if (!company) throw new NotFound('Şirket');
+
+    const fx = await this.fxConfig();
+    const [rateRow] = await this.sql<{ rate: bigint }[]>`
+      SELECT rate_try_per_usd AS rate FROM fx_rates ORDER BY tick_id DESC LIMIT 1`;
+    const rate = asMoney(rateRow?.rate ?? BigInt(Math.round(fx.rate0 * 10_000)));
+
+    const usd = asMoney(BigInt(Math.round(usdAmount * 10_000)));
+    const { tryAmount, spread } = fxConversion(usd, rate, fx.spreadPct, side);
+
+    return {
+      side,
+      usdAmount: usd.toString(),
+      usdAmountFormatted: formatMoney(usd, { symbol: false }),
+      tryAmount: tryAmount.toString(),
+      tryAmountFormatted: formatMoney(tryAmount),
+      spread: spread.toString(),
+      spreadFormatted: formatMoney(spread),
+      rate: rate.toString(),
+      rateFormatted: formatMoney(rate),
+      /** Yetmiyorsa ekran baştan söyler; uç yine de reddeder. */
+      affordable: side === 'BUY_USD'
+        ? company.cash >= (tryAmount as bigint)
+        : company.usd_balance >= (usd as bigint),
+    };
+  }
+
+  /** $ → ₺, kur ölçeği (1e4) bir kez düşürülür. */
+  private tryOf(usd: Money, rate: Money): Money {
+    return asMoney(((usd as bigint) * (rate as bigint)) / 10_000n);
+  }
+
   async capacity() {
     const tickSeq = await currentTickSeq(this.sql);
     const cfg = await this.foreignConfig();

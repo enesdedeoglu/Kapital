@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Inject, Post, Req, UseInterceptors } from '@nestjs/common';
+import {
+  Body, Controller, Get, Inject, Post, Query, Req, UseInterceptors,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { IdempotencyInterceptor } from '../../common/idempotency.interceptor.js';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import type { AuthUser } from '../auth/jwt.guard.js';
 import {
-  foreignTradeSchema, fxConvertSchema, type ForeignTradeDto, type FxConvertDto,
+  foreignTradeSchema, fxConvertSchema, fxPreviewSchema,
+  type ForeignTradeDto, type FxConvertDto, type FxPreviewDto,
 } from './foreign.dto.js';
 import { ForeignService } from './foreign.service.js';
 
@@ -12,10 +15,29 @@ import { ForeignService } from './foreign.service.js';
 export class ForeignController {
   constructor(@Inject(ForeignService) private readonly foreign: ForeignService) {}
 
+  /**
+   * Ekranın tek çağrısı: oyuncunun bağlamı (seviye, limanlar, $ bakiyesi) ile
+   * dünya verisi birlikte. `capacity` dünyayı anlatır ama kim olduğunu
+   * bilmez; "ticaret yapabilir miyim" sorusu oyuncuya ait üç şarta bağlı.
+   */
+  @Get()
+  overview(@Req() req: Request & { user: AuthUser }) {
+    return this.foreign.overview(req.user.sub);
+  }
+
   /** Bu turda kalan derinlik ve dünya fiyatları — oyuncu fiyatı belirleyemez. */
   @Get('capacity')
   capacity() {
     return this.foreign.capacity();
+  }
+
+  /** "Bozdurursam ne alırım" — spread dahil, işlemden önce. */
+  @Get('fx/preview')
+  fxPreview(
+    @Req() req: Request & { user: AuthUser },
+    @Query(new ZodPipe(fxPreviewSchema)) dto: FxPreviewDto,
+  ) {
+    return this.foreign.fxPreview(req.user.sub, dto.side, dto.usdAmount);
   }
 
   @Post('import')
