@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addBatch, runInTransaction, type Sql } from '@kapital/db';
+import { addBatch, checkInvariants, runInTransaction, type Sql } from '@kapital/db';
 import { makeNpc, prepareTestDb, truncateGameState } from '@kapital/db/testing';
 import { money, qty } from '@kapital/shared';
 import { runTick } from './orchestrator.js';
@@ -393,5 +393,58 @@ describe('★ tur belirleyicidir — aynı tohum aynı sonucu verir (R56)', () =
     ];
     const eksik = dosyalar.filter((f) => !readFileSync(f, 'utf8').includes('ORDER BY'));
     expect(eksik).toEqual([]);
+  });
+});
+
+describe('★ NPC kriz ithalatı (docs/12 F6)', () => {
+  // ★ Kapasite satırı tur kimliğine bağlı ve ON CONFLICT DO NOTHING ile
+  // yazılıyor: önceki testin aynı turdaki satırı kalırsa kota hiç işlenmez.
+  beforeEach(async () => { await sql`TRUNCATE foreign_trade_capacity`; });
+
+  const kotaAc = (magnitude: number) => sql`
+    INSERT INTO npc_directives (issued_tick, expires_tick, scope, product_id, lever,
+                                magnitude, reason)
+    VALUES (0, 999, 'PRODUCT', ${WHEAT}, 'IMPORT_QUOTA', ${magnitude}, 'test kotası')`;
+
+  const ithalatlar = (companyId: string) => sql<{ product_id: number; quantity: bigint }[]>`
+    SELECT product_id, quantity FROM foreign_trades
+     WHERE company_id = ${companyId}::uuid AND direction = 'IMPORT'`;
+
+  it('kota açıkken değirmen buğdayın bir kısmını dışarıdan alır, $ tutmaz', async () => {
+    const mill = await makeNpc(sql, { typeCode: 'MILL', outputCode: 'FLOUR', cityId: ANKARA });
+    await kotaAc(1); // derinlik ×4
+    await runTick(sql);
+
+    const [ithal] = await ithalatlar(mill.companyId);
+    expect(ithal?.product_id).toBe(WHEAT);
+    expect(ithal!.quantity).toBeGreaterThan(0n);
+
+    // Mal depoya AYNI turda girdi.
+    const [stok] = await sql<{ q: bigint }[]>`
+      SELECT COALESCE(SUM(quantity), 0)::bigint AS q FROM inventory_batches
+       WHERE inventory_id = ${mill.inventoryId}::uuid AND product_id = ${WHEAT}`;
+    expect(stok!.q).toBeGreaterThanOrEqual(ithal!.quantity);
+
+    // ★ NPC döviz TUTMAZ: aldığı $'ın tamamı ithalata gitti.
+    const [sirket] = await sql<{ usd: bigint }[]>`
+      SELECT usd_balance AS usd FROM companies WHERE id = ${mill.companyId}::uuid`;
+    expect(sirket!.usd).toBe(0n);
+
+    // ★ Yalnız kaldıracın eklediği pay: taban derinlik oyuncuya kalır.
+    const [kap] = await sql<{ cap: bigint; used: bigint; mult: number }[]>`
+      SELECT import_capacity AS cap, import_used AS used, import_quota_mult AS mult
+        FROM foreign_trade_capacity WHERE product_id = ${WHEAT}
+       ORDER BY tick_id DESC LIMIT 1`;
+    const taban = BigInt(Math.floor(Number(kap!.cap) / kap!.mult));
+    expect(kap!.used).toBe(ithal!.quantity);
+    expect(kap!.used).toBeLessThanOrEqual(kap!.cap - taban);
+
+    expect((await checkInvariants(sql)).ok).toBe(true);
+  });
+
+  it('kota yokken ithalat yapılmaz: kriz dışında yurt içi üretim kârlı kalmalı', async () => {
+    const mill = await makeNpc(sql, { typeCode: 'MILL', outputCode: 'FLOUR', cityId: ANKARA });
+    await runTick(sql);
+    expect(await ithalatlar(mill.companyId)).toHaveLength(0);
   });
 });

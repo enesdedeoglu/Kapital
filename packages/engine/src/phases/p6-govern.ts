@@ -14,6 +14,7 @@ import {
 import { configValue, type EngineTick } from '../context.js';
 import { loadReferencePrices, type ReferencePrices } from '../reference-prices.js';
 import { runDirector, type DirectorResult } from './director.js';
+import { loadCrisisImports, tryNpcImport } from './npc-imports.js';
 import { runStandingOrders, type StandingOrderResult } from './standing-orders.js';
 
 interface NpcRow {
@@ -46,6 +47,8 @@ export interface GovernPhaseResult {
   /** Kapatılan zarar eden tesis sayısı. */
   divested: number;
   built: number;
+  /** Kriz ithalatı yapan NPC tesis-girdi sayısı (docs/12 F6). */
+  imports: number;
   director: DirectorResult;
   standing: StandingOrderResult;
 }
@@ -128,7 +131,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   if (npcs.length === 0) {
     return { npcs: 0, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
              strategicDecisions: 0, throttled: playerThrottled, built: 0, divested: 0,
-             director, standing };
+             imports: 0, director, standing };
   }
 
   const references = await loadReferencePrices(sql, tick.seq);
@@ -173,7 +176,8 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
   const committed = new Map<number, number>();
 
   const out = { npcs: npcs.length, pricesSet: 0, buyOrders: 0, sellOrders: 0, retailOffers: 0,
-                strategicDecisions: 0, throttled: 0, built: 0, divested: 0, director, standing };
+                strategicDecisions: 0, throttled: 0, built: 0, divested: 0, imports: 0,
+                director, standing };
   out.throttled += playerThrottled;
   const byCompany = new Map<string, NpcFacilityRow[]>();
   for (const f of facilities) {
@@ -264,6 +268,9 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
     return Math.max(0.5, medyan);
   };
 
+  // Kotası açık ürünler (IMPORT_QUOTA): NPC girdisini kısmen dışarıdan alır.
+  const krizIthalati = await loadCrisisImports(sql, tick);
+
   for (const npc of npcs) {
     let budget = npc.cash - BigInt(Math.round(Number(npc.cash) * npc.cash_reserve_ratio));
 
@@ -287,6 +294,24 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           });
           if (plan.buyQuantity <= 0n) continue;
 
+          /*
+           * ★ KRİZ İTHALATI ÖNCE: kota açıksa ihtiyacın kaldıracın eklediği
+           * paya sığan kısmı dışarıdan, AYNI turda depoya girer. Kalanı yurt
+           * içi emirle istenir — ithal edilen miktar iki kez alınmaz.
+           */
+          let yurtIci: bigint = plan.buyQuantity;
+          const ithal = await tryNpcImport(sql, tick, krizIthalati, {
+            companyId: npc.company_id, facilityId: facility.facility_id,
+            inventoryId: facility.inventory_id, productId: input.product_id,
+            ihtiyac: yurtIci, butce: budget,
+          });
+          if (ithal) {
+            out.imports++;
+            budget -= ithal.odenen as bigint;
+            yurtIci -= ithal.miktar;
+            if (yurtIci <= 0n) continue;
+          }
+
           const reference = references.get(input.product_id);
           if (!reference) continue;
           // Acil ihtiyaçta piyasanın biraz üstünü ödemeye razı olur; navlun payı
@@ -299,7 +324,7 @@ export async function runGovernPhase(sql: Sql, tick: EngineTick): Promise<Govern
           const placed = await upsertOrder(sql, tick, openOrders, {
             companyId: npc.company_id, facilityId: facility.facility_id,
             cityId: facility.city_id, productId: input.product_id, side: 'BUY',
-            quantity: biasedQuantity(plan.buyQuantity, directives, support, input.product_id),
+            quantity: biasedQuantity(asQty(yurtIci), directives, support, input.product_id),
             price: bid, budget, freightAllowance: navlunPayi,
           });
           if (placed > 0n) { out.buyOrders++; budget -= placed; }
