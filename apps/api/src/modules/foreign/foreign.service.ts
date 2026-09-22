@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  addBatch, consumeFefo, currentTickSeq, runInTransaction, transfer, type Sql,
+  buyUsd, consumeFefo, currentTickSeq, importGoods, runInTransaction, sellUsd, transfer,
+  type Sql,
 } from '@kapital/db';
-import { expiryTick, foreignPrices, fxConversion } from '@kapital/economy';
+import { foreignPrices, fxConversion } from '@kapital/economy';
 import {
   asMoney, asQty, DomainError, formatMoney, formatQty, InsufficientFunds,
   NotFound, priceTimesQty, qtyFromNumber, type Money,
@@ -218,23 +219,18 @@ export class ForeignService {
       });
     }
 
-    await runInTransaction(this.sql, async (tx) => {
-      const world = await this.systemId(tx, 'SYS_WORLD');
-      await transfer(tx, {
-        tickId: tickSeq, fromCompanyId: ctx.companyId, toCompanyId: world,
-        amount: usdTotal, currency: 'USD', account: 'FOREIGN_TRADE',
-        reason: `${product.name} ithalatı`, refType: 'facility', refId: ctx.facilityId,
-      });
-      await addBatch(tx, {
-        inventoryId: ctx.inventoryId, productId: product.id, quantity: asQty(quantity),
-        quality: capacity.world_quality, unitCost: await this.tryValue(tx, importUsd),
-        producedInTick: tickSeq, expiresAtTick: expiryTick(tickSeq, product.shelf_life_ticks),
-      });
-      await this.recordForeign(tx, tickSeq, ctx, product.id, 'IMPORT', quantity,
-        importUsd, usdTotal, capacity.world_quality);
-      await tx`UPDATE foreign_trade_capacity SET import_used = import_used + ${quantity}
-                WHERE tick_id = ${tickSeq} AND product_id = ${product.id}`;
-    });
+    /*
+     * ★ Defter işlemi ORTAK çekirdekten (`importGoods`, packages/db): NPC'lerin
+     * kriz ithalatı da aynı kodu kullanır. İki ayrı yazım, para hareketinin iki
+     * ayrı yorumu olurdu (R102).
+     */
+    const rate = await this.currentRate();
+    await runInTransaction(this.sql, (tx) => importGoods(tx, {
+      tickId: tickSeq, companyId: ctx.companyId, facilityId: ctx.facilityId,
+      inventoryId: ctx.inventoryId, productId: product.id, quantity,
+      unitUsd: importUsd, quality: Number(capacity.world_quality),
+      shelfLifeTicks: product.shelf_life_ticks, rate, reason: `${product.name} ithalatı`,
+    }));
 
     return this.tradeResult('İTHALAT', product, quantity, importUsd, usdTotal, wanted);
   }
@@ -311,46 +307,15 @@ export class ForeignService {
     const usdAmount = asMoney(BigInt(Math.round(dto.usdAmount * 10_000)));
     const { tryAmount, spread } = fxConversion(usdAmount, rate, fx.spreadPct, dto.side);
 
-    await runInTransaction(this.sql, async (tx) => {
-      const fxCompany = await this.systemId(tx, 'SYS_FX');
-      const sink = await this.systemId(tx, 'SYS_SINK');
-
-      if (dto.side === 'BUY_USD') {
-        // ₺ defteri: oyuncu → SYS_FX · $ defteri: SYS_FX → oyuncu
-        await transfer(tx, {
-          tickId: tickSeq, fromCompanyId: company.id, toCompanyId: fxCompany,
-          amount: asMoney((tryAmount as bigint) - (spread as bigint)),
-          account: 'FX_CONVERSION', reason: 'döviz alımı',
-        });
-        await transfer(tx, {
-          tickId: tickSeq, fromCompanyId: fxCompany, toCompanyId: company.id,
-          amount: usdAmount, currency: 'USD', account: 'FX_CONVERSION', reason: 'döviz alımı',
-        });
-        await transfer(tx, {
-          tickId: tickSeq, fromCompanyId: company.id, toCompanyId: sink,
-          amount: spread, account: 'FX_SPREAD', reason: 'döviz komisyonu',
-        });
-      } else {
-        await transfer(tx, {
-          tickId: tickSeq, fromCompanyId: company.id, toCompanyId: fxCompany,
-          amount: usdAmount, currency: 'USD', account: 'FX_CONVERSION', reason: 'döviz satışı',
-        });
-        await transfer(tx, {
-          tickId: tickSeq, fromCompanyId: fxCompany, toCompanyId: company.id,
-          amount: asMoney((tryAmount as bigint) + (spread as bigint)),
-          account: 'FX_CONVERSION', reason: 'döviz satışı',
-        });
-        await transfer(tx, {
-          tickId: tickSeq, fromCompanyId: company.id, toCompanyId: sink,
-          amount: spread, account: 'FX_SPREAD', reason: 'döviz komisyonu',
-        });
-      }
-
-      await tx`
-        INSERT INTO fx_trades (tick_id, company_id, side, usd_amount, try_amount, rate, spread_paid)
-        VALUES (${tickSeq}, ${company.id}::uuid, ${dto.side}, ${usdAmount},
-                ${tryAmount}, ${rate}, ${spread})`;
-    });
+    /*
+     * ★ Defter işlemi ORTAK çekirdekten (`buyUsd`/`sellUsd`, packages/db):
+     * NPC'lerin kriz ithalatı ₺'yi aynı turda aynı kodla bozar (R102).
+     */
+    const girdi = {
+      tickId: tickSeq, companyId: company.id, usdAmount, rate, spreadPct: fx.spreadPct,
+    };
+    await runInTransaction(this.sql, (tx) => (dto.side === 'BUY_USD'
+      ? buyUsd(tx, girdi) : sellUsd(tx, girdi)));
 
     const [after] = await this.sql<{ cash: bigint; usd_balance: bigint }[]>`
       SELECT cash, usd_balance FROM companies WHERE id = ${company.id}::uuid`;
@@ -467,6 +432,13 @@ export class ForeignService {
     const [rate] = await tx<{ rate: bigint }[]>`
       SELECT rate_try_per_usd AS rate FROM fx_rates ORDER BY tick_id DESC LIMIT 1`;
     return asMoney(((usd as bigint) * (rate?.rate ?? 350_000n)) / 10_000n);
+  }
+
+  /** Son tur kuru (₺/$) — `fx_rates` boşsa config'teki başlangıç kuru. */
+  private async currentRate(): Promise<Money> {
+    const [row] = await this.sql<{ rate: bigint }[]>`
+      SELECT rate_try_per_usd AS rate FROM fx_rates ORDER BY tick_id DESC LIMIT 1`;
+    return asMoney(row?.rate ?? 350_000n);
   }
 
   private async systemId(tx: Sql, code: string): Promise<string> {
