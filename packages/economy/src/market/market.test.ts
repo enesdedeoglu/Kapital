@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { asQty, money, mulMoney, qty, type Money } from '@kapital/shared';
-import { fxConversion, foreignPrices, nextFxRate, worldPriceUsd } from './fx.js';
+import {
+  fxConversion, foreignPrices, nextFxRate, tradeBalancePressure, worldPriceUsd,
+} from './fx.js';
 import {
   matchBuyOrder, bookDepth, scarcityRation, type BookOrder, type MatchCandidate,
 } from './matching.js';
@@ -367,5 +369,31 @@ describe('kıtlıkta adil dağıtım (F8)', () => {
     expect(ration).toBe(qty(40));
     // 60 alıcı × 40 = 2.400 → arzın tamamı dağıtılabilir, kimse sıfır kalmaz.
     expect(ration * 60n).toBe(qty(2400));
+  });
+});
+
+describe('★ ticaret dengesi baskısı ölçeğe duyarlıdır', () => {
+  it('kırıntı kadar ithalat kuru kırıntı kadar oynatır', () => {
+    // İhracat yokken saf oran −1 verirdi: en büyük değer kaybı baskısı.
+    const kirinti = tradeBalancePressure({ exportTry: 0, importTry: 10, domesticTry: 10_000 });
+    expect(kirinti).toBeCloseTo(-0.001, 6);
+  });
+
+  it('ekonominin boyutuna yaklaşan açık tam baskıyı uygular', () => {
+    expect(tradeBalancePressure({ exportTry: 0, importTry: 1000, domesticTry: 1000 })).toBe(-1);
+  });
+
+  it('yön korunur: ihracat fazlası ₺yi değerlendirir', () => {
+    const fazla = tradeBalancePressure({ exportTry: 300, importTry: 100, domesticTry: 1000 });
+    expect(fazla).toBeGreaterThan(0);
+    expect(fazla).toBeLessThanOrEqual(1);
+  });
+
+  it('dış ticaret yoksa baskı da yoktur', () => {
+    expect(tradeBalancePressure({ exportTry: 0, importTry: 0, domesticTry: 5000 })).toBe(0);
+  });
+
+  it('yurt içi hacim ölçülemiyorsa baskı tam uygulanır', () => {
+    expect(tradeBalancePressure({ exportTry: 0, importTry: 50, domesticTry: 0 })).toBe(-1);
   });
 });

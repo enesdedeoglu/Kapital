@@ -1,5 +1,7 @@
 import type { Sql } from '@kapital/db';
-import { nextFxRate, smoothReference, weightedMedian, type PriceSample } from '@kapital/economy';
+import {
+  nextFxRate, smoothReference, tradeBalancePressure, weightedMedian, type PriceSample,
+} from '@kapital/economy';
 import { asMoney, asQty, TICKS_PER_DAY } from '@kapital/shared';
 import { configValue, type EngineTick } from '../context.js';
 import { detectWashTrades } from './wash-trade.js';
@@ -258,7 +260,15 @@ async function updateFxRate(
     FROM foreign_trades WHERE tick_id > ${windowStart} AND tick_id <= ${tick.seq}`;
   const ex = Number(balance?.exports ?? '0');
   const im = Number(balance?.imports ?? '0');
-  const tradeBalance = ex + im > 0 ? (ex - im) / (ex + im) : 0;
+
+  // Dış ticaretin ağırlığı yurt içi hacme göredir (bkz. tradeBalancePressure).
+  const [yurtIci] = await sql<{ hacim: string }[]>`
+    -- sira-onemsiz: tek satırlık toplam
+    SELECT COALESCE(SUM(quantity * price_per_unit / 1000), 0)::text AS hacim
+      FROM market_trades WHERE tick_id > ${windowStart} AND tick_id <= ${tick.seq}`;
+  const tradeBalance = tradeBalancePressure({
+    exportTry: ex, importTry: im, domesticTry: Number(yurtIci?.hacim ?? '0'),
+  });
 
   const { rate } = nextFxRate({
     previousRate: asMoney(previous?.rate ?? baseRate),

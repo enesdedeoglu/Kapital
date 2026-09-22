@@ -44,6 +44,32 @@ export function nextFxRate(input: FxModelInput): { rate: Money; clamped: boolean
   };
 }
 
+/**
+ * Ticaret dengesi baskısı — kur modelinin `tradeBalance` girdisi (docs/12 §4).
+ *
+ * ★★★★ SAF ORAN ÖLÇEĞİ GÖRMEZ. Spec dengeyi
+ * `(ihracat − ithalat) / (ihracat + ithalat)` diye yazıyor. Bu ifade
+ * ÖLÇEKSİZDİR: ihracat sıfırken bir tek birimlik ithalat da, ekonominin
+ * yarısı kadar ithalat da aynı −1'i verir — yani mümkün olan EN BÜYÜK değer
+ * kaybı baskısını. Hiç kimse ithalat yapmadığı sürece bu görünmüyordu; NPC
+ * kriz ithalatı devreye girince kapıda bir tohumda kur çıpadan %60 sapti.
+ *
+ * ★ ÇÖZÜM: oran, dış ticaretin YURT İÇİ HACME oranıyla ağırlıklandırılır.
+ * Kırıntı kadar ithalat kuru kırıntı kadar oynatır; ekonominin boyutuna
+ * yaklaşan bir açık tam baskıyı uygular. Yön ve uçlar spec'teki gibi kalır:
+ * ihracat fazlası ₺'yi değerlendirir, açık değer kaybettirir.
+ */
+export function tradeBalancePressure(input: {
+  exportTry: number; importTry: number; domesticTry: number;
+}): number {
+  const dis = input.exportTry + input.importTry;
+  if (dis <= 0) return 0;
+  const oran = (input.exportTry - input.importTry) / dis;
+  // Yurt içi hacim ölçülemiyorsa (ölçüm penceresinde iş yok) baskı tam uygulanır.
+  const agirlik = input.domesticTry > 0 ? Math.min(1, dis / input.domesticTry) : 1;
+  return oran * agirlik;
+}
+
 /** Dünya fiyatı USD'de çıpalıdır; oyuncu belirleyemez (docs/12 §3.1). */
 export function worldPriceUsd(basePriceUsd: Money, worldPriceIndex: number): Money {
   return mulMoney(basePriceUsd, worldPriceIndex).value;
