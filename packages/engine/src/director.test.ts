@@ -341,3 +341,33 @@ describe('★ ED duruşu tutarlıdır: eski yön anında iptal edilir', () => {
     expect(active.every((d) => d.lever === 'CAPACITY_CAP' || d.magnitude < 0)).toBe(true);
   });
 });
+
+describe('★ ithalat derinliği ara malın zincir talebini görür (docs/12 §3.3)', () => {
+  it('buğdayın ithalat kapasitesi tabana yapışmaz; ihracat derinliği değişmez', async () => {
+    await sql`TRUNCATE foreign_trade_capacity`;
+    // Ölçüm penceresi bir gündür ve ilk turda tek turluk tüketim görür;
+    // zincir talebinin tabanı (25) aştığını görmek için ekmek talebi büyütülür.
+    await sql`UPDATE products SET base_demand = 4000 WHERE code = 'BREAD'`;
+    await runTicks(2);
+
+    const [olcum] = await sql<{ tick_id: bigint; demand_units: bigint }[]>`
+      SELECT tick_id, demand_units FROM market_health
+       WHERE product_id = ${WHEAT} AND city_id = 0 ORDER BY tick_id LIMIT 1`;
+    const zincir = Number(olcum!.demand_units) / 1000 / 96;
+    // Buğdayın tüketici talebi yok; zincir talebi ekmekten gelir.
+    expect(zincir).toBeGreaterThan(25);
+
+    const [kap] = await sql<{
+      import_capacity: bigint; export_capacity: bigint; import_quota_mult: number;
+      import_depth_pct: number; export_depth_pct: number;
+    }[]>`
+      SELECT c.import_capacity, c.export_capacity, c.import_quota_mult,
+             w.import_depth_pct, w.export_depth_pct
+        FROM foreign_trade_capacity c JOIN world_market w USING (product_id)
+       WHERE c.product_id = ${WHEAT} AND c.tick_id = ${olcum!.tick_id + 1n}`;
+    const beklenen = zincir * kap!.import_depth_pct * kap!.import_quota_mult;
+    expect(Number(kap!.import_capacity) / 1000).toBeCloseTo(beklenen, 2);
+    // ★ İhracat R17 freni: taban derinlikte kalır, zincir talebiyle büyümez.
+    expect(Number(kap!.export_capacity) / 1000).toBeCloseTo(25 * kap!.export_depth_pct, 3);
+  });
+});

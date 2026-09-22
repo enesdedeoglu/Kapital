@@ -1,6 +1,6 @@
 import type { Sql } from '@kapital/db';
 import { foreignPrices, worldPriceUsd } from '@kapital/economy';
-import { asMoney, qtyFromNumber } from '@kapital/shared';
+import { asMoney, qtyFromNumber, TICKS_PER_DAY } from '@kapital/shared';
 import type { EngineTick } from '../context.js';
 
 export interface ForeignCapacityResult {
@@ -41,6 +41,7 @@ export async function computeForeignCapacity(
 
   // Economic Director direktifi (F7'de dolacak; şimdilik yok = 1,0)
   const quotas = await loadImportQuotas(sql, tick);
+  const zincirTalebi = await loadChainDemand(sql, tick);
 
   let importTotal = 0n;
   let exportTotal = 0n;
@@ -50,8 +51,20 @@ export async function computeForeignCapacity(
     const demandPerTick = Math.max(row.base_demand * cityScale!.scale, 25);
     const quota = quotas.get(row.product_id) ?? 1;
 
+    /*
+     * ★★★★ İTHALAT TABANI ZİNCİR TALEBİNİ DE GÖRÜR. Ara malların tüketici
+     * talebi (`base_demand`) sıfırdır; formül yalnız ona baktığı için buğday,
+     * un, çelik gibi dokuz ithal malın dokuzu 25 × %15 = 3,75 birimlik tabana
+     * yapışıyordu — yurt içinde turda ~400 buğday el değiştirirken. Spec
+     * "yurt içi talep" diyor (docs/12 §3.3); ara malın yurt içi talebi,
+     * Director'ın tüketiciden zincirle türettiği taleptir (R43).
+     *
+     * ★ YALNIZ İTHALAT. İhracat derinliği R17'nin para musluğu freni; onu
+     * büyütmek dışarıdan ₺ basmak olur, dokunulmaz.
+     */
+    const ithalatTabani = Math.max(demandPerTick, zincirTalebi.get(row.product_id) ?? 0);
     const importCapacity = row.importable
-      ? qtyFromNumber(demandPerTick * row.import_depth_pct * quota)
+      ? qtyFromNumber(ithalatTabani * row.import_depth_pct * quota)
       : 0n;
     const exportCapacity = row.exportable
       ? qtyFromNumber(demandPerTick * row.export_depth_pct)
@@ -71,6 +84,23 @@ export async function computeForeignCapacity(
   }
 
   return { products: rows.length, importCapacity: importTotal, exportCapacity: exportTotal };
+}
+
+/**
+ * Ürün başına tur başı yurt içi talep — Director'ın son ölçümünden.
+ *
+ * `market_health.demand_units` ölçüm penceresinin (bir gün) toplamıdır ve
+ * ara mallarda zincirle türetilmiştir. Tüketici talebinden türediği için
+ * ithalattan geri beslenmez: ithalat kapasiteyi kendi kendine büyütemez.
+ * P0, Director'dan (P6) önce koşar; okunan önceki turun ölçümüdür.
+ */
+async function loadChainDemand(sql: Sql, tick: EngineTick): Promise<Map<number, number>> {
+  const rows = await sql<{ product_id: number; demand_units: bigint }[]>`
+    SELECT product_id, demand_units FROM market_health
+     WHERE city_id = 0
+       AND tick_id = (SELECT MAX(tick_id) FROM market_health WHERE tick_id < ${tick.seq})
+     ORDER BY product_id`;
+  return new Map(rows.map((r) => [r.product_id, Number(r.demand_units) / 1000 / TICKS_PER_DAY]));
 }
 
 /** `IMPORT_QUOTA` direktifi: derinlik 0,5×–4× arası ölçeklenir (docs/12 §6). */
