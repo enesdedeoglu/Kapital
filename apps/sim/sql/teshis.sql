@@ -464,3 +464,31 @@ SELECT p.code, COUNT(*) AS satici,
               (ORDER BY stok / NULLIF(tur_basi, 0)))::numeric, 2) AS medyan_kapsam
   FROM kap JOIN products p ON p.id = kap.pid
  GROUP BY 1 ORDER BY 3;
+
+\echo ''
+\echo '=== DIŞ TİCARET: kriz kapısı açıldı mı, içeri mal girdi mi? ==='
+-- ★ Bu bölüm, ithalatın ÖLÇÜLEBİLİR olması için var. F6 yazılmadan önce
+-- "kota açıldı ama kimse ithal etmiyor" durumu hiçbir çıktıda görünmüyordu:
+-- metrikler yalnız kuru ve bandı ölçüyor, ikisi de dolaylı işaret.
+SELECT p.code,
+       COUNT(*) FILTER (WHERE d.lever = 'IMPORT_QUOTA') AS kota_direktifi,
+       COALESCE(SUM(ft.quantity) / 1000, 0) AS ithal_birim,
+       COALESCE(ROUND(SUM(ft.try_equivalent) / 10000.0), 0) AS ithal_tl,
+       COUNT(DISTINCT ft.company_id) AS ithal_eden_sirket
+  FROM products p
+  LEFT JOIN npc_directives d ON d.product_id = p.id AND d.lever = 'IMPORT_QUOTA'
+  LEFT JOIN foreign_trades ft ON ft.product_id = p.id AND ft.direction = 'IMPORT'
+ WHERE EXISTS (SELECT 1 FROM world_market w WHERE w.product_id = p.id AND w.importable)
+ GROUP BY 1 ORDER BY 3 DESC, 1;
+
+\echo ''
+\echo '=== DIŞ TİCARET: derinlik tabana mı yapışıyor (son tur) ==='
+SELECT p.code, ROUND(c.import_capacity / 1000.0, 1) AS ithalat_kapasite,
+       c.import_quota_mult AS kota_carpani,
+       ROUND(c.import_used / 1000.0, 1) AS kullanilan,
+       ROUND(c.export_capacity / 1000.0, 1) AS ihracat_kapasite
+  FROM foreign_trade_capacity c
+  JOIN products p ON p.id = c.product_id
+ WHERE c.tick_id = (SELECT MAX(tick_id) FROM foreign_trade_capacity)
+   AND (c.import_capacity > 0 OR c.export_capacity > 0)
+ ORDER BY c.import_capacity DESC;
