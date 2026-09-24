@@ -13,9 +13,21 @@ import { tekUcus } from './tekUcus';
 
 interface Jeton { readonly access: string; readonly refresh: string }
 
+/**
+ * Şirket durumu — kayıttan sonra oyunun başlayıp başlamadığı.
+ *
+ * ★ 'yok' HALİ GERÇEKTİR, hata değil: yeni hesabın şirketi olmaz ve kuruluş
+ * ekranına gitmesi gerekir. Bu ayrım yapılmadığı için yeni oyuncu boş
+ * sekmelerde ve 0 ₺ kasayla kalıyordu.
+ */
+export type SirketDurumu = 'bilinmiyor' | 'var' | 'yok';
+
 interface OturumDurumu {
   readonly hazir: boolean;
   readonly girisli: boolean;
+  readonly sirket: SirketDurumu;
+  /** Kuruluş ekranı şirketi kurunca çağırır; kapı yeniden sormaz. */
+  readonly sirketKuruldu: () => void;
   /** Jeton yenilemeyi kendi halleden istek yardımcısı. */
   readonly iste: <T>(path: string, options?: Omit<RequestOptions, 'token'>) => Promise<T>;
   readonly girisOldu: (access: string, refresh: string) => Promise<void>;
@@ -41,11 +53,16 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
    * sorusunu çizime taşır.
    */
   const jetonRef = useRef<Jeton | null>(null);
+  const [sirket, setSirket] = useState<SirketDurumu>('bilinmiyor');
 
   const jetonuKur = useCallback((yeni: Jeton | null) => {
     jetonRef.current = yeni;
     setGirisli(yeni !== null);
+    // Oturum değişti: şirket bilgisi yeni hesabın değil, yeniden sorulmalı.
+    if (yeni === null) setSirket('bilinmiyor');
   }, []);
+
+  const sirketKuruldu = useCallback(() => setSirket('var'), []);
 
   /**
    * Yenileme kapısı: paralel isteklerin hepsi TEK yenilemeye biner.
@@ -142,9 +159,30 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
     }
   }, [jetonuKur, cikisYap]);
 
+  /*
+   * Şirket var mı? Girişten sonra BİR KEZ sorulur.
+   *
+   * ★ 404 = şirket yok; başka her hata 'bilinmiyor' bırakır. Ağ koptuğunda
+   * oyuncuyu kuruluş ekranına atmak, var olan şirketinin üstüne ikinci bir
+   * şirket kurdurmaya çalışmak olurdu (sunucu reddeder, oyuncu kilitlenir).
+   */
+  useEffect(() => {
+    if (!girisli || sirket !== 'bilinmiyor') return;
+    let iptal = false;
+    void (async () => {
+      try {
+        await iste('/company');
+        if (!iptal) setSirket('var');
+      } catch (e) {
+        if (!iptal && e instanceof ApiError && e.status === 404) setSirket('yok');
+      }
+    })();
+    return () => { iptal = true; };
+  }, [girisli, sirket, iste]);
+
   const deger = useMemo<OturumDurumu>(
-    () => ({ hazir, girisli, iste, girisOldu, cikisYap }),
-    [hazir, girisli, iste, girisOldu, cikisYap],
+    () => ({ hazir, girisli, sirket, sirketKuruldu, iste, girisOldu, cikisYap }),
+    [hazir, girisli, sirket, sirketKuruldu, iste, girisOldu, cikisYap],
   );
   return <Baglam.Provider value={deger}>{children}</Baglam.Provider>;
 }

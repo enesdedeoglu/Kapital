@@ -3,6 +3,7 @@ import {
   ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
 import { useTurDegisince } from '~/tur';
@@ -24,6 +25,7 @@ import { YoldaOzet } from '~/ui/YoldakiMal';
 export default function Sirketim() {
   const { iste } = useOturum();
   const kenar = useSafeAreaInsets();
+  const router = useRouter();
   const [tesisler, setTesisler] = useState<Tesis[] | null>(null);
   const [stoklar, setStoklar] = useState<Record<string, TesisStok>>({});
   const [yolda, setYolda] = useState<Sevkiyat[]>([]);
@@ -553,7 +555,22 @@ export default function Sirketim() {
 
               {acikMi && stok && (
                 stok.products.length === 0
-                  ? <Text style={s.bosStok}>Depo boş.</Text>
+                  ? (
+                    /*
+                      ★ BOŞ DEPO ÇIKMAZ OLMAMALI. Yeni oyuncunun ilk gördüğü
+                      ekran bu ve "Depo boş." tek başına ne yapacağını
+                      söylemiyordu: mal almanın yolu Piyasa sekmesinden
+                      geçiyor ama hiçbir yerde yazmıyor.
+                    */
+                    <Pressable style={s.bosKutu} onPress={() => router.push('/piyasa')}>
+                      <MCI name="cart-outline" size={16} color={renk.mavi} />
+                      <Text style={s.bosStok}>
+                        Depo boş. Piyasadan mal al{t.type.category === 'RETAIL'
+                          ? ', sonra rafına koyup sat.' : '.'}
+                      </Text>
+                      <MCI name="chevron-right" size={18} color={renk.mavi} />
+                    </Pressable>
+                  )
                   : (
                     <View style={s.stokKap}>
                       <View style={s.stokBas}>
@@ -799,7 +816,13 @@ const s = StyleSheet.create({
   depoYuzde: { color: renk.soluk, fontSize: 12, fontFamily: yaziTipi.rakam, width: 36, textAlign: 'right' },
 
   stokKap: { marginTop: bosluk.m, borderTopWidth: 1, borderTopColor: renk.kenar, paddingTop: bosluk.s },
-  bosStok: { color: renk.cokSoluk, fontSize: 13, fontFamily: yaziTipi.govde, marginTop: bosluk.m },
+  bosStok: { color: renk.soluk, fontSize: 13, flex: 1, fontFamily: yaziTipi.govde },
+  bosKutu: {
+    flexDirection: 'row', alignItems: 'center', gap: bosluk.s, marginTop: bosluk.m,
+    paddingVertical: bosluk.m, paddingHorizontal: bosluk.m, borderRadius: yuvarlak.m,
+    backgroundColor: 'rgba(90,160,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(90,160,255,0.28)',
+  },
   stokBas: { flexDirection: 'row', paddingBottom: 6 },
   bas: { color: renk.cokSoluk, fontSize: 10, fontFamily: yaziTipi.etiket, letterSpacing: 0.6 },
   stokSatir: {

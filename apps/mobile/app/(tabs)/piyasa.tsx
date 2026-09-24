@@ -31,21 +31,32 @@ export default function Piyasa() {
 
   useEffect(() => {
     void (async () => {
+      /*
+       * ★ SEVİYE ÜRÜNLERDEN ÖNCE BİLİNMELİ. Ekran ilk ürünü seçiyordu ve o
+       * ürün Buğday — seviye 5 kilidi var. Yeni oyuncu piyasayı açar açmaz
+       * "bu ürünün ticareti için seviye 5 gerekli" uyarısıyla karşılaşıyor,
+       * alabileceği tek ürünü (Domates) kendi bulmak zorunda kalıyordu.
+       */
+      let seviyem = 1;
+      try {
+        const sirket = await iste<Sirket>('/company');
+        seviyem = sirket.level;
+        setSeviye(sirket.level);
+      } catch { /* şirket okunamazsa seviye 1 varsayılır: kilitsiz ürün seçilir */ }
+
       try {
         const liste = await iste<Urun[]>('/products');
         setUrunler(liste);
-        setSecili((s) => s ?? liste[0]?.code ?? null);
+        // Açılışta TİCARET EDİLEBİLİR ilk ürün seçilir; yoksa listenin başı.
+        const acik = liste.find((u) => (u.unlockLevel ?? 1) <= seviyem);
+        setSecili((s) => s ?? acik?.code ?? liste[0]?.code ?? null);
       } catch (e) {
         setHata(e instanceof ApiError ? e.message : 'Ürünler alınamadı');
       }
+
       // Emir verirken tesis seçilecek; şimdiden alınır ki panel anında açılsın.
       try {
-        const [t, sirket] = await Promise.all([
-          iste<Tesis[]>('/facilities'),
-          iste<Sirket>('/company'),
-        ]);
-        setTesisler(t);
-        setSeviye(sirket.level);
+        setTesisler(await iste<Tesis[]>('/facilities'));
       } catch {
         setTesisler([]);
       }

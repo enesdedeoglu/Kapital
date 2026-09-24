@@ -18,16 +18,35 @@ import { gradyan, renk } from '~/ui/tema';
 void SplashScreen.preventAutoHideAsync();
 
 function Kapi() {
-  const { hazir, girisli } = useOturum();
+  const { hazir, girisli, sirket } = useOturum();
   const segments = useSegments();
   const router = useRouter();
 
+  /*
+   * ★ ÜÇ KAPI, SIRAYLA: giriş → şirket kuruluşu → oyun.
+   *
+   * Ortadaki kapı eksikti: kayıt olan oyuncu doğrudan sekmelere düşüyor,
+   * şirketi olmadığı için her ekran boş ve kasası 0 ₺ görünüyordu.
+   *
+   * 'bilinmiyor' iken hiçbir yere yönlendirilmez: şirket sorgusu sürerken
+   * oyuncuyu kuruluşa atmak, şirketi OLAN oyuncuyu da oraya sokardı.
+   */
   useEffect(() => {
     if (!hazir) return;
     const girisEkraninda = segments[0] === 'giris';
-    if (!girisli && !girisEkraninda) router.replace('/giris');
-    else if (girisli && girisEkraninda) router.replace('/');
-  }, [hazir, girisli, segments, router]);
+    const kurulustayken = segments[0] === 'kurulus';
+
+    if (!girisli) {
+      if (!girisEkraninda) router.replace('/giris');
+      return;
+    }
+    if (sirket === 'yok') {
+      if (!kurulustayken) router.replace('/kurulus');
+      return;
+    }
+    if (sirket === 'var' && (girisEkraninda || kurulustayken)) router.replace('/');
+    else if (girisEkraninda) router.replace('/');
+  }, [hazir, girisli, sirket, segments, router]);
 
   if (!hazir) {
     return (
