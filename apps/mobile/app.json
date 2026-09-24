@@ -17,7 +17,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.nsdedeoglu.kapital",
-      "buildNumber": "1"
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.nsdedeoglu.kapital",
