@@ -132,6 +132,31 @@ describe('emir defteri', () => {
     expect(res.body.code).toBe('LEVEL_LOCKED');
   });
 
+  /*
+   * ★ ANINDA ALIM YOLU DA AYNI KİLİDE TABİDİR — ve değildi.
+   *
+   * Kural yalnız emir defteri yolunda uygulanıyordu; `/market/buy` seviyeye
+   * hiç bakmıyordu. Uç mobil uygulamadan çağrılmadığı için görünmüyordu ama
+   * sunucu internete açık. İki yolu tek testte tutmak, kuralın bir yolda
+   * unutulduğunu bir dahakine burada yakalar.
+   */
+  it('★ seviye kilidi ANINDA ALIM yolunda da uygulanır', async () => {
+    const satici = await player({ cityCode: 'KON', level: 15 });
+    await stockUp(satici.facilityId, IRON, qty(200));
+    await call('/market/orders', {
+      method: 'POST', token: satici.token,
+      body: { side: 'SELL', facilityId: satici.facilityId, productCode: 'IRON', quantity: 200, pricePerUnit: 30 },
+    });
+
+    const alici = await player({ cityCode: 'KON', level: 5 });
+    const res = await call('/market/buy', {
+      method: 'POST', token: alici.token,
+      body: { facilityId: alici.facilityId, productCode: 'IRON', quantity: 10 },
+    });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('LEVEL_LOCKED');
+  });
+
   it('★ defter ürün fiyatı / nakliye / toplam maliyeti AYRI gösterir (madde 16)', async () => {
     const konya = await player({ cityCode: 'KON' });
     await stockUp(konya.facilityId, IRON, qty(500));

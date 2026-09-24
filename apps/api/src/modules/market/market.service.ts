@@ -68,8 +68,8 @@ export class MarketService {
    * ŞEHİRDEKİ arzdan alınır ve nakliye yoktur (docs/08 MVP-0).
    */
   async buy(userId: string, dto: BuyDto): Promise<BuyResult> {
-    const [company] = await this.sql<{ id: string; cash: bigint }[]>`
-      SELECT id, cash FROM companies WHERE user_id = ${userId}::uuid`;
+    const [company] = await this.sql<{ id: string; cash: bigint; level: number }[]>`
+      SELECT id, cash, level FROM companies WHERE user_id = ${userId}::uuid`;
     if (!company) throw new NotFound('Şirket');
 
     const [facility] = await this.sql<{ id: string; city_id: number; inventory_id: string }[]>`
@@ -79,10 +79,28 @@ export class MarketService {
         AND f.closed_at IS NULL`;
     if (!facility) throw new NotFound('Tesis', dto.facilityId);
 
-    const [product] = await this.sql<{ id: number; code: string; unit: string; shelf_life_ticks: number | null }[]>`
-      SELECT id, code, unit, shelf_life_ticks FROM products
+    const [product] = await this.sql<{
+      id: number; code: string; name: string; unit: string;
+      shelf_life_ticks: number | null; unlock_level: number;
+    }[]>`
+      SELECT id, code, name, unit, shelf_life_ticks, unlock_level FROM products
       WHERE code = ${dto.productCode} AND is_active`;
     if (!product) throw new NotFound('Ürün', dto.productCode);
+
+    /*
+     * ★★★★ SEVİYE KİLİDİ BURADA DA GEÇERLİ — VE YOKTU (güvenlik açığı).
+     *
+     * Emir defteri yolunda (`order.service`) kilit kontrol ediliyordu; anında
+     * alım yolunda EDİLMİYORDU. Uç mobil uygulamadan çağrılmadığı için
+     * görünmüyordu, ama sunucu internete açık: seviye 1 bir hesap doğrudan
+     * çelik satın alabilirdi. İki yol aynı kuralı uygulamak zorunda; kuralın
+     * TEK yerde yaşamaması, kuralın olmaması demek.
+     */
+    if (company.level < product.unlock_level) {
+      throw new DomainError('LEVEL_LOCKED',
+        `${product.name} ticareti için seviye ${product.unlock_level} gerekli`,
+        { required: product.unlock_level, current: company.level });
+    }
 
     const wanted = qtyFromNumber(dto.quantity);
     const priceCeiling = dto.maxUnitPrice === undefined ? null : money(dto.maxUnitPrice);
