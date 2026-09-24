@@ -5,7 +5,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { useOturum } from '~/oturum';
-import { useTurDegisince } from '~/tur';
+import { useTur, useTurDegisince } from '~/tur';
+import { sureBicimle, useKalan } from '~/ui/kalanSure';
 import { ApiError } from '~/api/client';
 import type { AcikEmir, Defter, Sevkiyat, Sirket, Tesis, Urun } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
@@ -28,6 +29,9 @@ export default function Piyasa() {
   const [seviye, setSeviye] = useState(1);
   const [emirler, setEmirler] = useState<AcikEmir[]>([]);
   const [yolda, setYolda] = useState<Sevkiyat[]>([]);
+  // Emir paneli "ne zaman eşleşir" diye söyleyecek: sıradaki turun saati.
+  const { sonraki } = useTur();
+  const kalanTur = useKalan(sonraki);
 
   useEffect(() => {
     void (async () => {
@@ -242,6 +246,19 @@ export default function Piyasa() {
                 <Text style={s.emirAlt}>
                   {e.remainingFormatted} · {e.pricePerUnitFormatted} · {e.city.code}
                 </Text>
+                {/*
+                  ★★★★ "NEDEN EŞLEŞMİYOR" SORUSUNUN CEVABI YOKTU.
+                  Oyuncu o anki piyasaya bakıp emrini veriyor; bir tur sonra
+                  fiyatlar oynayınca emir eşleşmiyor ve ekranda HİÇBİR ŞEY
+                  bunu söylemiyordu — emir öylece duruyor, oyuncu bekliyor.
+                  Tanı yalnız seçili ürün için verilebilir: defter o ürüne ait.
+                */}
+                {tani(e, defter) && (
+                  <View style={s.taniSatir}>
+                    <MCI name="alert-circle-outline" size={12} color={renk.uyari} />
+                    <Text style={s.taniYazi}>{tani(e, defter)}</Text>
+                  </View>
+                )}
               </View>
               <Pressable onPress={() => void emirIptal(e.id)} hitSlop={10} style={s.iptal}>
                 <MCI name="close-circle-outline" size={20} color={renk.eksi} />
@@ -386,11 +403,39 @@ export default function Piyasa() {
         ipucuFiyat={emirTarafi === 'BUY'
           ? kurusaVirgul(defter?.sell[0]?.totalPerUnit)
           : kurusaVirgul(defter?.buy.find((o) => o.reachable)?.goodsCeilingPerUnit)}
+        sonrakiTur={kalanTur > 0 ? sureBicimle(kalanTur) : null}
         kapat={() => setEmirTarafi(null)}
         gonder={emirGonder}
       />
     </>
   );
+}
+
+/**
+ * Bekleyen emrin neden eşleşmediğini söyler; söylenecek bir şey yoksa null.
+ *
+ * ★ Yalnız EKRANDAKİ ürün için konuşur: defter o ürünün defteridir. Başka
+ * ürünün emri için susmak, yanlış tanı koymaktan iyidir.
+ */
+function tani(e: AcikEmir, defter: Defter | null): string | null {
+  if (defter === null || defter.product.code !== e.product.code) return null;
+  const fiyat = BigInt(e.pricePerUnit);
+
+  if (e.side === 'BUY') {
+    const enUcuz = defter.sell[0];
+    if (!enUcuz) return 'Şu an satıcı yok; satıcı çıkınca eşleşir.';
+    if (BigInt(enUcuz.totalPerUnit) > fiyat) {
+      return `Tavanın düşük: en ucuz satıcı ${enUcuz.totalPerUnitFormatted} istiyor.`;
+    }
+    return null;
+  }
+
+  const enIyi = defter.buy.find((o) => o.reachable);
+  if (!enIyi) return 'Şu an ulaşılabilir alıcı yok; alıcı çıkınca eşleşir.';
+  if (BigInt(enIyi.goodsCeilingPerUnit) < fiyat) {
+    return `Fiyatın yüksek: en iyi alıcı ${enIyi.goodsCeilingPerUnitFormatted} veriyor.`;
+  }
+  return null;
 }
 
 /** Seçili ürün oyuncunun seviyesine kilitli mi? */
@@ -464,6 +509,8 @@ const s = StyleSheet.create({
   yonYazi: { fontSize: 10, letterSpacing: 0.8, fontFamily: yaziTipi.etiket },
   emirOrta: { flex: 1 },
   emirUrun: { color: renk.metin, fontSize: 14, fontFamily: yaziTipi.govdeOrta },
+  taniSatir: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  taniYazi: { color: renk.uyari, fontSize: 11.5, flex: 1, fontFamily: yaziTipi.govde },
   emirAlt: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.govde },
   iptal: { padding: 2 },
 

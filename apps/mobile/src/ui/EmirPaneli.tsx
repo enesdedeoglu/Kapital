@@ -30,7 +30,7 @@ export interface EmirGirdisi {
  * verir ve hiç eşleşmez. O yüzden etiket ve ipucu tarafa göre değişir.
  */
 export function EmirPaneli({
-  acik, taraf, urunKodu, urunAdi, birim, tesisler, ipucuFiyat, kapat, gonder,
+  acik, taraf, urunKodu, urunAdi, birim, tesisler, ipucuFiyat, sonrakiTur, kapat, gonder,
 }: {
   acik: boolean;
   taraf: 'BUY' | 'SELL';
@@ -40,6 +40,8 @@ export function EmirPaneli({
   tesisler: readonly Tesis[];
   /** Defterdeki en iyi fiyat — oyuncu neyin makul olduğunu bilsin. */
   ipucuFiyat: string | null;
+  /** Sıradaki tura kalan süre, biçimli ("12 dk"); bilinmiyorsa null. */
+  sonrakiTur: string | null;
   kapat: () => void;
   gonder: (g: EmirGirdisi) => Promise<string | null>;
 }) {
@@ -158,6 +160,22 @@ export function EmirPaneli({
                 : 'Nakliyeyi alıcı öder; bu senin mal fiyatındır.'}
             </Text>
 
+            {/*
+              ★★★★ EMİR ANINDA ALMAZ VE BU HİÇBİR YERDE YAZMIYORDU.
+              Oyuncu "Emri ver"e basınca malı aldığını sanıyor, sonra depoyu
+              boş görüp oyunun bozuk olduğunu düşünüyordu. Beklentiyi kuran
+              tek cümle bu kutu.
+            */}
+            <View style={s.zamanKutu}>
+              <MCI name="clock-outline" size={15} color={renk.mavi} />
+              <Text style={s.zamanYazi}>
+                Emir hemen alınmaz: sıradaki turda eşleşir
+                {sonrakiTur ? ` (${sonrakiTur} sonra)` : ''}. Motor en ucuz toplam
+                maliyetten başlar; {alis ? 'tavanın' : 'fiyatın'} piyasanın
+                {alis ? ' altında' : ' üstünde'} kalırsa eşleşmez ve emrin beklemeye devam eder.
+              </Text>
+            </View>
+
             {gecerli && (
               <View style={s.toplamKart}>
                 <Text style={s.toplamEtiket}>
@@ -197,11 +215,6 @@ export function EmirPaneli({
                   )}
               </LinearGradient>
             </Pressable>
-
-            <Text style={s.not}>
-              Emir bu turda değil, SIRADAKİ TURDA eşleşir. Motor en ucuz toplam
-              maliyetten başlayarak eşleştirir.
-            </Text>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -234,6 +247,13 @@ const s = StyleSheet.create({
     color: renk.metin, fontSize: 18, fontFamily: yaziTipi.rakam,
   },
   ipucu: { color: renk.cokSoluk, fontSize: 12, lineHeight: 17, marginTop: 6, fontFamily: yaziTipi.govde },
+  zamanKutu: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: bosluk.s, marginTop: bosluk.m,
+    padding: bosluk.m, borderRadius: yuvarlak.m,
+    backgroundColor: 'rgba(90,160,255,0.08)', borderWidth: 1,
+    borderColor: 'rgba(90,160,255,0.28)',
+  },
+  zamanYazi: { color: renk.mavi, fontSize: 12.5, lineHeight: 18, flex: 1, fontFamily: yaziTipi.govde },
 
   tesisSerit: { flexDirection: 'row', gap: bosluk.s, flexWrap: 'wrap' },
   tesisPul: {
