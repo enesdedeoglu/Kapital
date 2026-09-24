@@ -9,7 +9,8 @@
     "android": "expo run:android",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint app src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "eas-build-post-install": "cd ../.. && pnpm --filter @kapital/shared build"
   },
   "dependencies": {
     "@expo-google-fonts/chakra-petch": "^0.4.1",
