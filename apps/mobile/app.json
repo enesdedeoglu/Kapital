@@ -16,10 +16,11 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.kapital.app"
+      "bundleIdentifier": "com.nsdedeoglu.kapital",
+      "buildNumber": "1"
     },
     "android": {
-      "package": "com.kapital.app",
+      "package": "com.nsdedeoglu.kapital",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
