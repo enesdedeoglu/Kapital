@@ -13,6 +13,7 @@ import { tesisEtiketi } from '~/ui/tesisEtiketi';
 import { LotPaneli } from '~/ui/LotPaneli';
 import { RafPaneli, type RafGirdisi } from '~/ui/RafPaneli';
 import { bosluk, renk, yaziTipi, yuvarlak } from '~/ui/tema';
+import { TasimaPaneli, type TasimaGirdisi, type TasimaSonucu } from '~/ui/TasimaPaneli';
 import { TesisPaneli, type KurmaGirdisi } from '~/ui/TesisPaneli';
 import { YukseltmePaneli } from '~/ui/YukseltmePaneli';
 import { OtomatikPaneli, type KuralGirdisi } from '~/ui/OtomatikPaneli';
@@ -54,6 +55,13 @@ export default function Sirketim() {
    */
   const [disTesis, setDisTesis] = useState<Tesis | null>(null);
   const [disDurum, setDisDurum] = useState<DisTicaret | null>(null);
+
+  /*
+   * Taşıma paneli — kendi tesisleri arasında mal aktarma. Kaynak, panelin
+   * açıldığı tesistir; hedefler AYNI ŞEHİRDEKİ öteki tesislerdir (sunucu da
+   * şehirler arasını reddeder, lojistik F4).
+   */
+  const [tasimaTesis, setTasimaTesis] = useState<Tesis | null>(null);
 
   /*
    * Kurma paneli. Tür ve şehir listesi TEMBEL çekilir: sekme her açıldığında
@@ -311,6 +319,27 @@ export default function Sirketim() {
       }
     }, [iste]);
 
+  /*
+   * ★ Sonuç PANELİN İÇİNDE gösterilir: ekrandaki bildirim şeridi panelin
+   * arkasında kalıyor ve oyuncu hiçbir onay görmüyordu.
+   */
+  const malTasi = useCallback(async (g: TasimaGirdisi): Promise<TasimaSonucu> => {
+    try {
+      const sonuc = await iste<{ movedFormatted: string; to: string; complete: boolean }>(
+        '/inventory/transfer', { method: 'POST', body: g });
+      await yukle();
+      // ★ Kısmi taşıma SESSİZ GEÇMEZ: istenen kadar lot bulunamamış olabilir.
+      return {
+        tamam: true,
+        mesaj: sonuc.complete
+          ? `${sonuc.movedFormatted} ${sonuc.to} deposuna taşındı.`
+          : `Yalnız ${sonuc.movedFormatted} taşınabildi.`,
+      };
+    } catch (e) {
+      return { tamam: false, hata: e instanceof ApiError ? e.message : 'Mal taşınamadı' };
+    }
+  }, [iste, yukle]);
+
   const rafKaydet = useCallback(async (girdi: RafGirdisi[]): Promise<string | null> => {
     if (!rafTesis) return 'Tesis seçili değil';
     try {
@@ -504,6 +533,22 @@ export default function Sirketim() {
                 </Pressable>
               )}
 
+              {/*
+                ★ Taşıma düğmesi YALNIZ aynı şehirde başka tesis VARKEN ve
+                depoda taşınacak mal VARKEN. Şartlardan biri yoksa düğme
+                oyuncuyu boş bir panele götürür; "üret ve kendi dükkânında
+                sat" kurgusunun kapısı buradadır.
+              */}
+              {acikMi && !t.isUnderConstruction
+                && tesisler.some((o) => o.id !== t.id && o.city.id === t.city.id)
+                && (stok?.products.some((u) => BigInt(u.available) > 0n) ?? false) && (
+                <Pressable style={s.tasiDugme} onPress={() => setTasimaTesis(t)}>
+                  <MCI name="truck-fast-outline" size={16} color={renk.mavi} />
+                  <Text style={s.tasiYazi}>Mal taşı</Text>
+                  <MCI name="chevron-right" size={18} color={renk.mavi} />
+                </Pressable>
+              )}
+
               {acikMi && <YoldaOzet sevkiyatlar={yolda.filter((v) => v.toFacilityId === t.id)} />}
 
               {acikMi && stok && (
@@ -608,6 +653,17 @@ export default function Sirketim() {
         ticaret={disTicaretYap}
       />
 
+      <TasimaPaneli
+        acik={tasimaTesis !== null}
+        kaynak={tasimaTesis}
+        stok={tasimaTesis ? stoklar[tasimaTesis.id] ?? null : null}
+        hedefler={(tesisler ?? []).filter(
+          (t) => tasimaTesis !== null && t.id !== tasimaTesis.id
+            && t.city.id === tasimaTesis.city.id && !t.isUnderConstruction)}
+        kapat={() => setTasimaTesis(null)}
+        tasi={malTasi}
+      />
+
       <UretimPaneli
         tesis={uretimTesis}
         uretim={uretim}
@@ -684,6 +740,13 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(61,220,151,0.08)',
   },
   otomatikYazi: { color: renk.artı, fontSize: 14, fontFamily: yaziTipi.govdeOrta, flex: 1 },
+  tasiDugme: {
+    flexDirection: 'row', alignItems: 'center', gap: bosluk.s,
+    marginTop: bosluk.s, paddingVertical: bosluk.m, paddingHorizontal: bosluk.m,
+    borderRadius: yuvarlak.m, backgroundColor: 'rgba(90,160,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(90,160,255,0.28)',
+  },
+  tasiYazi: { color: renk.mavi, fontSize: 14, fontFamily: yaziTipi.govdeOrta, flex: 1 },
 
   yukseltDugme: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
