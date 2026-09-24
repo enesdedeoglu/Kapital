@@ -31,6 +31,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a0c76ad9-a71d-4036-aeaa-300a568a113d"
+      }
+    },
+    "owner": "tezkip"
   }
 }
