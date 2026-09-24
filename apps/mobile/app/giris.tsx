@@ -6,8 +6,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { girisYap, kayitOl } from '~/api/session';
-import { ApiError } from '~/api/client';
+import { ApiError, apiBaseUrl } from '~/api/client';
 import { useOturum } from '~/oturum';
+import { SunucuPaneli } from '~/ui/SunucuPaneli';
 import { bosluk, golge, gradyan, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
 /*
@@ -24,13 +25,19 @@ const devEmail = __DEV__ ? (process.env.EXPO_PUBLIC_DEV_EMAIL ?? '') : '';
 const devParola = __DEV__ ? (process.env.EXPO_PUBLIC_DEV_PASSWORD ?? '') : '';
 
 export default function Giris() {
-  const { girisOldu } = useOturum();
+  const { girisOldu, cikisYap } = useOturum();
   const [kayit, setKayit] = useState(false);
   const [email, setEmail] = useState(devEmail);
   const [parola, setParola] = useState(devParola);
   const [isim, setIsim] = useState('');
   const [hata, setHata] = useState<string | null>(null);
   const [bekliyor, setBekliyor] = useState(false);
+  const [sunucuAcik, setSunucuAcik] = useState(false);
+  /*
+   * ★ Adres DURUMDA tutulur: `apiBaseUrl()` bir modül değişkeni okuyor, React
+   * onun değiştiğini bilemez. Kayıttan sonra yeniden okunur.
+   */
+  const [adres, setAdres] = useState(apiBaseUrl);
 
   async function gonder() {
     setHata(null);
@@ -109,8 +116,29 @@ export default function Giris() {
               {kayit ? 'Zaten hesabım var' : 'Hesabım yok, kayıt olayım'}
             </Text>
           </Pressable>
+
+          {/*
+            ★ Sunucu adresi GİRİŞ EKRANINDA. Yanlış sunucuya bakan uygulamada
+            oyuncu giriş bile yapamaz; ayarı oturumun arkasına koymak onu tam
+            gerektiği anda erişilmez yapardı.
+          */}
+          <Pressable style={s.sunucuSatir} onPress={() => setSunucuAcik(true)}>
+            <MCI name="server-network" size={14} color={renk.cokSoluk} />
+            <Text style={s.sunucuYazi} numberOfLines={1}>{adres}</Text>
+            <Text style={s.sunucuDegistir}>değiştir</Text>
+          </Pressable>
         </View>
       </ScrollView>
+
+      <SunucuPaneli
+        acik={sunucuAcik}
+        kapat={() => setSunucuAcik(false)}
+        adresDegisti={async () => {
+          await cikisYap();
+          setHata(null);
+          setAdres(apiBaseUrl());
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -156,6 +184,12 @@ const s = StyleSheet.create({
   dugmeYazi: { color: '#3D2A00', fontSize: 16, fontFamily: yaziTipi.baslik, letterSpacing: 0.5 },
   dugmeYaziPasif: { color: renk.cokSoluk },
 
+  sunucuSatir: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: bosluk.s,
+  },
+  sunucuYazi: { color: renk.cokSoluk, fontSize: 12, fontFamily: yaziTipi.rakam, flexShrink: 1 },
+  sunucuDegistir: { color: renk.mavi, fontSize: 12, fontFamily: yaziTipi.govdeOrta },
   gecisAlan: { paddingVertical: bosluk.s },
   gecis: { color: renk.mavi, textAlign: 'center', fontSize: 14, fontFamily: yaziTipi.govdeOrta },
 });

@@ -8,6 +8,7 @@ import {
 import type { ReactNode } from 'react';
 import { ApiError, request, type RequestOptions } from './api/client';
 import { oturumuOku, oturumuSil, oturumuYaz, yenile } from './api/session';
+import { sunucuyuYukle } from './api/sunucu';
 import { tekUcus } from './tekUcus';
 
 interface Jeton { readonly access: string; readonly refresh: string }
@@ -55,6 +56,12 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void (async () => {
+      /*
+       * ★ SUNUCU ADRESİ JETONDAN ÖNCE OKUNUR. `hazir` olur olmaz ekranlar
+       * istek atmaya başlıyor; adres o an bellekte olmazsa ilk istekler
+       * yapıya gömülü ESKİ adrese gider ve oyuncu sebepsiz bir hata görür.
+       */
+      await sunucuyuYukle();
       const kayitli = await oturumuOku();
       jetonuKur(kayitli);
       setHazir(true);

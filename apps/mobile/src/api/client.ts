@@ -6,12 +6,21 @@
  * biçimi. Bunlar ekranlara dağılırsa jeton yenileme her ekranda tekrar yazılır.
  */
 import Constants from 'expo-constants';
+import { ozelSunucu } from './sunucu';
 
 /**
- * Taban adres. Simülatör `localhost`u kendi kendine çözer; gerçek cihaz
- * çözemez, o yüzden Expo'nun geliştirme sunucusunun IP'sinden türetilir.
+ * Taban adres. Üç kaynak, bu sırayla:
+ *
+ *  1. OYUNCUNUN AYARI — her şeyi ezer. Sunucu adresi yapıya gömülü olamaz;
+ *     gerekçesi `sunucu.ts`te.
+ *  2. Yapıya gömülü varsayılan (`EXPO_PUBLIC_API_URL`).
+ *  3. Geliştirme: Expo sunucusunun IP'si. Simülatör `localhost`u kendi
+ *     çözer; gerçek cihaz çözemez.
  */
 export function apiBaseUrl(): string {
+  const kayitli = ozelSunucu();
+  if (kayitli) return kayitli;
+
   const acik = process.env.EXPO_PUBLIC_API_URL;
   if (acik) return acik.replace(/\/$/, '');
 
