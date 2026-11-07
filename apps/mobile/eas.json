@@ -25,7 +25,8 @@
     "production": {
       "ios": {
         "appleId": "nsdedeoglu@icloud.com",
-        "appleTeamId": "29ZC3SL63L"
+        "appleTeamId": "29ZC3SL63L",
+        "ascAppId": "6815599140"
       }
     }
   }
