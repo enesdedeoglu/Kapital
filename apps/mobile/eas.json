@@ -17,7 +17,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://deal-closed-chapel-comm.trycloudflare.com"
+        "EXPO_PUBLIC_API_URL": "https://disciplines-tap-happen-polyphonic.trycloudflare.com"
       }
     }
   },
