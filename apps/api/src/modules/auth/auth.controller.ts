@@ -1,9 +1,9 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Patch, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ZodPipe } from '../../common/zod.pipe.js';
 import {
-  loginSchema, refreshSchema, registerSchema,
-  type LoginDto, type RefreshDto, type RegisterDto,
+  changePasswordSchema, loginSchema, refreshSchema, registerSchema,
+  type ChangePasswordDto, type LoginDto, type RefreshDto, type RegisterDto,
 } from './auth.dto.js';
 import { AuthService } from './auth.service.js';
 import { Public, type AuthUser } from './jwt.guard.js';
@@ -30,6 +30,16 @@ export class AuthController {
   @HttpCode(200)
   refresh(@Body(new ZodPipe(refreshSchema)) dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken);
+  }
+
+  /** Parola değiştirme — mevcut parola şart, diğer oturumlar kapanır. */
+  @Patch('password')
+  @HttpCode(200)
+  changePassword(
+    @Req() req: Request & { user: AuthUser },
+    @Body(new ZodPipe(changePasswordSchema)) dto: ChangePasswordDto,
+  ) {
+    return this.auth.changePassword(req.user.sub, dto);
   }
 
   @Post('logout')

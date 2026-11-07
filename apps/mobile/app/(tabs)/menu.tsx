@@ -9,6 +9,7 @@ import { useTurDegisince } from '~/tur';
 import { apiBaseUrl, ApiError } from '~/api/client';
 import type { Hesap, Sirket } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
+import { ParolaPaneli } from '~/ui/ParolaPaneli';
 import { SunucuPaneli } from '~/ui/SunucuPaneli';
 import { SeviyeMerdiveni } from '~/ui/SeviyeMerdiveni';
 import { bosluk, paraBicimle, renk, yaziTipi, yuvarlak } from '~/ui/tema';
@@ -23,13 +24,14 @@ import { bosluk, paraBicimle, renk, yaziTipi, yuvarlak } from '~/ui/tema';
  * XP dışındaki dört şart hiç görünmüyordu.
  */
 export default function Menu() {
-  const { iste, cikisYap } = useOturum();
+  const { iste, cikisYap, parolaDegistir } = useOturum();
   const kenar = useSafeAreaInsets();
   const [hesap, setHesap] = useState<Hesap | null>(null);
   const [sirket, setSirket] = useState<Sirket | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [yenileniyor, setYenileniyor] = useState(false);
   const [sunucuAcik, setSunucuAcik] = useState(false);
+  const [parolaAcik, setParolaAcik] = useState(false);
 
   const yukle = useCallback(async () => {
     try {
@@ -110,6 +112,22 @@ export default function Menu() {
       )}
 
       {/*
+        ★★ PAROLA DEĞİŞTİRMENİN HİÇBİR YOLU YOKTU: hesap açılırken bir kez
+        yazılıyor, sonsuza kadar öyle kalıyordu. Parolasını paylaşan oyuncunun
+        tek çaresi şirketini bırakıp yeni hesap açmaktı.
+      */}
+      <Pressable onPress={() => setParolaAcik(true)}>
+        <Kart>
+          <View style={s.sunucuSatir}>
+            <Etiket ikon="lock-reset" yazi="PAROLA" />
+            <View style={s.bosluk} />
+            <Text style={s.degistir}>değiştir</Text>
+          </View>
+          <Text style={s.deger}>••••••••</Text>
+        </Kart>
+      </Pressable>
+
+      {/*
         ★★★ SUNUCU SATIRI DOKUNULABİLİR OLMALI — ÇIKMAZDI.
         Sunucu taşındığında girişli oyuncunun her isteği "Sunucuya ulaşılamadı"
         veriyor, bu kart ölü adresi gösteriyor ve değiştirecek hiçbir yer yok:
@@ -143,6 +161,12 @@ export default function Menu() {
         <Text style={s.cikisYazi}>Çıkış yap</Text>
       </Pressable>
       <View style={{ height: 80 }} />
+
+      <ParolaPaneli
+        acik={parolaAcik}
+        kapat={() => setParolaAcik(false)}
+        degistir={parolaDegistir}
+      />
 
       <SunucuPaneli
         acik={sunucuAcik}

@@ -8,6 +8,7 @@ import {
 import type { ReactNode } from 'react';
 import { ApiError, request, type RequestOptions } from './api/client';
 import { oturumuOku, oturumuSil, oturumuYaz, yenile } from './api/session';
+import type { OturumYaniti } from './api/types';
 import { sunucuyuKesfet, sunucuyuYukle } from './api/sunucu';
 import { tekUcus } from './tekUcus';
 
@@ -31,6 +32,8 @@ interface OturumDurumu {
   /** Jeton yenilemeyi kendi halleden istek yardımcısı. */
   readonly iste: <T>(path: string, options?: Omit<RequestOptions, 'token'>) => Promise<T>;
   readonly girisOldu: (access: string, refresh: string) => Promise<void>;
+  /** Parola değiştirir; sunucu taze jeton verir, oturum düşmez. */
+  readonly parolaDegistir: (mevcut: string, yeni: string) => Promise<void>;
   readonly cikisYap: () => Promise<void>;
 }
 
@@ -193,6 +196,22 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
     }
   }, [jetonuKur, jetonlariBirak]);
 
+  /**
+   * Parola değişimi — sunucu diğer oturumları kapatır ve bu oturuma taze bir
+   * jeton çifti verir.
+   *
+   * ★ YENİ JETONLAR YAZILMAZSA OYUNCU KENDİ TELEFONUNDAN ATILIRDI: sunucu
+   * bütün yenileme jetonlarını iptal ediyor, elimizdeki eski çift ölüyor.
+   */
+  const parolaDegistir = useCallback(async (mevcut: string, yeni: string) => {
+    const yanit = await iste<OturumYaniti>('/auth/password', {
+      method: 'PATCH',
+      body: { currentPassword: mevcut, newPassword: yeni },
+    });
+    await oturumuYaz(yanit);
+    jetonuKur({ access: yanit.accessToken, refresh: yanit.refreshToken });
+  }, [iste, jetonuKur]);
+
   /*
    * Şirket var mı? Girişten sonra BİR KEZ sorulur.
    *
@@ -215,8 +234,8 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
   }, [girisli, sirket, iste]);
 
   const deger = useMemo<OturumDurumu>(
-    () => ({ hazir, girisli, sirket, sirketKuruldu, iste, girisOldu, cikisYap }),
-    [hazir, girisli, sirket, sirketKuruldu, iste, girisOldu, cikisYap],
+    () => ({ hazir, girisli, sirket, sirketKuruldu, iste, girisOldu, parolaDegistir, cikisYap }),
+    [hazir, girisli, sirket, sirketKuruldu, iste, girisOldu, parolaDegistir, cikisYap],
   );
   return <Baglam.Provider value={deger}>{children}</Baglam.Provider>;
 }

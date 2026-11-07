@@ -15,3 +15,9 @@ export type LoginDto = z.infer<typeof loginSchema>;
 
 export const refreshSchema = z.object({ refreshToken: z.string().min(10) });
 export type RefreshDto = z.infer<typeof refreshSchema>;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Mevcut parolanı gir').max(200),
+  newPassword: z.string().min(8, 'Yeni parola en az 8 karakter olmalı').max(200),
+});
+export type ChangePasswordDto = z.infer<typeof changePasswordSchema>;

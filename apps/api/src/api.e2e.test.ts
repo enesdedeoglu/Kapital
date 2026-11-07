@@ -117,6 +117,75 @@ describe('auth', () => {
   it('korumalı uç oturumsuz erişilemez', async () => {
     expect((await call('/company')).status).toBe(403);
   });
+  /*
+   * ★★★ PAROLA DEĞİŞTİRMENİN HİÇBİR YOLU YOKTU — hesap açılırken bir kez
+   * yazılıyor, sonsuza kadar öyle kalıyordu.
+   */
+  it('parola değiştirilir: eski parola ölür, yeni parola çalışır', async () => {
+    const eposta = `parola-${randomUUID()}@kapital.test`;
+    const kayit = await call('/auth/register', {
+      method: 'POST',
+      body: { email: eposta, password: 'eskiparola1', displayName: 'Parola Testi' },
+    });
+    const token = kayit.body.accessToken as string;
+
+    const res = await call('/auth/password', {
+      method: 'PATCH', token,
+      body: { currentPassword: 'eskiparola1', newPassword: 'yeniparola2' },
+    });
+    expect(res.status).toBe(200);
+    // ★ Taze jeton gelir: sunucu bütün oturumları kapattığı için eski çift ölür.
+    expect(typeof res.body.accessToken).toBe('string');
+
+    const eski = await call('/auth/login', {
+      method: 'POST', body: { email: eposta, password: 'eskiparola1' },
+    });
+    expect(eski.status).toBe(403);
+
+    const yeni = await call('/auth/login', {
+      method: 'POST', body: { email: eposta, password: 'yeniparola2' },
+    });
+    expect(yeni.status).toBe(200);
+  });
+
+  /*
+   * ★ YANLIŞ MEVCUT PAROLA 400 DÖNER, 403 DEĞİL — ve bu bilerek böyle.
+   * Mobil istemci 403+FORBIDDEN'ı "jeton öldü" diye okuyup oyuncuyu dışarı
+   * atıyor (oturum.tsx); form hatası yüzünden oyundan atılmak saçma olurdu.
+   */
+  it('mevcut parola yanlışsa 400 döner ve parola değişmez', async () => {
+    const eposta = `parola-${randomUUID()}@kapital.test`;
+    const kayit = await call('/auth/register', {
+      method: 'POST',
+      body: { email: eposta, password: 'dogruparola1', displayName: 'Parola Testi' },
+    });
+    const token = kayit.body.accessToken as string;
+
+    const res = await call('/auth/password', {
+      method: 'PATCH', token,
+      body: { currentPassword: 'yanlisparola', newPassword: 'yeniparola2' },
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION');
+
+    const giris = await call('/auth/login', {
+      method: 'POST', body: { email: eposta, password: 'dogruparola1' },
+    });
+    expect(giris.status).toBe(200);
+  });
+
+  it('kısa yeni parola reddedilir', async () => {
+    const eposta = `parola-${randomUUID()}@kapital.test`;
+    const kayit = await call('/auth/register', {
+      method: 'POST',
+      body: { email: eposta, password: 'dogruparola1', displayName: 'Parola Testi' },
+    });
+    const res = await call('/auth/password', {
+      method: 'PATCH', token: kayit.body.accessToken as string,
+      body: { currentPassword: 'dogruparola1', newPassword: 'kisa' },
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('şirket kurma', () => {

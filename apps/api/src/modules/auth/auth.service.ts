@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import type { Sql } from '@kapital/db';
 import { Conflict, DomainError, NotFound } from '@kapital/shared';
 import { SQL } from '../../common/db.module.js';
-import type { LoginDto, RegisterDto } from './auth.dto.js';
+import type { ChangePasswordDto, LoginDto, RegisterDto } from './auth.dto.js';
 import { hashPassword, verifyPassword } from './password.js';
 
 export interface AuthTokens {
@@ -91,6 +91,45 @@ export class AuthService {
     // Rotasyon: kullanılan refresh token iptal edilir, yenisi verilir.
     await this.sql`UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ${row.id}::uuid`;
     return this.issueTokens(row.user_id);
+  }
+
+  /**
+   * Parola değiştirme — oturumdaki hesap, mevcut parolasını bilerek.
+   *
+   * ★★★ PAROLA DEĞİŞTİRMENİN HİÇBİR YOLU YOKTU. Hesap açılıyor, parola bir
+   * kez yazılıyor ve bir daha asla değiştirilemiyordu: parolası sızan ya da
+   * basit bir parola seçtiğine sonradan pişman olan oyuncunun yapabileceği
+   * tek şey yeni hesap açmaktı — yani şirketini bırakmak.
+   *
+   * ★ MEVCUT PAROLA SORULUR. Erişim jetonu yetmez: telefonu bir süreliğine
+   * başkasının eline geçen oyuncunun hesabı kalıcı olarak ele geçirilemesin.
+   *
+   * ★ HATA KODU 'VALIDATION', 'FORBIDDEN' DEĞİL — ve bu bilerek böyle.
+   * Mobil istemci 403+FORBIDDEN'ı "jetonun ölmüş" diye okuyup jeton
+   * yenilemeye kalkıyor, tutmayınca oyuncuyu dışarı atıyor (oturum.tsx).
+   * Yanlış parola yazan oyuncunun oyundan atılması saçma olurdu; bu bir
+   * form hatasıdır, kimlik hatası değil.
+   *
+   * ★ DİĞER OTURUMLAR KAPANIR, bu oturum AÇIK KALIR: parola değiştirmenin
+   * asıl amacı başkasının elindeki erişimi kesmektir, bunun için yenileme
+   * jetonlarının hepsi iptal edilir. Çağırana taze bir çift verilir ki
+   * kendi telefonundan atılmasın.
+   */
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<AuthTokens> {
+    const [user] = await this.sql<{ password_hash: string }[]>`
+      SELECT password_hash FROM users WHERE id = ${userId}::uuid`;
+    if (!user) throw new NotFound('Kullanıcı', userId);
+
+    const ok = await verifyPassword(dto.currentPassword, user.password_hash);
+    if (!ok) throw new DomainError('VALIDATION', 'Mevcut parola yanlış');
+
+    const passwordHash = await hashPassword(dto.newPassword);
+    await this.sql.begin(async (tx) => {
+      await tx`UPDATE users SET password_hash = ${passwordHash} WHERE id = ${userId}::uuid`;
+      await tx`UPDATE refresh_tokens SET revoked_at = NOW()
+                WHERE user_id = ${userId}::uuid AND revoked_at IS NULL`;
+    });
+    return this.issueTokens(userId);
   }
 
   async logout(userId: string): Promise<void> {
