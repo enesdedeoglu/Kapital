@@ -380,6 +380,12 @@ export interface Rapor {
     readonly adet: string; readonly adetFormatted: string;
     readonly ciro: string; readonly ciroFormatted: string;
   }[];
+  /** Toptan piyasadan ALINANLAR — tutar nakliye dahil. */
+  readonly alimlar: readonly {
+    readonly urunKodu: string; readonly urunAdi: string;
+    readonly adet: string; readonly adetFormatted: string;
+    readonly tutar: string; readonly tutarFormatted: string;
+  }[];
   readonly uretim: readonly {
     readonly urunAdi: string;
     readonly uretilen: string; readonly uretilenFormatted: string;

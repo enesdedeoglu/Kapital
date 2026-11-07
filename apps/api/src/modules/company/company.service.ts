@@ -125,8 +125,10 @@ export class CompanyService {
        * satın alınan bir yatırım değil (madde 4'te nakit 30.000 ₺ VE ilk tesis
        * birlikte veriliyor).
        */
-      const [type] = await tx<{ id: number; name: string; storage_capacity: bigint }[]>`
-        SELECT id, name, storage_capacity FROM facility_types
+      const [type] = await tx<{
+        id: number; name: string; storage_capacity: bigint; base_cost: bigint;
+      }[]>`
+        SELECT id, name, storage_capacity, base_cost FROM facility_types
          WHERE code = ${dto.facilityTypeCode} AND is_active`;
       if (!type) throw new NotFound('Tesis türü', dto.facilityTypeCode);
 
@@ -138,6 +140,20 @@ export class CompanyService {
                 ${type.storage_capacity}, ${tickSeq})`;
       await tx`UPDATE company_stats SET facilities_built = 1
                 WHERE company_id = ${company!.id}::uuid`;
+
+      /*
+       * ★★ ŞİRKET DEĞERİ KURULUŞTA 0 GÖRÜNÜYORDU. `companies.company_value`
+       * bir anlık görüntüdür ve P5'te turda bir kez yazılır; yeni şirket ilk
+       * turu bekleyene kadar (15 dakikaya kadar) ana sayfada "ŞİRKET DEĞERİ
+       * 0 ₺" yazıyordu — oyuncu kasasında 30.000 ₺ görürken. İlk izlenim
+       * "bu uygulama sayıları yanlış gösteriyor" oluyordu.
+       *
+       * Değer P5'teki formülle aynı kurulur: nakit + tesislerin taban bedeli
+       * (stok yok, borç yok). Bir sonraki turda zaten P5 üzerine yazar.
+       */
+      await tx`
+        UPDATE companies SET company_value = ${startingCash + type.base_cost}
+         WHERE id = ${company!.id}::uuid`;
 
       return company!.id;
     });

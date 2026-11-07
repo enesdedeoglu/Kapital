@@ -4,6 +4,7 @@ import {
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MCI from '@expo/vector-icons/MaterialCommunityIcons';
 import { ApiError } from '~/api/client';
@@ -48,6 +49,7 @@ const DUKKANLAR = [
 export default function Kurulus() {
   const { iste, cikisYap, sirketKuruldu } = useOturum();
   const router = useRouter();
+  const kenar = useSafeAreaInsets();
 
   const [ad, setAd] = useState('');
   const [sehirler, setSehirler] = useState<SehirBilgi[] | null>(null);
@@ -94,7 +96,20 @@ export default function Kurulus() {
   return (
     <LinearGradient colors={gradyan.zemin} style={s.zemin}>
       <KeyboardAvoidingView style={s.zemin} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.govde} keyboardShouldPersistTaps="handled">
+        {/*
+          ★ İÇERİK DURUM ÇUBUĞUNUN ALTINA GİRİYORDU. Gövde `justifyContent:
+          'center'` ile ortalanıyor; şehir ve dükkân listeleri ekrandan
+          taşınca orta hizalama üst kenarı negatife itiyor ve başlık saatin
+          altında kalıyordu. Çentik payı eklenince taşan içerik yukarıdan
+          düzgün kesiliyor.
+        */}
+        <ScrollView
+          contentContainerStyle={[
+            s.govde,
+            { paddingTop: kenar.top + bosluk.l, paddingBottom: kenar.bottom + bosluk.l },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={s.marka}>
             <LinearGradient colors={gradyan.altin} style={[s.rozet, golge.altin]}>
               <MCI name="office-building-outline" size={30} color="#3D2A00" />

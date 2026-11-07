@@ -70,6 +70,22 @@ export function RaporPaneli({ rapor, kapat }: {
               </Bolum>
             )}
 
+            {/*
+              ★ ALIMLAR: emri dolan oyuncu raporda bunu görmezse "hiçbir şey
+              olmamış" sanıyordu — oysa kasadan para çıkmış, mal yola düşmüştü.
+            */}
+            {rapor.alimlar.length > 0 && (
+              <Bolum ikon="cart-arrow-down" baslik="ALDIKLARIN" ton={renk.mavi}>
+                {rapor.alimlar.map((x) => (
+                  <View key={x.urunKodu} style={s.satir}>
+                    <Text style={s.satirAd}>{x.urunAdi}</Text>
+                    <Text style={s.satirOrta}>{x.adetFormatted}</Text>
+                    <Text style={s.satirSag}>{x.tutarFormatted}</Text>
+                  </View>
+                ))}
+              </Bolum>
+            )}
+
             {rapor.uretim.length > 0 && (
               <Bolum ikon="factory" baslik="ÜRETİLEN">
                 {rapor.uretim.map((x) => (
@@ -113,7 +129,8 @@ export function RaporPaneli({ rapor, kapat }: {
               </Bolum>
             )}
 
-            {rapor.satislar.length === 0 && rapor.uretim.length === 0
+            {rapor.satislar.length === 0 && rapor.alimlar.length === 0
+              && rapor.uretim.length === 0
               && rapor.sorunlar.length === 0 && rapor.dunya.length === 0 && (
               <Text style={s.sessiz}>
                 Sessiz geçti — kayda değer bir hareket olmadı.

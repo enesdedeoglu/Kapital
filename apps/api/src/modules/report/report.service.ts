@@ -48,13 +48,14 @@ export class ReportService {
         pencere: { baslangicTur: simdi.toString(), bitisTur: simdi.toString(), turSayisi: 0, dakika: 0, kirpildi: false },
         yeniMi: false,
         kar: { net: '0', netFormatted: formatMoney(asMoney(0n)), ciro: '0', ciroFormatted: formatMoney(asMoney(0n)), gider: '0', giderFormatted: formatMoney(asMoney(0n)) },
-        satislar: [], uretim: [], sorunlar: [], dunya: [],
+        satislar: [], alimlar: [], uretim: [], sorunlar: [], dunya: [],
       };
     }
 
-    const [kar, satislar, uretim, uretimSorunlari, rafSorunlari, dunya] = await Promise.all([
+    const [kar, satislar, alimlar, uretim, uretimSorunlari, rafSorunlari, dunya] = await Promise.all([
       this.kar(sirket.id, baslangic),
       this.satislar(sirket.id, baslangic),
+      this.alimlar(sirket.id, baslangic),
       this.uretim(sirket.id, baslangic),
       this.uretimSorunlari(sirket.id, baslangic),
       this.rafSorunlari(sirket.id, baslangic, simdi),
@@ -72,7 +73,7 @@ export class ReportService {
         kirpildi,
       },
       yeniMi: true,
-      kar, satislar, uretim, sorunlar, dunya,
+      kar, satislar, alimlar, uretim, sorunlar, dunya,
     };
   }
 
@@ -121,6 +122,40 @@ export class ReportService {
         urunKodu: r.code, urunAdi: r.name,
         adet: adet.toString(), adetFormatted: formatQty(adet, r.unit),
         ciro: ciro.toString(), ciroFormatted: formatMoney(ciro),
+      };
+    });
+  }
+
+  /**
+   * Toptan ALIMLAR — "emrim doldu mu" sorusunun cevabı.
+   *
+   * ★★★ EMİR DOLUNCA RAPOR SUSUYORDU. Oyuncu emir verip çıkıyor, dönünce
+   * "Sessiz geçti — kayda değer bir hareket olmadı" okuyordu; oysa emri
+   * eşleşmiş, kasasından binlerce lira çıkmış ve mal yola düşmüştü. Rapor
+   * yalnız PERAKENDE satışı, üretimi ve sorunları anlatıyordu: oyuncunun en
+   * çok beklediği olay raporun kapsamı dışındaydı.
+   *
+   * Tutar nakliye DAHİLDİR: kasadan çıkan toplam odur.
+   */
+  private async alimlar(companyId: string, baslangic: bigint) {
+    const rows = await this.sql<{
+      code: string; name: string; unit: string; adet: string; tutar: string;
+    }[]>`
+      SELECT p.code, p.name, p.unit,
+             SUM(t.quantity) AS adet,
+             SUM(t.quantity * t.price_per_unit / 1000 + t.shipping_cost) AS tutar
+        FROM market_trades t JOIN products p ON p.id = t.product_id
+       WHERE t.buyer_company_id = ${companyId}::uuid AND t.tick_id > ${baslangic}
+       GROUP BY p.code, p.name, p.unit
+       ORDER BY SUM(t.quantity * t.price_per_unit / 1000 + t.shipping_cost) DESC
+       LIMIT 5`;
+    return rows.map((r) => {
+      const tutar = asMoney(BigInt(r.tutar));
+      const adet = asQty(BigInt(r.adet));
+      return {
+        urunKodu: r.code, urunAdi: r.name,
+        adet: adet.toString(), adetFormatted: formatQty(adet, r.unit),
+        tutar: tutar.toString(), tutarFormatted: formatMoney(tutar),
       };
     });
   }

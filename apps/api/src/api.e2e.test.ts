@@ -139,6 +139,16 @@ describe('şirket kurma', () => {
     expect(res.body.level).toBe(1);
     expect(res.body.levelTitle).toBe('Esnaf');
 
+    /*
+     * ★ ŞİRKET DEĞERİ KURULUŞTA 0 GELİYORDU. Değer P5'te turda bir kez
+     * yazılıyor; yeni oyuncu ilk turu bekleyene kadar ana sayfada kasasında
+     * 30.000 ₺ görürken "ŞİRKET DEĞERİ 0 ₺" okuyordu. Artık kuruluşta
+     * nakit + tesisin taban bedeliyle başlar.
+     */
+    const [tur] = await sql<{ base_cost: bigint }[]>`
+      SELECT base_cost FROM facility_types WHERE code = 'GREENGROCER'`;
+    expect(BigInt(res.body.companyValue)).toBe(300000000n + tur!.base_cost);
+
     // Sermaye SYS_TREASURY'den geldi; kredi ile karışmadı (R15 metriği temiz kalsın)
     const [row] = await sql<{ account: string; amount: bigint }[]>`
       SELECT l.account, l.amount FROM ledger_entries l

@@ -148,14 +148,25 @@ export async function runSettlePhase(sql: Sql, tick: EngineTick): Promise<Settle
     WHERE f.closed_at IS NULL
     ON CONFLICT (tick_id, facility_id) DO NOTHING`;
 
-  // Şirket finansalları defterden türetilir — tek doğruluk kaynağı orası.
+  /*
+   * Şirket finansalları defterden türetilir — tek doğruluk kaynağı orası.
+   *
+   * ★★ NAKLİYE NET KÂRDAN DÜŞÜLÜYOR AMA SÜTUNA YAZILMIYORDU. `shipping_cost`
+   * kolonu INSERT listesinde yoktu, 0 kalıyordu; net ise `l.shipping`i
+   * düşüyordu. Sonuç: "sen yokken" raporu "net −335,31 ₺ · ciro 0,00 ₺ ·
+   * gider 4,00 ₺" gibi kendi kendini yalanlayan bir tablo gösteriyordu —
+   * gider satırı sütunların toplamı, net ise başka bir hesap.
+   * Ölçüldü (kapital_deneme, tur 792): net −170,81 ₺, kayıtlı gider 1,00 ₺,
+   * eksik kalan 169,81 ₺ tam olarak o turun nakliye bedeliydi.
+   */
   const settled = await sql`
     INSERT INTO company_financials (tick_id, company_id, revenue, cogs, maintenance, capex, tax,
-                                    interest_cost, net_profit, cash_close, inventory_value,
-                                    facility_value, debt, company_value)
+                                    interest_cost, shipping_cost, net_profit, cash_close,
+                                    inventory_value, facility_value, debt, company_value)
     SELECT ${tick.seq}, c.id,
            COALESCE(l.sales, 0), COALESCE(rs.cogs, 0), COALESCE(l.maintenance, 0),
            COALESCE(l.capex, 0), COALESCE(l.tax, 0), COALESCE(l.interest, 0),
+           COALESCE(l.shipping, 0),
            COALESCE(l.sales, 0) - COALESCE(rs.cogs, 0) - COALESCE(l.maintenance, 0)
              - COALESCE(l.tax, 0) - COALESCE(l.interest, 0) - COALESCE(l.shipping, 0),
            c.cash, COALESCE(inv.value, 0), COALESCE(fac.value, 0), COALESCE(debt.total, 0),

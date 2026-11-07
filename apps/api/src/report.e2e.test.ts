@@ -131,6 +131,37 @@ describe('GET /report — sen yokken', () => {
   });
 
   /*
+   * ★★★ EMRİ DOLAN OYUNCUYA "SESSİZ GEÇTİ" DENİYORDU.
+   *
+   * Rapor yalnız perakende satışını, üretimi ve sorunları anlatıyordu; toptan
+   * ALIM hiç yoktu. Emir verip çıkan oyuncu dönünce kasasından binlerce lira
+   * çıkmış, malı yola düşmüş olmasına rağmen "kayda değer bir hareket olmadı"
+   * okuyordu — raporun en çok beklenen olayı kapsam dışıydı.
+   */
+  it('toptan ALIM raporda görünür ve tutara nakliye dahildir', async () => {
+    const p = await oyuncu();
+    await turlar(10);
+    const [npc] = await sql<{ id: string }[]>`
+      SELECT id FROM companies WHERE kind = 'NPC' LIMIT 1`;
+    const alim = (tick: number, productId: number, adet: number, fiyat: number, nakliye: number) => sql`
+      INSERT INTO market_trades (tick_id, buyer_company_id, seller_company_id, product_id,
+                                 from_city_id, to_city_id, quantity, price_per_unit,
+                                 quality, shipping_cost)
+      VALUES (${tick}, ${p.companyId}::uuid, ${npc!.id}::uuid, ${productId},
+              2, 1, ${adet * 1000}, ${fiyat * 10000}, 80, ${nakliye * 10000})`;
+
+    await alim(3, 4, 10, 20, 5);    // pencere DIŞI (sinceTick=5)
+    await alim(7, 4, 100, 20, 157); // 100 kg × 20 ₺ + 157 ₺ nakliye
+
+    const res = await call('/report?sinceTick=5', { token: p.token });
+    const a = res.body.alimlar as { urunKodu: string; tutar: string }[];
+    expect(a).toHaveLength(1);
+    expect(a[0]!.urunKodu).toBe('TOMATO');
+    // Mal 2.000 ₺ + nakliye 157 ₺ — kasadan çıkan toplam budur.
+    expect(BigInt(a[0]!.tutar)).toBe(BigInt((2000 + 157) * 10000));
+  });
+
+  /*
    * ★ RAF BOŞALMASI — perakendecinin başına gelen bir numaralı şey.
    *
    * İlk sürümde rapor yalnız ÜRETİM duruşlarına bakıyordu; her yeni oyuncu
