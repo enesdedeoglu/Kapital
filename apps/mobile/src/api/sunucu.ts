@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { tekUcus } from '../tekUcus';
 
 /**
  * Sunucu adresi — oyuncunun elinde, yapıya gömülü değil.
@@ -15,13 +16,43 @@ import * as SecureStore from 'expo-secure-store';
  *
  * ★ Değer BELLEKTE de tutulur (`ozel`): `apiBaseUrl()` her istekte çağrılıyor
  * ve eşzamanlı olmak zorunda. Açılışta bir kez okunur (`sunucuyuYukle`).
+ *
+ * ★★★★ ADRES KEŞFİ (`sunucuyuKesfet`). Yukarıdaki gerekçe yarım kalmıştı:
+ * adres gömülü olmasın diye oyuncuya bir ayar verildi, ama OYUNCU YENİ ADRESİ
+ * NEREDEN BİLECEK? Tünel adresi her yeniden başlatmada değişiyor; TestFlight'
+ * taki yapı ilk ölümden sonra bir daha hiçbir sunucuya bağlanamıyordu —
+ * elimizdeki tek yol oyuncuya adresi mesajla göndermekti.
+ *
+ * Çözüm: adres sabit bir adreste YAYINLANIR, uygulama açılışta oradan okur.
+ * Yayını `infra/oyna.sh` yapıyor (deponun `sunucu` dalına tek satırlık JSON).
+ * Böylece sunucu taşındığında yeni yapı gerekmez.
+ *
+ * ★ GÜVENİLİRLİK: bu dosyaya yalnızca depoya yazabilen kişi dokunabilir;
+ * uygulamanın jetonlarını göndereceği adresi belirlediği için önemlidir.
+ * İçeriği zaten yapıya gömülü olan bir ana makine adıdır — yeni bir sır değil.
+ *
+ * ★ SIRA: oyuncunun kendi yazdığı adres keşfi EZER. Oyuncu bir adres
+ * verdiyse yayın onu değiştirmemeli, yoksa kendi sunucusunu kuran biri her
+ * açılışta bizim sunucumuza geri döner.
+ *
+ * ★★ KEŞİF GELİŞTİRMEDE KAPALI (`__DEV__`). Açık olsaydı Metro ile çalışan
+ * geliştirici kendi makinesindeki API'yi test ettiğini sanırken sessizce
+ * YAYINDAKİ sunucuya bağlanırdı — yaptığı değişikliği göremez, üstüne
+ * oyuncunun verisine yazar. Üretim yapısında ise tam tersi gerekir: gömülü
+ * adres ölüdür, yayın onu ezmek ZORUNDADIR.
  */
 
 const ANAHTAR = 'kapital.sunucuAdresi';
+/** Son keşfedilen adres; ağ yoksa açılışta bu kullanılır. */
+const BELLEK = 'kapital.kesfedilenAdres';
+
+const KESIF_URL =
+  'https://raw.githubusercontent.com/enesdedeoglu/Kapital/sunucu/sunucu.json';
 
 let ozel: string | null = null;
+let kesfedilen: string | null = null;
 
-/** Açılışta bir kez: kayıtlı adres belleğe alınır. */
+/** Açılışta bir kez: kayıtlı adres ve son keşif belleğe alınır. */
 export async function sunucuyuYukle(): Promise<void> {
   try {
     ozel = await SecureStore.getItemAsync(ANAHTAR);
@@ -29,6 +60,64 @@ export async function sunucuyuYukle(): Promise<void> {
     // Anahtarlık okunamazsa varsayılan adresle devam edilir: uygulama açılsın.
     ozel = null;
   }
+  try {
+    kesfedilen = await SecureStore.getItemAsync(BELLEK);
+  } catch {
+    kesfedilen = null;
+  }
+}
+
+/** Yayınlanmış adres (varsa); `apiBaseUrl()` sırada ikinci olarak kullanır. */
+export function kesfedilenSunucu(): string | null {
+  return __DEV__ ? null : kesfedilen;
+}
+
+const kesifKapisi = tekUcus<string | null>();
+
+/**
+ * Yayınlanmış adresi okur. Dönen değer DEĞİŞTİYSE adres döner, yoksa null.
+ *
+ * ★ Hata yutulur: keşif bir KOLAYLIK, önkoşul değil. Ağ yoksa ya da dosya
+ * bozuksa uygulama gömülü adresle devam eder ve oyuncu Sunucu panelinden
+ * elle girebilir.
+ *
+ * ★ Tek uçuş: ağ koptuğunda ekranların paralel istekleri hep birlikte buraya
+ * düşüyor; tek bir keşif hepsine yeter.
+ */
+export async function sunucuyuKesfet(): Promise<string | null> {
+  // Geliştirmede yerel sunucu kullanılır; gerekçesi dosya başında.
+  if (__DEV__) return null;
+  // Oyuncunun kendi adresi varsa keşfe hiç çıkılmaz: onun kararı geçerli.
+  if (ozel !== null) return null;
+  return kesifKapisi(async () => {
+    try {
+      const durdurucu = new AbortController();
+      const sure = setTimeout(() => durdurucu.abort(), 6000);
+      try {
+        // Sorgu dizesi CDN önbelleğini atlatmak için: adres değişiminden
+        // sonra beş dakika beklemek oyuncu için "uygulama bozuk" demektir.
+        const yanit = await fetch(`${KESIF_URL}?t=${Date.now()}`, {
+          signal: durdurucu.signal,
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+        if (!yanit.ok) return null;
+        const veri = (await yanit.json()) as { api?: unknown };
+        const adres = typeof veri.api === 'string' ? adresiDuzelt(veri.api) : null;
+        if (adres === null || adres === kesfedilen) return null;
+        kesfedilen = adres;
+        try {
+          await SecureStore.setItemAsync(BELLEK, adres);
+        } catch {
+          // Yazılamadıysa bellekteki değer bu oturum için yeterli.
+        }
+        return adres;
+      } finally {
+        clearTimeout(sure);
+      }
+    } catch {
+      return null;
+    }
+  });
 }
 
 /** Oyuncunun verdiği adres; yoksa null (yapıdaki varsayılan kullanılır). */

@@ -8,7 +8,7 @@ import {
 import type { ReactNode } from 'react';
 import { ApiError, request, type RequestOptions } from './api/client';
 import { oturumuOku, oturumuSil, oturumuYaz, yenile } from './api/session';
-import { sunucuyuYukle } from './api/sunucu';
+import { sunucuyuKesfet, sunucuyuYukle } from './api/sunucu';
 import { tekUcus } from './tekUcus';
 
 interface Jeton { readonly access: string; readonly refresh: string }
@@ -79,6 +79,16 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
        * yapıya gömülü ESKİ adrese gider ve oyuncu sebepsiz bir hata görür.
        */
       await sunucuyuYukle();
+      /*
+       * ★ YAYINLANMIŞ ADRES AÇILIŞTA SORULUR, ama açılışı BEKLETMEZ. Sunucu
+       * taşındıysa doğru adres buradan gelir; GitHub yavaşsa oyuncuyu açılış
+       * ekranında tutmanın anlamı yok — keşif arka planda bitse de sonraki
+       * istekler onu kullanır (apiBaseUrl sırası, client.ts).
+       */
+      await Promise.race([
+        sunucuyuKesfet(),
+        new Promise((bitir) => setTimeout(bitir, 2500)),
+      ]);
       const kayitli = await oturumuOku();
       jetonuKur(kayitli);
       setHazir(true);
@@ -90,10 +100,34 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
     jetonuKur({ access, refresh });
   }, [jetonuKur]);
 
-  const cikisYap = useCallback(async () => {
+  /** Yalnız cihazdaki jetonları siler — sunucuya haber vermez. */
+  const jetonlariBirak = useCallback(async () => {
     await oturumuSil();
     jetonuKur(null);
   }, [jetonuKur]);
+
+  /**
+   * Çıkış — sunucudaki yenileme jetonu da iptal edilir.
+   *
+   * ★★ ÖNCE YALNIZ CİHAZDAN SİLİYORDU ve `POST /auth/logout` hiç çağrılmıyordu.
+   * Sunucudaki yenileme jetonu 30 gün daha geçerli kalıyordu: çıkış yapmak
+   * oturumu KAPATMIYORDU, sadece gizliyordu. Telefonu kaybeden oyuncu için
+   * "çıkış yaptım" bir güvence değildi.
+   *
+   * ★ Bildirim BEST-EFFORT: ağ yoksa ya da jeton zaten geçersizse cihazdaki
+   * jeton yine silinir. Aksi halde çevrimdışı oyuncu uygulamaya kilitlenirdi.
+   */
+  const cikisYap = useCallback(async () => {
+    const jeton = jetonRef.current;
+    if (jeton) {
+      try {
+        await request('/auth/logout', { method: 'POST', token: jeton.access });
+      } catch {
+        // Sunucuya ulaşılamadı: jeton süresi dolunca kendiliğinden ölür.
+      }
+    }
+    await jetonlariBirak();
+  }, [jetonlariBirak]);
 
   const iste = useCallback(async <T,>(
     path: string, options: Omit<RequestOptions, 'token'> = {},
@@ -151,13 +185,13 @@ export function OturumSaglayici({ children }: { children: ReactNode }) {
            * Dikkat: bu yakalama YALNIZCA yenilemeyi sarar. İsteğin kendi ağ
            * hatası buraya düşerse oyuncuyu bağlantı koptu diye atmış oluruz.
            */
-          await cikisYap();
+          await jetonlariBirak();
           throw yenilemeHatasi;
         }
       }
       return await request<T>(path, { ...options, token: taze.access });
     }
-  }, [jetonuKur, cikisYap]);
+  }, [jetonuKur, jetonlariBirak]);
 
   /*
    * Şirket var mı? Girişten sonra BİR KEZ sorulur.

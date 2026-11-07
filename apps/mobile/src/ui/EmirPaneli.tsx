@@ -30,7 +30,8 @@ export interface EmirGirdisi {
  * verir ve hiç eşleşmez. O yüzden etiket ve ipucu tarafa göre değişir.
  */
 export function EmirPaneli({
-  acik, taraf, urunKodu, urunAdi, birim, tesisler, ipucuFiyat, sonrakiTur, kapat, gonder,
+  acik, taraf, urunKodu, urunAdi, birim, tesisler, ipucuFiyat, sonrakiTur, rakipTavan,
+  kapat, gonder,
 }: {
   acik: boolean;
   taraf: 'BUY' | 'SELL';
@@ -42,6 +43,8 @@ export function EmirPaneli({
   ipucuFiyat: string | null;
   /** Sıradaki tura kalan süre, biçimli ("12 dk"); bilinmiyorsa null. */
   sonrakiTur: string | null;
+  /** Defterdeki en yüksek alıcı tavanı (biçimli) — alışta rekabeti gösterir. */
+  rakipTavan: string | null;
   kapat: () => void;
   gonder: (g: EmirGirdisi) => Promise<string | null>;
 }) {
@@ -161,6 +164,21 @@ export function EmirPaneli({
             </Text>
 
             {/*
+              ★★★ ALIŞTA RAKİP SATICI DEĞİL, DİĞER ALICILARDIR.
+              Ekran en ucuz satıcıyı gösteriyor ve tavan oraya ön-dolduruluyor;
+              oyuncu da "bu kadar verirsem alırım" sanıyor. Oysa motor alış
+              emirlerini yüksek tekliften başlayarak karşılar: ucuz malı
+              senden yüksek veren alıcılar alır, emrin bekler. Yarıştığın
+              rakamı görmeden rekabetçi bir tavan verilemez.
+            */}
+            {alis && rakipTavan !== null && (
+              <Text style={s.rakip}>
+                Defterdeki en yüksek alıcı {rakipTavan} veriyor. Ucuz mal önce
+                yüksek teklife gider.
+              </Text>
+            )}
+
+            {/*
               ★★★★ EMİR ANINDA ALMAZ VE BU HİÇBİR YERDE YAZMIYORDU.
               Oyuncu "Emri ver"e basınca malı aldığını sanıyor, sonra depoyu
               boş görüp oyunun bozuk olduğunu düşünüyordu. Beklentiyi kuran
@@ -246,6 +264,10 @@ const s = StyleSheet.create({
     borderRadius: yuvarlak.m, paddingHorizontal: bosluk.l, paddingVertical: bosluk.m,
     color: renk.metin, fontSize: 18, fontFamily: yaziTipi.rakam,
   },
+  rakip: {
+    color: renk.altin, fontSize: 12.5, lineHeight: 18,
+    fontFamily: yaziTipi.govde, marginTop: 6,
+  },
   ipucu: { color: renk.cokSoluk, fontSize: 12, lineHeight: 17, marginTop: 6, fontFamily: yaziTipi.govde },
   zamanKutu: {
     flexDirection: 'row', alignItems: 'flex-start', gap: bosluk.s, marginTop: bosluk.m,
@@ -285,8 +307,4 @@ const s = StyleSheet.create({
   dugmeYazi: { color: '#3D2A00', fontSize: 16, fontFamily: yaziTipi.baslik, letterSpacing: 0.5 },
   dugmeYaziPasif: { color: renk.cokSoluk },
 
-  not: {
-    color: renk.cokSoluk, fontSize: 12, lineHeight: 18,
-    marginTop: bosluk.m, fontFamily: yaziTipi.govde,
-  },
 });

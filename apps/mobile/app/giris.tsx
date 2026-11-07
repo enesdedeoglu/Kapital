@@ -101,8 +101,14 @@ export default function Giris() {
                 ? <ActivityIndicator color="#3D2A00" />
                 : (
                   <>
+                    {/*
+                      ★ "Şirketi kur" YANLIŞTI: bu düğme yalnız HESAP açar,
+                      şirket bir sonraki ekranda (kurulus.tsx) kurulur. Kayıt
+                      olup kendini şirket kurmuş sanan oyuncu, karşısına çıkan
+                      kuruluş ekranını hata zannediyordu.
+                    */}
                     <Text style={[s.dugmeYazi, !gecerli && s.dugmeYaziPasif]}>
-                      {kayit ? 'Şirketi kur' : 'Giriş yap'}
+                      {kayit ? 'Hesabı aç' : 'Giriş yap'}
                     </Text>
                     <MCI name="arrow-right" size={19}
                       color={gecerli ? '#3D2A00' : renk.cokSoluk} />

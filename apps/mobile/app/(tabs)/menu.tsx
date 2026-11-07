@@ -9,6 +9,7 @@ import { useTurDegisince } from '~/tur';
 import { apiBaseUrl, ApiError } from '~/api/client';
 import type { Hesap, Sirket } from '~/api/types';
 import { Etiket, Kart } from '~/ui/parcalar';
+import { SunucuPaneli } from '~/ui/SunucuPaneli';
 import { SeviyeMerdiveni } from '~/ui/SeviyeMerdiveni';
 import { bosluk, paraBicimle, renk, yaziTipi, yuvarlak } from '~/ui/tema';
 
@@ -28,6 +29,7 @@ export default function Menu() {
   const [sirket, setSirket] = useState<Sirket | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [yenileniyor, setYenileniyor] = useState(false);
+  const [sunucuAcik, setSunucuAcik] = useState(false);
 
   const yukle = useCallback(async () => {
     try {
@@ -107,10 +109,23 @@ export default function Menu() {
         </Kart>
       )}
 
-      <Kart>
-        <Etiket ikon="server-network" yazi="SUNUCU" />
-        <Text style={s.deger}>{apiBaseUrl()}</Text>
-      </Kart>
+      {/*
+        ★★★ SUNUCU SATIRI DOKUNULABİLİR OLMALI — ÇIKMAZDI.
+        Sunucu taşındığında girişli oyuncunun her isteği "Sunucuya ulaşılamadı"
+        veriyor, bu kart ölü adresi gösteriyor ve değiştirecek hiçbir yer yok:
+        adres paneli YALNIZ giriş ekranındaydı. Oyuncunun tek çıkışı çıkış
+        yapmaktı — üstelik bunu bilmesi gerekiyordu.
+      */}
+      <Pressable onPress={() => setSunucuAcik(true)}>
+        <Kart>
+          <View style={s.sunucuSatir}>
+            <Etiket ikon="server-network" yazi="SUNUCU" />
+            <View style={s.bosluk} />
+            <Text style={s.degistir}>değiştir</Text>
+          </View>
+          <Text style={s.deger}>{apiBaseUrl()}</Text>
+        </Kart>
+      </Pressable>
 
       <Kart>
         <Etiket ikon="information-outline" yazi="SÜRÜM" />
@@ -128,6 +143,12 @@ export default function Menu() {
         <Text style={s.cikisYazi}>Çıkış yap</Text>
       </Pressable>
       <View style={{ height: 80 }} />
+
+      <SunucuPaneli
+        acik={sunucuAcik}
+        kapat={() => setSunucuAcik(false)}
+        adresDegisti={() => cikisYap()}
+      />
     </ScrollView>
   );
 }
@@ -152,6 +173,9 @@ const s = StyleSheet.create({
   tarih: { color: renk.cokSoluk, fontSize: 12.5, fontFamily: yaziTipi.govde, marginTop: 6 },
 
   satir: { flexDirection: 'row', gap: bosluk.s, marginTop: bosluk.m },
+  sunucuSatir: { flexDirection: 'row', alignItems: 'center' },
+  bosluk: { flex: 1 },
+  degistir: { color: renk.mavi, fontSize: 13, fontFamily: yaziTipi.govdeOrta },
   kutu: {
     flex: 1, backgroundColor: renk.kart, borderRadius: yuvarlak.m,
     borderWidth: 1, borderColor: renk.kenar, padding: bosluk.m,

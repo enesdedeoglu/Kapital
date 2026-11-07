@@ -30,6 +30,24 @@ describe('catch-up politikası (docs/05 §5)', () => {
     expect(plan.due).toBe(96);
   });
 
+  /*
+   * ★ Dizüstü oyun sunucusu: makine gece kapanıyor, sabah binlerce tur
+   * birikmiş oluyor. Onay beklemek dünyayı dondurur (oyuncu için "bozuk
+   * uygulama"); boşluğu atlamak tek tur koşar ve saat şimdiden akar.
+   */
+  it('boşluk atlama politikası tek tur koşar ve boşluğu bildirir', () => {
+    const plan = planCatchUp(at(60 * 24 * 44), now, { gapPolicy: 'skip' });
+    expect(plan.mode).toBe('skip-gap');
+    expect(plan.due).toBe(1);
+    expect(plan.gap).toBe(4224);
+  });
+
+  it('boşluk atlama LİMİTİN ALTINI değiştirmez', () => {
+    // 8 tur hâlâ hızlandırılmış koşar: kısa kesintide veri kaybı olmasın.
+    expect(planCatchUp(at(120), now, { gapPolicy: 'skip' }).mode).toBe('catch-up');
+    expect(planCatchUp(at(60), now, { gapPolicy: 'skip' })).toEqual({ due: 4, mode: 'normal' });
+  });
+
   it('eşikler yapılandırılabilir', () => {
     expect(planCatchUp(at(60), now, { catchUpThreshold: 2 }).mode).toBe('catch-up');
     expect(planCatchUp(at(60), now, { catchUpThreshold: 2, catchUpLimit: 3 }).mode)

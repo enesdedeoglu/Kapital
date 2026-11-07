@@ -7,12 +7,30 @@ export interface SchedulerOptions {
   readonly catchUpThreshold?: number;
   /** Bu sayının üstünde operatör onayı gerekir; worker kendi başına koşmaz. */
   readonly catchUpLimit?: number;
+  /**
+   * Limit aşıldığında ne olacağı.
+   *
+   * ★★★ 'operator' ÜRETİM İÇİNDİR, dizüstü bilgisayar için değil. Oyun sunucusu
+   * geliştirme makinesinde duruyor ve makine her gece kapanıyor; sabah worker
+   * "4224 tur geride kalındı, operatör onayı gerekiyor" yazıp duruyordu.
+   * Günlüğü kimse okumuyor, oyuncunun dünyası sessizce donuyor: emirler
+   * eşleşmiyor, üretim işlemiyor, raf satmıyor. Oyuncu bunu "uygulama bozuk"
+   * olarak görür ve haklıdır.
+   *
+   * 'skip' boşluğu YOK SAYAR: tek tur koşar, saat o andan itibaren yeniden
+   * akar. Kapalı geçen süre oynanmamış sayılır — mobil bir oyunda doğru
+   * davranış budur; 44 günü hızlandırılmış koşmak oyuncunun stoğunu
+   * çürütür, kredisini temerrüde düşürür ve emirlerini süresi dolmuş yapar.
+   */
+  readonly gapPolicy?: 'operator' | 'skip';
   readonly onLog?: (message: string, data?: unknown) => void;
 }
 
 export interface CatchUpPlan {
   due: number;
-  mode: 'idle' | 'normal' | 'catch-up' | 'operator-required';
+  mode: 'idle' | 'normal' | 'catch-up' | 'operator-required' | 'skip-gap';
+  /** 'skip-gap' modunda yok sayılan tur sayısı — yalnız günlük için. */
+  gap?: number;
 }
 
 /**
@@ -36,6 +54,7 @@ export function planCatchUp(
   if (due <= 0) return { due: 0, mode: 'idle' };
   if (due <= threshold) return { due, mode: 'normal' };
   if (due <= limit) return { due, mode: 'catch-up' };
+  if (opts.gapPolicy === 'skip') return { due: 1, mode: 'skip-gap', gap: due };
   return { due, mode: 'operator-required' };
 }
 
@@ -91,6 +110,12 @@ export class TickScheduler {
           `Bu kadar birikmiş turu otomatik koşmak ekonomiyi bozabilir (docs/05 §5).`,
         );
         return;
+      }
+      if (plan.mode === 'skip-gap') {
+        this.log(
+          `${plan.gap} tur kapalı geçmiş — boşluk yok sayıldı, saat şimdiden ` +
+          `akmaya devam ediyor (docs/05 §5, gapPolicy: skip).`,
+        );
       }
       if (plan.mode === 'catch-up') {
         this.log(`${plan.due} tur geride — hızlandırılmış mod (bildirimler atlanır)`);

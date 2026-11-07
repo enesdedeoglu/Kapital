@@ -404,6 +404,7 @@ export default function Piyasa() {
           ? kurusaVirgul(defter?.sell[0]?.totalPerUnit)
           : kurusaVirgul(defter?.buy.find((o) => o.reachable)?.goodsCeilingPerUnit)}
         sonrakiTur={kalanTur > 0 ? sureBicimle(kalanTur) : null}
+        rakipTavan={emirTarafi === 'BUY' ? enYuksekAlici(defter) : null}
         kapat={() => setEmirTarafi(null)}
         gonder={emirGonder}
       />
@@ -427,6 +428,23 @@ function tani(e: AcikEmir, defter: Defter | null): string | null {
     if (BigInt(enUcuz.totalPerUnit) > fiyat) {
       return `Tavanın düşük: en ucuz satıcı ${enUcuz.totalPerUnitFormatted} istiyor.`;
     }
+    /*
+     * ★★★ "TAVANIM PİYASADA AMA EMRİM DURUYOR" — EN SIK ŞİKÂYET.
+     *
+     * Tavan en ucuz satıcının üstünde olduğu hâlde emir beklemeye devam
+     * edebilir: motor alış emirlerini FİYAT SIRASIYLA karşılar, senden yüksek
+     * teklif verenler ucuz malı önce alır ve sana kalan artık tavanının
+     * üstündedir. Ekran bunu söylemediği için oyuncu "emir çalışmıyor"
+     * sanıyordu — tek eksik cümle buydu.
+     */
+    const ustTeklif = defter.buy.filter((o) => BigInt(o.maxTotalPerUnit) > fiyat);
+    if (ustTeklif.length > 0) {
+      const enYuksek = ustTeklif.reduce((a, b) =>
+        (BigInt(b.maxTotalPerUnit) > BigInt(a.maxTotalPerUnit) ? b : a));
+      return `Sıra sana gelmiyor: ${ustTeklif.length} alıcı senden yüksek veriyor `
+        + `(en yükseği ${enYuksek.maxTotalPerUnitFormatted}). Ucuz mal önce onlara `
+        + `gidiyor; tavanı yükseltirsen öne geçersin.`;
+    }
     return null;
   }
 
@@ -436,6 +454,20 @@ function tani(e: AcikEmir, defter: Defter | null): string | null {
     return `Fiyatın yüksek: en iyi alıcı ${enIyi.goodsCeilingPerUnitFormatted} veriyor.`;
   }
   return null;
+}
+
+/**
+ * Defterdeki en yüksek alıcı tavanı — "kiminle yarışıyorum" sorusu.
+ *
+ * ★ Emir panelinde gösterilir: en ucuz satıcıyı görüp tavanını oraya koyan
+ * oyuncu, aslında DİĞER ALICILARLA yarıştığını bilmiyordu. Ucuz mal önce
+ * yüksek teklife gider; rakamı görmeden rekabetçi bir tavan verilemez.
+ */
+function enYuksekAlici(defter: Defter | null): string | null {
+  if (defter === null || defter.buy.length === 0) return null;
+  const enYuksek = defter.buy.reduce((a, b) =>
+    (BigInt(b.maxTotalPerUnit) > BigInt(a.maxTotalPerUnit) ? b : a));
+  return enYuksek.maxTotalPerUnitFormatted;
 }
 
 /** Seçili ürün oyuncunun seviyesine kilitli mi? */

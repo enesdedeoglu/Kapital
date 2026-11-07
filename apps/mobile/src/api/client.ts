@@ -6,20 +6,25 @@
  * biçimi. Bunlar ekranlara dağılırsa jeton yenileme her ekranda tekrar yazılır.
  */
 import Constants from 'expo-constants';
-import { ozelSunucu } from './sunucu';
+import { kesfedilenSunucu, ozelSunucu, sunucuyuKesfet } from './sunucu';
 
 /**
- * Taban adres. Üç kaynak, bu sırayla:
+ * Taban adres. Dört kaynak, bu sırayla:
  *
  *  1. OYUNCUNUN AYARI — her şeyi ezer. Sunucu adresi yapıya gömülü olamaz;
  *     gerekçesi `sunucu.ts`te.
- *  2. Yapıya gömülü varsayılan (`EXPO_PUBLIC_API_URL`).
- *  3. Geliştirme: Expo sunucusunun IP'si. Simülatör `localhost`u kendi
+ *  2. YAYINLANMIŞ ADRES (keşif). Tünel adresi değiştiğinde yapı yenilenmeden
+ *     uygulamanın sunucuyu bulmasını sağlayan tek yol; gerekçesi `sunucu.ts`te.
+ *  3. Yapıya gömülü varsayılan (`EXPO_PUBLIC_API_URL`).
+ *  4. Geliştirme: Expo sunucusunun IP'si. Simülatör `localhost`u kendi
  *     çözer; gerçek cihaz çözemez.
  */
 export function apiBaseUrl(): string {
   const kayitli = ozelSunucu();
   if (kayitli) return kayitli;
+
+  const yayin = kesfedilenSunucu();
+  if (yayin) return yayin;
 
   const acik = process.env.EXPO_PUBLIC_API_URL;
   if (acik) return acik.replace(/\/$/, '');
@@ -48,7 +53,45 @@ export interface RequestOptions {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * ★★★ AĞ HATASINDA ADRES BİR KEZ YENİDEN KEŞFEDİLİR.
+ *
+ * Sunucu yer değiştirdiğinde (tünel yeniden başladı) uygulamanın elindeki
+ * adres ölüdür ve HER istek ağ hatasıyla düşer. Oyuncunun gördüğü şey
+ * "bağlanamadı"dır; yapabileceği hiçbir şey yoktur. Burada yayınlanmış adres
+ * yeniden okunur, DEĞİŞMİŞSE istek bir kez tekrarlanır — oyuncu kesintiyi
+ * çoğu zaman hiç fark etmez.
+ *
+ * ★ Yalnız AĞ hatasında: sunucudan gelen 4xx/5xx yanıtı adresin doğru
+ * olduğunu kanıtlar, tekrar etmek yanlış olurdu.
+ * ★ Yalnız BİR KEZ ve adres GERÇEKTEN değiştiyse: aksi halde çevrimdışı bir
+ * oyuncunun her isteği iki katına çıkar.
+ * ★ İstek sunucuya VARMADIĞI için yazma uçlarında tekrar güvenlidir: yeni
+ * adres farklı bir sunucudur, eskisinde de hiçbir şey uygulanmamıştır.
+ */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const taban = apiBaseUrl();
+  try {
+    return await gonder<T>(taban, path, options);
+  } catch (e) {
+    if (!agHatasi(e) || ozelSunucu() !== null) throw e;
+    const yeni = await sunucuyuKesfet();
+    if (yeni === null || yeni === taban) throw e;
+    return gonder<T>(yeni, path, options);
+  }
+}
+
+/**
+ * `fetch` ağa hiç çıkamadığında TypeError atar ("Network request failed").
+ * `ApiError` sunucunun cevabıdır — o ağ hatası değildir.
+ */
+function agHatasi(e: unknown): boolean {
+  return !(e instanceof ApiError) && e instanceof Error && e.name !== 'AbortError';
+}
+
+async function gonder<T>(
+  taban: string, path: string, options: RequestOptions,
+): Promise<T> {
   const { method = 'GET', body, token, idempotencyKey, signal } = options;
 
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -56,7 +99,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (token) headers.Authorization = `Bearer ${token}`;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
 
-  const response = await fetch(`${apiBaseUrl()}${path}`, {
+  const response = await fetch(`${taban}${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
